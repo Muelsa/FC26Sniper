@@ -1,0 +1,100 @@
+[
+  {
+    "id": 1,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Origin", "operation": "set", "value": "https://www.ea.com" },
+        { "header": "Referer", "operation": "set", "value": "https://www.ea.com/" },
+        { "header": "User-Agent", "operation": "set", "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36" },
+        { "header": "Sec-Fetch-Dest", "operation": "set", "value": "empty" },
+        { "header": "Sec-Fetch-Mode", "operation": "set", "value": "cors" },
+        { "header": "Sec-Fetch-Site", "operation": "set", "value": "same-site" },
+        { "header": "sec-ch-ua", "operation": "set", "value": "\"Google Chrome\";v=\"141\", \"Not?A_Brand\";v=\"8\", \"Chromium\";v=\"141\"" },
+        { "header": "sec-ch-ua-mobile", "operation": "set", "value": "?0" },
+        { "header": "sec-ch-ua-platform", "operation": "set", "value": "\"Windows\"" },
+        { "header": "Cookie", "operation": "remove" },
+        { "header": "sec-fetch-storage-access", "operation": "remove" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "*://utas.mob.v5.prd.futc-ext.gcp.ea.com/ut/game/fc26/transfermarket?*",
+      "resourceTypes": ["xmlhttprequest"] 
+    }
+  },
+  {
+    "id": 2,
+    "priority": 1,
+    "action": {
+      "type": "modifyHeaders",
+      "requestHeaders": [
+        { "header": "Origin", "operation": "set", "value": "https://www.ea.com" },
+        { "header": "Referer", "operation": "set", "value": "https://www.ea.com/" },
+        { "header": "User-Agent", "operation": "set", "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36" },
+        { "header": "Sec-Fetch-Dest", "operation": "set", "value": "empty" },
+        { "header": "Sec-Fetch-Mode", "operation": "set", "value": "cors" },
+        { "header": "Sec-Fetch-Site", "operation": "set", "value": "same-site" },
+        { "header": "sec-ch-ua", "operation": "set", "value": "\"Google Chrome\";v=\"141\", \"Not?A_Brand\";v=\"8\", \"Chromium\";v=\"141\"" },
+        { "header": "sec-ch-ua-mobile", "operation": "set", "value": "?0" },
+        { "header": "sec-ch-ua-platform", "operation": "set", "value": "\"Windows\"" },
+        { "header": "Cookie", "operation": "remove" },
+        { "header": "sec-fetch-storage-access", "operation": "remove" }
+      ]
+    },
+    "condition": {
+      "urlFilter": "*://utas.mob.v5.prd.futc-ext.gcp.ea.com/ut/game/fc26/item*",
+      "resourceTypes": ["xmlhttprequest"] 
+    }
+  },
+  {
+  "id": 3,
+  "priority": 1,
+  "action": {
+    "type": "modifyHeaders",
+    "requestHeaders": [
+      { "header": "Origin", "operation": "set", "value": "https://www.ea.com" },
+      { "header": "Referer", "operation": "set", "value": "https://www.ea.com/" },
+      { "header": "Sec-Fetch-Site", "operation": "set", "value": "same-site" },
+      { "header": "User-Agent", "operation": "set", "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36" },
+      { "header": "Sec-Fetch-Dest", "operation": "set", "value": "empty" },
+      { "header": "Sec-Fetch-Mode", "operation": "set", "value": "cors" },
+      { "header": "sec-ch-ua", "operation": "set", "value": "\"Chromium\";v=\"142\", \"Google Chrome\";v=\"142\", \"Not_A Brand\";v=\"99\"" },
+      { "header": "sec-ch-ua-mobile", "operation": "set", "value": "?0" },
+      { "header": "sec-ch-ua-platform", "operation": "set", "value": "\"Windows\"" },
+      { "header": "sec-fetch-site", "operation": "set", "value": "same-site" },
+      { "header": "Cookie", "operation": "remove" },
+      { "header": "sec-fetch-storage-access", "operation": "remove" }
+    ]
+  },
+  "condition": {
+    "urlFilter": "*://utas.mob.v5.prd.futc-ext.gcp.ea.com/ut/game/fc26/auctionhouse*",
+    "resourceTypes": ["xmlhttprequest"] 
+  }
+},
+{
+  "id": 4,
+  "priority": 1,
+  "action": {
+    "type": "modifyHeaders",
+    "requestHeaders": [
+      { "header": "Origin", "operation": "set", "value": "https://www.ea.com" },
+      { "header": "Referer", "operation": "set", "value": "https://www.ea.com/" },
+      { "header": "Sec-Fetch-Site", "operation": "set", "value": "same-site" },
+      { "header": "User-Agent", "operation": "set", "value": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36" },
+      { "header": "Sec-Fetch-Dest", "operation": "set", "value": "empty" },
+      { "header": "Sec-Fetch-Mode", "operation": "set", "value": "cors" },
+      { "header": "sec-ch-ua", "operation": "set", "value": "\"Chromium\";v=\"142\", \"Google Chrome\";v=\"142\", \"Not_A Brand\";v=\"99\"" },
+      { "header": "sec-ch-ua-mobile", "operation": "set", "value": "?0" },
+      { "header": "sec-ch-ua-platform", "operation": "set", "value": "\"Windows\"" },
+      { "header": "sec-fetch-site", "operation": "set", "value": "same-site" },
+      { "header": "Cookie", "operation": "remove" },
+      { "header": "sec-fetch-storage-access", "operation": "remove" }
+    ]
+  },
+  "condition": {
+    "urlFilter": "*://utas.mob.v5.prd.futc-ext.gcp.ea.com/ut/game/fc26/trade*",
+    "resourceTypes": ["xmlhttprequest"] 
+  }
+}
+]
