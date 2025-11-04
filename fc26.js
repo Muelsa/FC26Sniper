@@ -390,7 +390,7 @@ async function sendFodderResearchRequest(){
     chrome.runtime.sendMessage({ tipo: 'TENTATIVI_RIMASTI', valore: numeroTentativi - (i + 1)});
     let randomValue;
     if((i+1)%50 == 0 && i!=numeroTentativi-1) {
-      randomValue = getRandomInRange(300, 360) ; //sleep random tra 5 minuti e 6 minuti ogni 100 tentativi
+      randomValue = getRandomInRange(300, 420) ; //sleep random tra 5 minuti e 7 minuti ogni 50 tentativi
       chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Cool down di: ' + randomValue + ' sec'});
     }
       else if((i+1)%5 == 0) randomValue = getRandomInRange(2,5) ; //sleep random tra 1 e 3 secondi ogni 5 tentativi
