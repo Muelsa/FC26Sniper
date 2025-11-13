@@ -301,6 +301,7 @@ async function sendFodderResearchRequest(){
 
     //ad inizio e alla fine del primo ciclo, ricarico la lista 
     if(i==0 || i==listaFodder.length-1){
+      listaFodder = []
       await getFdderList()
     }
 
@@ -431,23 +432,7 @@ async function getFdderList(){
     "sec-gpc": "1"
   });
 
-  const body = [
-    26,
-    {
-      mode: "search",
-      filters: {
-        rating: { min: 84, max: 84 },
-        priceRange: { min: 200, max: 15000000 }
-      },
-      search: "$undefined",
-      pagination: { page: 1, limit: 40 },
-      sorting: { field: "price", direction: "asc" }
-    }
-  ];
-
-  let bodyJson = JSON.stringify({body});
-
-  // Invio la richiesta PUT
+  // Invio la richiesta GET
   try{
     const response = await fetch(futWizUrl, {
       method: "GET",
