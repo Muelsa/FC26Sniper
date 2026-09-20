@@ -1,44 +1,64 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <title>FC26</title>
     <meta charset="utf-8">
 </head>
+
 <body>
-    <h2 style="text-align: center; margin-top: 1rem;">FC26</h2>
-    <p id="versione" style="text-align: center;">v1.1.6</p>
+    <h2 style="text-align: center; margin-top: 1rem;">FC27</h2>
+    <p id="versione" style="text-align: center;">v1.1.9</p>
 
     <div class="container-fluid">
-        
+
         <div class="d-flex align-items-start" style="margin-top: 20px;">
-            
+
             <div class="card">
                 <div class="card-body">
                     <div class="form-floating">
-                        <input type="number" class="form-control" id="tentativi" placeholder="Inserisci un numero" min="0" style="width: 200px;">
+                        <input type="number" class="form-control" id="tentativi" placeholder="Inserisci un numero"
+                            min="0" style="width: 200px;">
                         <label for="tentativi">Tentativi ricerca</label>
                         <div class="form-check form-switch">
                             <input class="form-check-input" type="checkbox" id="switchFodder">
                             <label class="form-check-label" for="switchFodder">Fodder search</label>
-                        </div>                                      
-                        <button type="button" class="btn btn-primary" style="margin-top: 5px;" id="startBtn">Start</button>
+                        </div>
+                        <div id="fodderRatingContainer" class="mt-2 mb-2 d-none">
+                            <label class="form-label form-label-sm d-block mb-1 text-muted" style="font-size: 0.8rem;">Rating:</label>
+                            <div class="btn-group btn-group-sm" role="group" aria-label="Rating Fodder">
+                                <input type="radio" class="btn-check" name="fodderRating" id="rating84" value="84" autocomplete="off" checked>
+                                <label class="btn btn-outline-primary" for="rating84">84</label>
+
+                                <input type="radio" class="btn-check" name="fodderRating" id="rating85" value="85" autocomplete="off">
+                                <label class="btn btn-outline-primary" for="rating85">85</label>
+
+                                <input type="radio" class="btn-check" name="fodderRating" id="rating86" value="86" autocomplete="off">
+                                <label class="btn btn-outline-primary" for="rating86">86</label>
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-primary" style="margin-top: 5px;"
+                            id="startBtn">Start</button>
                         <button type="button" class="btn btn-danger" style="margin-top: 5px;" id="stopBtn">Stop</button>
-                        <button class="btn btn-secondary" data-bs-toggle="collapse" href="#logCollapse" role="button" aria-expanded="false" aria-controls="logCollapse" style="margin-top: 5px;">
+                        <button class="btn btn-secondary" data-bs-toggle="collapse" href="#logCollapse" role="button"
+                            aria-expanded="false" aria-controls="logCollapse" style="margin-top: 5px;">
                             Log
                         </button>
                     </div>
                 </div>
             </div>
-            <div class="ms-3"> 
+            <div class="ms-3">
                 <label id="tentativiRimasti"></label>
                 <br>
                 <label id="carteAcquistate"></label>
-                
+                <br>
+                <label id="crediti"></label>
+
             </div>
 
-        </div> 
-        
+        </div>
+
         <div class="collapse" id="logCollapse" style="margin-top: 20px;">
             <div class="card" style="height: 300px; width: 50%;">
                 <div class="card-body">
@@ -51,4 +71,5 @@
     <script src="ui.js"></script>
     <script src="bootstrap.bundle.min.js"></script>
 </body>
+
 </html>

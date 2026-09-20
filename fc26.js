@@ -8,10 +8,15 @@ let fodderSid = ""
 let numeroTentativi;
 let start = false;
 let carteAcquistate = 0;
-let listaFodder= []
+let listaFodder = []
 let ricercaFodder = false;
+let fodderRating = "84";
 let indexFodder = 0;
-let idCarteAcquistate= [];
+let idCarteAcquistate = [];
+
+
+const watchListUrl = "https://utas.mob.v1.prd.futc-ext.gcp.ea.com/ut/game/fc27/watchlist"
+const deleteSoldUrl = "https://utas.mob.v1.prd.futc-ext.gcp.ea.com/ut/game/fc27/trade/sold"
 
 chrome.action.onClicked.addListener(() => {
   chrome.tabs.create({ url: "index.html" }); // Apre la GUI in una nuova scheda
@@ -20,21 +25,23 @@ chrome.action.onClicked.addListener(() => {
 chrome.webRequest.onBeforeRequest.addListener(
   (details) => {
     try {
-        if (details.method === "GET" || details.method === "POST") {
-          if(start==false){
-            chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Filtro di ricerca acquisito'});
-          }
-          if(details.url.includes("transfermarket?")){
-            searchUrl = details.url;
-          }   
+      if (details.method === "GET" || details.method === "POST") {
+        if (start == false) {
+          chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Filtro di ricerca acquisito' });
         }
+        if (details.url.includes("transfermarket?")) {
+          searchUrl = details.url;
+        }
+      }
     } catch (err) {
       console.error('[FC26 listener error]', err);
     }
-    },
-  { urls: [
-    "https://utas.mob.v5.prd.futc-ext.gcp.ea.com/ut/game/fc26/transfermarket*",
-  ] },
+  },
+  {
+    urls: [
+      "https://utas.mob.v1.prd.futc-ext.gcp.ea.com/ut/game/fc27/transfermarket*",
+    ]
+  },
   ["requestBody"]
 );
 
@@ -42,81 +49,92 @@ chrome.webRequest.onBeforeRequest.addListener(
 
 chrome.webRequest.onSendHeaders.addListener(
   (details) => {
-    if(details.url.includes("transfermarket?") && start==false){
-        searchHeaders = details.requestHeaders;
-        details.requestHeaders.forEach(header => {
-            if(header.name.toLowerCase().includes ("x-ut-sid"))
-            {
-                xUtSid = header.value;
-            }
-        })
-    }
-    if(details.url.includes("https://www.futwiz.com/fc26/players") && start==false){
+    if (details.url.includes("transfermarket?") && start == false) {
+      searchHeaders = details.requestHeaders;
       details.requestHeaders.forEach(header => {
-          if(header.name.toLowerCase().includes ("next-action"))
-          {
-              fodderSid = header.value;
-          }
-        })
+        if (header.name.toLowerCase().includes("x-ut-sid")) {
+          xUtSid = header.value;
+        }
+      })
     }
-    },
-  { urls: ["https://utas.mob.v5.prd.futc-ext.gcp.ea.com/ut/game/fc26/transfermarket*"] },
+    if (details.url.includes("https://www.futwiz.com/fc27/players") && start == false) {
+      details.requestHeaders.forEach(header => {
+        if (header.name.toLowerCase().includes("next-action")) {
+          fodderSid = header.value;
+        }
+      })
+    }
+  },
+  { urls: ["https://utas.mob.v1.prd.futc-ext.gcp.ea.com/ut/game/fc27/transfermarket*"] },
   ["requestHeaders"]
 );
 
 chrome.runtime.onMessage.addListener(async (message) => {
   if (message.tipo === 'START') {
     start = message.valore;
-    
-    if(start == true){
 
-      
+    if (start == true) {
 
-      // Recupera il numero di tentativi dallo storage
+
+
+      // Recupera il numero di tentativi e il rating dallo storage
       numeroTentativi = await getNumeroTentativi();
+      fodderRating = await getFodderRating();
       carteAcquistate = 0;
-      
-    
-      chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Avvio ricerca'});
-      chrome.runtime.sendMessage({ tipo: 'CARTA_ACQUISTATA', valore: ""});
 
-      
-      
-      
+
+      chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Avvio ricerca' });
+      chrome.runtime.sendMessage({ tipo: 'CARTA_ACQUISTATA', valore: "" });
+      crediti = await getCrediti()
+      chrome.runtime.sendMessage({ tipo: 'CREDITI', valore: crediti });
+
+
+
+
       switch (ricercaFodder) {
         case true:
 
-          
+
           await sendFodderResearchRequest();
 
           break;
-      
+
         case false:
-          
+
           let i = 0;
-          while(start==true && i < numeroTentativi){
+          while (start == true && i < numeroTentativi) {
             await sendResearchRequest();
 
             //aggiorno contatore tentativi rimasti
-            chrome.runtime.sendMessage({ tipo: 'TENTATIVI_RIMASTI', valore: numeroTentativi - (i + 1)});
-            
-            let randomValue;
-            if((i+1)%5 == 0) randomValue = getRandomInRange(2,5) ; //sleep random tra 1 e 3 secondi ogni 5 tentativi
-            else randomValue = Math.random() + 0.5; //sleep random tra 0.5 e 1 secondi
-            
-            await sleep(randomValue * 1000);
-            
-            i++;
-        }
+            chrome.runtime.sendMessage({ tipo: 'TENTATIVI_RIMASTI', valore: numeroTentativi - (i + 1) });
 
+            let randomValue;
+            if ((i + 1) % 5 == 0) randomValue = getRandomInRange(2, 5); //sleep random tra 1 e 3 secondi ogni 5 tentativi
+            else randomValue = Math.random() + 0.5; //sleep random tra 0.5 e 1 secondi
+
+            await sleep(randomValue * 1000);
+
+            i++;
+          }
+
+          //pulisco la lista trasferimenti dagli elementi venduti a fine ricerche
+          await clearSoldItem()
 
           break;
       }
-      
-      chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Ricerca terminata\n'});
+
+      chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Ricerca terminata\n' });
       //ho finito le ricerche, quindi termino ed invio messaggio di stop
-      chrome.runtime.sendMessage({ tipo: 'START', valore: false});
-      chrome.runtime.sendMessage({ tipo: 'TENTATIVI_RIMASTI', valore: ""});
+      chrome.runtime.sendMessage({ tipo: 'START', valore: false });
+      chrome.runtime.sendMessage({ tipo: 'TENTATIVI_RIMASTI', valore: "" });
+
+      //recupero crediti residui
+      crediti = await getCrediti()
+      chrome.runtime.sendMessage({ tipo: 'CREDITI', valore: crediti });
+
+      //pulisco la lista trasferimenti dagli elementi venduti
+      await clearSoldItem()
+
       start = false;
     }
   }
@@ -136,9 +154,68 @@ const getNumeroTentativi = () => {
   });
 };
 
+// Funzione per ottenere fodderRating come Promise
+const getFodderRating = () => {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['fodderRating'], (result) => {
+      resolve(result.fodderRating || "84"); // Default a 84 se non definito
+    });
+  });
+};
+
 
 function getRandomInRange(min, max) {
   return Math.random() * (max - min + 1) + min;
+}
+
+async function getCrediti() {
+  const headers = new Headers({
+    "accept": "*/*",
+    "accept-language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
+    "cache-control": "no-cache",
+    "content-type": "application/json",
+    "x-ut-sid": xUtSid,
+  });
+
+  try {
+    const response = await fetch(watchListUrl, {
+      method: "GET",
+      headers: headers,
+    });
+
+    if (!response.ok) {
+      return 'N/D';
+    }
+
+    const data = await response.json();
+    return data?.credits ?? data?.credit ?? 0;
+  } catch (error) {
+    console.error('[ERROR Updating credits]', error);
+    return 'N/D';
+  }
+}
+
+async function clearSoldItem() {
+
+  const headers = new Headers({
+    "accept": "*/*",
+    "accept-language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
+    "content-type": "application/json",
+    "x-ut-sid": xUtSid,
+  });
+
+  try {
+    const response = await fetch(deleteSoldUrl, {
+      method: "DELETE",
+      headers: headers,
+    });
+
+    chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Lista trasferimenti pulita' });
+
+  } catch (error) {
+    console.error('[ERROR clearing sold items]', error);
+    return 'N/D';
+  }
 }
 
 
@@ -153,17 +230,17 @@ async function sendResearchRequest() {
       return;
     }
 
-    if(searchUrl.includes('start=0') && !searchUrl.includes('maxb=200')) searchUrl = searchUrl.replace('start=0', 'start=200')
-    else if(searchUrl.includes('start=200')) searchUrl = searchUrl.replace('start=200', 'start=0')
-        
+    if (searchUrl.includes('start=0') && !searchUrl.includes('maxb=200')) searchUrl = searchUrl.replace('start=0', 'start=200')
+    else if (searchUrl.includes('start=200')) searchUrl = searchUrl.replace('start=200', 'start=0')
+
 
     const headers = new Headers({
-    "Accept": "*/*",
-    "Accept-Encoding": "gzip, deflate, br, zstd",
-    "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Cache-Control": "no-cache",
-    "Content-Type": "application/json",
-    "X-UT-SID": xUtSid
+      "Accept": "*/*",
+      "Accept-Encoding": "gzip, deflate, br, zstd",
+      "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
+      "Cache-Control": "no-cache",
+      "Content-Type": "application/json",
+      "X-UT-SID": xUtSid
     });
 
     // Invia la richiesta GET
@@ -171,27 +248,27 @@ async function sendResearchRequest() {
       method: "GET",
       headers: headers,
     });
-    
+
 
     // Controlla la risposta
     if (response.ok) {
       const data = await response.json();
-      if(data.auctionInfo && data.auctionInfo.length >0){
-        idCarteAcquistate= [];
-        
-         for (const auction of data.auctionInfo) {
+      if (data.auctionInfo && data.auctionInfo.length > 0) {
+        idCarteAcquistate = [];
+
+        for (const auction of data.auctionInfo) {
           let tradeId = auction.tradeId;
           let buyNowPrice = auction.buyNowPrice;
           let itemDataId = auction.itemData.id;
-          
-          await sendBuyNowRequest(tradeId, buyNowPrice,itemDataId, idCarteAcquistate);
-          chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Ho trovato ' + data.auctionInfo.length + ' carte'});
-          
-        };
-        
-        if(idCarteAcquistate.length > 0) await sendToTransferList();
 
-      } else if(!data.auctionInfo){
+          await sendBuyNowRequest(tradeId, buyNowPrice, itemDataId, idCarteAcquistate);
+          chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Ho trovato ' + data.auctionInfo.length + ' carte' });
+
+        };
+
+        if (idCarteAcquistate.length > 0) await sendToTransferList();
+
+      } else if (!data.auctionInfo) {
         console.error("Errore nella ricerca:", response.status, response.statusText);
       }
     }
@@ -201,7 +278,7 @@ async function sendResearchRequest() {
 }
 
 async function sendBuyNowRequest(tradeId, buyNowPrice, itemId) {
-  let buyNowUrl = 'https://utas.mob.v5.prd.futc-ext.gcp.ea.com/ut/game/fc26/trade/'+ tradeId +'/bid';
+  let buyNowUrl = 'https://utas.mob.v1.prd.futc-ext.gcp.ea.com/ut/game/fc27/trade/' + tradeId + '/bid';
 
   if (!buyNowUrl || !searchHeaders) {
     console.error("URL o Header non definiti");
@@ -218,11 +295,11 @@ async function sendBuyNowRequest(tradeId, buyNowPrice, itemId) {
     "X-UT-SID": xUtSid
   });
 
-  let body = JSON.stringify({ bid : buyNowPrice });
+  let body = JSON.stringify({ bid: buyNowPrice });
 
 
   // Invia la richiesta PUT
-  try{
+  try {
     const response = await fetch(buyNowUrl, {
       method: "PUT",
       headers: headers,
@@ -232,9 +309,9 @@ async function sendBuyNowRequest(tradeId, buyNowPrice, itemId) {
       const data = await response.json();
       carteAcquistate += 1;
       idCarteAcquistate.push(itemId);
-      chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Ho acquistato una carta al prezzo di: ' + buyNowPrice});
-      chrome.runtime.sendMessage({ tipo: 'CARTA_ACQUISTATA', valore: carteAcquistate});
-      
+      chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Ho acquistato una carta al prezzo di: ' + buyNowPrice });
+      chrome.runtime.sendMessage({ tipo: 'CARTA_ACQUISTATA', valore: carteAcquistate });
+
     } else {
       console.error("Errore nell'acquisto:", response.status, response.statusText);
     }
@@ -245,7 +322,7 @@ async function sendBuyNowRequest(tradeId, buyNowPrice, itemId) {
 }
 
 async function sendToTransferList() {
-  let transferListUrl = 'https://utas.mob.v5.prd.futc-ext.gcp.ea.com/ut/game/fc26/item';
+  let transferListUrl = 'https://utas.mob.v1.prd.futc-ext.gcp.ea.com/ut/game/fc27/item';
 
   if (!transferListUrl || !searchHeaders) {
     console.error("URL o Header non definiti per la lista trasferimenti");
@@ -265,42 +342,42 @@ async function sendToTransferList() {
     "X-UT-SID": xUtSid
   });
 
-  let body = {itemData: []};
-  for(id of idCarteAcquistate){
-      body.itemData.push({
-        "id": id,
-        "pile": "trade"
-      })
-      let bodyJson = JSON.stringify(body);
+  let body = { itemData: [] };
+  for (id of idCarteAcquistate) {
+    body.itemData.push({
+      "id": id,
+      "pile": "trade"
+    })
+    let bodyJson = JSON.stringify(body);
 
-      // Invio la richiesta PUT
-      try{
-        const response = await fetch(transferListUrl, {
-          method: "PUT",
-          headers: headers,
-          body: bodyJson
-        });
-        if (response.ok) {
-          chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Carte inviate alla lista trasferimenti'});
-        }
-      }catch (error) {
-        chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Errore durante l\'invio alla lista trasferimenti'});
-        console.error("Errore durante l'invio alla lista trasferimenti:", error);
+    // Invio la richiesta PUT
+    try {
+      const response = await fetch(transferListUrl, {
+        method: "PUT",
+        headers: headers,
+        body: bodyJson
+      });
+      if (response.ok) {
+        chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Carte inviate alla lista trasferimenti' });
       }
+    } catch (error) {
+      chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Errore durante l\'invio alla lista trasferimenti' });
+      console.error("Errore durante l'invio alla lista trasferimenti:", error);
     }
-  
+  }
+
 }
 
 
 
-async function sendFodderResearchRequest(){
+async function sendFodderResearchRequest() {
 
 
   let i = 0
-  while(start==true && i < numeroTentativi){
+  while (start == true && i < numeroTentativi) {
 
     //ad inizio e alla fine del primo ciclo, ricarico la lista 
-    if(i==0 || i==listaFodder.length-1){
+    if (i == 0 || i == listaFodder.length - 1) {
       listaFodder = []
       await getFdderList()
     }
@@ -312,21 +389,21 @@ async function sendFodderResearchRequest(){
     let fodderPrice = Math.floor((next.price * 0.9) / 100) * 100; //calcolo il 10% ed arrotondo alla centinaia più vicina per difetto
 
     //Definisco l'URL di base
-    const baseUrl = "https://utas.mob.v5.prd.futc-ext.gcp.ea.com/ut/game/fc26/transfermarket";
+    const baseUrl = "https://utas.mob.v1.prd.futc-ext.gcp.ea.com/ut/game/fc27/transfermarket";
 
     //Creo un oggetto URL
     const url = new URL(baseUrl);
 
     //Imposto i parametri che servono
     url.searchParams.set("num", "21");
-    url.searchParams.set("start", "0"); 
+    url.searchParams.set("start", "0");
     url.searchParams.set("type", "player");
     url.searchParams.set("maxb", fodderPrice);
     url.searchParams.set("maskedDefId", fodderDefId);
 
     //Ottiene l'URL finale come stringa
     const searchUrlCompleto = url.href;
-  
+
 
     try {
       // Controlla che l'URL e l'header siano definiti
@@ -335,17 +412,17 @@ async function sendFodderResearchRequest(){
         return;
       }
 
-      if(searchUrlCompleto.includes('start=0') && !searchUrl.includes('maxb=200')) searchUrl = searchUrl.replace('start=0', 'start=200')
-      else if(searchUrlCompleto.includes('start=200')) searchUrl = searchUrl.replace('start=200', 'start=0')
-          
+      if (searchUrlCompleto.includes('start=0') && !searchUrl.includes('maxb=200')) searchUrl = searchUrl.replace('start=0', 'start=200')
+      else if (searchUrlCompleto.includes('start=200')) searchUrl = searchUrl.replace('start=200', 'start=0')
+
 
       const headers = new Headers({
-      "Accept": "*/*",
-      "Accept-Encoding": "gzip, deflate, br, zstd",
-      "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
-      "Cache-Control": "no-cache",
-      "Content-Type": "application/json",
-      "X-UT-SID": xUtSid
+        "Accept": "*/*",
+        "Accept-Encoding": "gzip, deflate, br, zstd",
+        "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Cache-Control": "no-cache",
+        "Content-Type": "application/json",
+        "X-UT-SID": xUtSid
       });
 
       // Invia la richiesta GET
@@ -353,62 +430,68 @@ async function sendFodderResearchRequest(){
         method: "GET",
         headers: headers,
       });
-      
+
 
       // Controlla la risposta
       if (response.ok) {
         const data = await response.json();
-        if(data.auctionInfo && data.auctionInfo.length >0){
-          chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Ho trovato ' + data.auctionInfo.length + ' carte'});
-          idCarteAcquistate= [];
+        if (data.auctionInfo && data.auctionInfo.length > 0) {
+          chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Ho trovato ' + data.auctionInfo.length + ' carte' });
+          idCarteAcquistate = [];
 
           for (const auction of data.auctionInfo) {
             let tradeId = auction.tradeId;
             let buyNowPrice = auction.buyNowPrice;
             let itemDataId = auction.itemData.id;
-            
-            await sendBuyNowRequest(tradeId, buyNowPrice,itemDataId);
-            
+
+            await sendBuyNowRequest(tradeId, buyNowPrice, itemDataId);
+
           };
 
           //invio alla lista trasferimenti
           //if(idCarteAcquistate.length > 0) 
-          if(idCarteAcquistate.length > 0) {
+          if (idCarteAcquistate.length > 0) {
             await sendToTransferList();
             await sellFodder(next.price);
           }
 
-        } else if(!data.auctionInfo){
+        } else if (!data.auctionInfo) {
           console.error("Errore nella ricerca:", response.status, response.statusText);
         }
       }
-    }catch (error) {
+    } catch (error) {
       console.error("Errore durante l'invio della richiesta:", error);
     }
 
     //sleep
     //aggiorno contatore tentativi rimasti
-    chrome.runtime.sendMessage({ tipo: 'TENTATIVI_RIMASTI', valore: numeroTentativi - (i + 1)});
+    chrome.runtime.sendMessage({ tipo: 'TENTATIVI_RIMASTI', valore: numeroTentativi - (i + 1) });
     let randomValue;
-    if((i+1)%50 == 0 && i!=numeroTentativi-1) {
-      randomValue = getRandomInRange(300, 420) ; //sleep random tra 5 minuti e 7 minuti ogni 50 tentativi
-      chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Cool down di: ' + randomValue + ' sec'});
+    if ((i + 1) % 50 == 0 && i != numeroTentativi - 1) {
+      randomValue = getRandomInRange(300, 420); //sleep random tra 5 minuti e 7 minuti ogni 50 tentativi
+      chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Cool down di: ' + randomValue + ' sec' });
+
+      //ogni 50 tentativi pulisco la lista trasferimenti dagli elementi venduti
+      await clearSoldItem()
     }
-      else if((i+1)%5 == 0) randomValue = getRandomInRange(2,5) ; //sleep random tra 1 e 3 secondi ogni 5 tentativi
+    else if ((i + 1) % 5 == 0) randomValue = getRandomInRange(2, 5); //sleep random tra 1 e 3 secondi ogni 5 tentativi
     else randomValue = Math.random() + 0.5; //sleep random tra 0.5 e 1 secondi
-    
+
     await sleep(randomValue * 1000);
     i++;
   }
+
+  //pulisco la lista trasferimenti dagli elementi venduti a fine tentativi
+  await clearSoldItem()
 
 }
 
 
 
-async function getFdderList(){
+async function getFdderList() {
 
 
-  let futWizUrl = 'http://localhost:3000/fut/fodder';
+  let futWizUrl = 'http://localhost:3000/fut/fodder?rating=' + fodderRating;
 
   if (!futWizUrl) {
     console.error("URL o Header non definiti per FUTWIZZ");
@@ -433,7 +516,7 @@ async function getFdderList(){
   });
 
   // Invio la richiesta GET
-  try{
+  try {
     const response = await fetch(futWizUrl, {
       method: "GET",
       headers: headers,
@@ -444,19 +527,20 @@ async function getFdderList(){
 
       //se trovo risultati, aggiungo alla lista dei fodder
       if (Array.isArray(data.data) && data?.data?.length) {
-      //Estraggo gli id interni delle carte ed i relativi prezzi
-      data.data.forEach(item => {
-        let fodder = {
-          "pid" : item.pid,
-          "price" : item.prices.console.bin
-        }
-        listaFodder.push(fodder)
-      });
+        //Estraggo gli id interni delle carte ed i relativi prezzi
+        data.data.forEach(item => {
+          let fodder = {
+            "pid": item.pid,
+            "price": item.prices.console.bin
+          }
+          listaFodder.push(fodder)
+        });
 
-      chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Ho recuperato la lista dei fodder da FUTWIZ'});
+        chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Ho recuperato la lista dei fodder (rating ' + fodderRating + ') da FUTWIZ' });
+      }
     }
-    }}catch (error) {
-    chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Errore durante recupero lista dei fodder da FUTWIZ'});
+  } catch (error) {
+    chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Errore durante recupero lista dei fodder da FUTWIZ' });
     console.error("Errore durante recupero lista dei fodder da FUTWIZ:", error);
   }
 
@@ -469,6 +553,9 @@ async function getFdderList(){
 chrome.runtime.onMessage.addListener(async (message) => {
   if (message.tipo === 'FODDER_MODE') {
     ricercaFodder = message.valore;
+    if (message.rating) {
+      fodderRating = message.rating;
+    }
   }
 })
 
@@ -481,20 +568,20 @@ function getNextFodder() {
 
 async function sellFodder(price) {
 
-  sellUrl = "https://utas.mob.v5.prd.futc-ext.gcp.ea.com/ut/game/fc26/auctionhouse"
+  sellUrl = "https://utas.mob.v1.prd.futc-ext.gcp.ea.com/ut/game/fc27/auctionhouse"
   if (!xUtSid) {
     console.error("X-UT-SID non definito");
     return;
   }
 
-  for(id of idCarteAcquistate){
+  for (id of idCarteAcquistate) {
 
     const headers = new Headers({
-    "accept": "*/*",
-    "accept-language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
-    "content-type": "application/json",
-    "x-ut-sid": xUtSid
-  });
+      "accept": "*/*",
+      "accept-language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
+      "content-type": "application/json",
+      "x-ut-sid": xUtSid
+    });
 
     const body = {
       "buyNowPrice": price,
@@ -502,7 +589,7 @@ async function sellFodder(price) {
       "itemData": {
         "id": id
       },
-      "startingBid": price-100
+      "startingBid": price - 100
     };
 
     const bodyJson = JSON.stringify(body);
@@ -520,18 +607,18 @@ async function sellFodder(price) {
       if (response.ok) {
         const data = await response.json();
 
-        chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Carta messa in vendita a: ' + price + ' crediti'});
+        chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Carta messa in vendita a: ' + price + ' crediti' });
       } else {
         console.error(`Errore HTTP: ${response.status} ${response.statusText}`);
-        chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Errore nella messa in vnedita'});
+        chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Errore nella messa in vnedita' });
       }
 
     } catch (error) {
       console.error("Errore durante la richiesta all'Auction House:", error);
     }
-      
+
   }
 
-  
+
 }
 
