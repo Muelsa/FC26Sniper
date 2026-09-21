@@ -25,6 +25,24 @@
   "background": {
     "service_worker": "fc26.js"
   },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.ea.com/ea-sports-fc/ultimate-team/web-app/*",
+        "https://www.ea.com/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["pin-bridge.js"],
+      "matches": [
+        "https://www.ea.com/*"
+      ]
+    }
+  ],
   "action": {
     "default_title": "FC26"
   }

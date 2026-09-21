@@ -9,7 +9,7 @@
 
 <body>
     <h2 style="text-align: center; margin-top: 1rem;">FC27</h2>
-    <p id="versione" style="text-align: center;">v1.1.9</p>
+    <p id="versione" style="text-align: center;">v2.1.0</p>
 
     <div class="container-fluid">
 
@@ -25,17 +25,48 @@
                             <input class="form-check-input" type="checkbox" id="switchFodder">
                             <label class="form-check-label" for="switchFodder">Fodder search</label>
                         </div>
+                        <div class="mt-2 mb-2">
+                            <label class="form-label form-label-sm d-block mb-1 text-muted"
+                                style="font-size: 0.8rem;">Strategia:</label>
+                            <div class="btn-group btn-group-sm w-100" role="group" aria-label="Strategia">
+                                <input type="radio" class="btn-check" name="strategyMode" id="modeSniping"
+                                    value="sniping" autocomplete="off" checked>
+                                <label class="btn btn-outline-success" for="modeSniping">Sniping (BIN)</label>
+
+                                <input type="radio" class="btn-check" name="strategyMode" id="modeBidding"
+                                    value="bidding" autocomplete="off">
+                                <label class="btn btn-outline-warning" for="modeBidding">Mass Bidding</label>
+                            </div>
+                        </div>
+                        <div id="biddingConfigContainer" class="mt-2 mb-2 d-none">
+                            <label for="minMargin" class="form-label form-label-sm text-muted mb-0"
+                                style="font-size: 0.8rem;">Margine min. netto:</label>
+                            <input type="number" class="form-control form-control-sm" id="minMargin" value="250"
+                                min="50" step="50" style="width: 200px;">
+                        </div>
                         <div id="fodderRatingContainer" class="mt-2 mb-2 d-none">
-                            <label class="form-label form-label-sm d-block mb-1 text-muted" style="font-size: 0.8rem;">Rating:</label>
+                            <label class="form-label form-label-sm d-block mb-1 text-muted"
+                                style="font-size: 0.8rem;">Rating Fodder:</label>
                             <div class="btn-group btn-group-sm" role="group" aria-label="Rating Fodder">
-                                <input type="radio" class="btn-check" name="fodderRating" id="rating84" value="84" autocomplete="off" checked>
+                                <input type="radio" class="btn-check" name="fodderRating" id="rating84" value="84"
+                                    autocomplete="off" checked>
                                 <label class="btn btn-outline-primary" for="rating84">84</label>
 
-                                <input type="radio" class="btn-check" name="fodderRating" id="rating85" value="85" autocomplete="off">
+                                <input type="radio" class="btn-check" name="fodderRating" id="rating85" value="85"
+                                    autocomplete="off">
                                 <label class="btn btn-outline-primary" for="rating85">85</label>
 
-                                <input type="radio" class="btn-check" name="fodderRating" id="rating86" value="86" autocomplete="off">
+                                <input type="radio" class="btn-check" name="fodderRating" id="rating86" value="86"
+                                    autocomplete="off">
                                 <label class="btn btn-outline-primary" for="rating86">86</label>
+
+                                <input type="radio" class="btn-check" name="fodderRating" id="rating87" value="87"
+                                    autocomplete="off">
+                                <label class="btn btn-outline-primary" for="rating87">87</label>
+
+                                <input type="radio" class="btn-check" name="fodderRating" id="rating88" value="88"
+                                    autocomplete="off">
+                                <label class="btn btn-outline-primary" for="rating88">88</label>
                             </div>
                         </div>
                         <button type="button" class="btn btn-primary" style="margin-top: 5px;"
