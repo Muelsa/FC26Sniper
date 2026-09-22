@@ -3,13 +3,13 @@
 
 <head>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <title>FC26</title>
+    <title>FC27</title>
     <meta charset="utf-8">
 </head>
 
 <body>
     <h2 style="text-align: center; margin-top: 1rem;">FC27</h2>
-    <p id="versione" style="text-align: center;">v2.1.0</p>
+    <p id="versione" style="text-align: center;">v2.2.0</p>
 
     <div class="container-fluid">
 
@@ -21,10 +21,26 @@
                         <input type="number" class="form-control" id="tentativi" placeholder="Inserisci un numero"
                             min="0" style="width: 200px;">
                         <label for="tentativi">Tentativi ricerca</label>
-                        <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" id="switchFodder">
-                            <label class="form-check-label" for="switchFodder">Fodder search</label>
+                        <!-- Selettore Modalità Bersaglio -->
+                        <div class="mt-2 mb-2">
+                            <label class="form-label form-label-sm d-block mb-1 text-muted"
+                                style="font-size: 0.8rem;">Obiettivo:</label>
+                            <div class="btn-group btn-group-sm w-100" role="group" aria-label="Obiettivo">
+                                <input type="radio" class="btn-check" name="targetMode" id="targetFodder" value="fodder"
+                                    autocomplete="off" checked>
+                                <label class="btn btn-outline-primary" for="targetFodder">Fodder</label>
+
+                                <input type="radio" class="btn-check" name="targetMode" id="targetConsumables"
+                                    value="consumables" autocomplete="off">
+                                <label class="btn btn-outline-primary" for="targetConsumables">Consumabili</label>
+
+                                <input type="radio" class="btn-check" name="targetMode" id="targetManual" value="manual"
+                                    autocomplete="off">
+                                <label class="btn btn-outline-secondary" for="targetManual">Manuale</label>
+                            </div>
                         </div>
+                        <input type="checkbox" id="switchFodder" class="d-none" checked>
+
                         <div class="mt-2 mb-2">
                             <label class="form-label form-label-sm d-block mb-1 text-muted"
                                 style="font-size: 0.8rem;">Strategia:</label>
@@ -41,10 +57,10 @@
                         <div id="biddingConfigContainer" class="mt-2 mb-2 d-none">
                             <label for="minMargin" class="form-label form-label-sm text-muted mb-0"
                                 style="font-size: 0.8rem;">Margine min. netto:</label>
-                            <input type="number" class="form-control form-control-sm" id="minMargin" value="250"
+                            <input type="number" class="form-control form-control-sm" id="minMargin" value="200"
                                 min="50" step="50" style="width: 200px;">
                         </div>
-                        <div id="fodderRatingContainer" class="mt-2 mb-2 d-none">
+                        <div id="fodderRatingContainer" class="mt-2 mb-2">
                             <label class="form-label form-label-sm d-block mb-1 text-muted"
                                 style="font-size: 0.8rem;">Rating Fodder:</label>
                             <div class="btn-group btn-group-sm" role="group" aria-label="Rating Fodder">
@@ -67,6 +83,31 @@
                                 <input type="radio" class="btn-check" name="fodderRating" id="rating88" value="88"
                                     autocomplete="off">
                                 <label class="btn btn-outline-primary" for="rating88">88</label>
+                            </div>
+                        </div>
+                        <div id="consumablesConfigContainer" class="mt-2 mb-2 d-none">
+                            <label for="chemStyleSelect" class="form-label form-label-sm d-block mb-1 text-muted"
+                                style="font-size: 0.8rem;">Stile Intesa:</label>
+                            <select class="form-select form-select-sm mb-2" id="chemStyleSelect" style="width: 200px;">
+                                <option value="all">Tutti (Ombra + Cacciatore)</option>
+                                <option value="268" selected>Ombra (Shadow)</option>
+                                <option value="266">Cacciatore (Hunter)</option>
+                                <option value="265">Ancora (Anchor)</option>
+                                <option value="260">Motore (Engine)</option>
+                                <option value="267">Catalizzatore (Catalyst)</option>
+                            </select>
+
+                            <div class="form-check form-switch mb-1">
+                                <input class="form-check-input" type="checkbox" id="autoBinCheck" checked>
+                                <label class="form-check-label text-muted" for="autoBinCheck"
+                                    style="font-size: 0.8rem;">Auto-Discovery BIN</label>
+                            </div>
+
+                            <div id="manualBinContainer" class="d-none">
+                                <label for="manualBinInput" class="form-label form-label-sm text-muted mb-0"
+                                    style="font-size: 0.8rem;">BIN vendita forzato:</label>
+                                <input type="number" class="form-control form-control-sm" id="manualBinInput"
+                                    placeholder="es. 4000" min="200" step="100" style="width: 200px;">
                             </div>
                         </div>
                         <button type="button" class="btn btn-primary" style="margin-top: 5px;"

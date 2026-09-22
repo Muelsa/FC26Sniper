@@ -11,13 +11,53 @@ let carteAcquistate = 0;
 let carteVinteCiclo = 0;
 let listaFodder = []
 let ricercaFodder = false;
+let targetMode = "fodder"; // "fodder" | "consumables" | "manual"
+let chemStyle = "268";
+let autoBin = true;
+let manualBin = 0;
 let fodderRating = "84";
 let indexFodder = 0;
 let idCarteAcquistate = [];
 let strategyMode = "sniping"; // "sniping" | "bidding"
-let minMargin = 250;
+let minMargin = 200;
 let activeBids = new Map(); // tradeId -> { pid, sellPrice, bidAmount, expiresAt }
 let consecutiveBidErrors = 0;
+let consecutiveSnipeErrors = 0;
+let consecutiveSearchErrors = 0;
+let consecutive401Errors = 0;
+let lastBidTimestamp = 0;
+let lastBidErrorStatus = 0;
+
+// Metadati ufficiali Stili Intesa EA (PlayStyle)
+const CHEM_STYLES = {
+  "268": { id: 268, name: "Ombra (Shadow)", defaultGuess: 4200 },
+  "266": { id: 266, name: "Cacciatore (Hunter)", defaultGuess: 3800 },
+  "265": { id: 265, name: "Ancora (Anchor)", defaultGuess: 1300 },
+  "260": { id: 260, name: "Motore (Engine)", defaultGuess: 800 },
+  "267": { id: 267, name: "Catalizzatore (Catalyst)", defaultGuess: 800 },
+  "255": { id: 255, name: "Falco (Hawk)", defaultGuess: 700 }
+};
+
+const consumableBinCache = new Map(); // playStyleId -> { price, timestamp }
+
+// Gestione centralizzata errore 401 (Sessione scaduta / token non valido)
+async function handle401Error(context = "") {
+  consecutive401Errors++;
+  console.warn(`[FC Sniper ${context}] Errore 401 (Sessione scaduta). Consecutivi: ${consecutive401Errors}/5`);
+  if (consecutive401Errors >= 5) {
+    console.error(`[FC Sniper] Rilevati 5 errori 401 consecutivi. Arresto di sicurezza.`);
+    chrome.runtime.sendMessage({
+      tipo: 'LOG',
+      valore: `[BLOCCO - SESSIONE SCADUTA] Ricevuti 5 errori 401 di fila. La sessione della Web App è scaduta o disconnessa. Bot arrestato. Effettua nuovamente il login nella Web App.`
+    });
+    chrome.runtime.sendMessage({ tipo: 'START', valore: false });
+    start = false;
+    consecutive401Errors = 0;
+  } else {
+    console.warn(`[FC Sniper] In attesa di token aggiornato da Web App (3s)...`);
+    await sleep(3000);
+  }
+}
 
 
 const watchListUrl = "https://utas.mob.v1.prd.futc-ext.gcp.ea.com/ut/game/fc27/watchlist"
@@ -111,14 +151,21 @@ chrome.runtime.onMessage.addListener(async (message) => {
 
 
 
-      // Recupera il numero di tentativi, il rating e la strategia dallo storage
+      // Recupera il numero di tentativi, targetMode, rating e la strategia dallo storage
       numeroTentativi = await getNumeroTentativi();
-      fodderRating = await getFodderRating();
+      targetMode = message.targetMode || await getTargetMode();
+      chemStyle = message.chemStyle || await getChemStyle();
+      autoBin = message.autoBin !== undefined ? message.autoBin : await getAutoBin();
+      manualBin = message.manualBin !== undefined ? message.manualBin : await getManualBin();
+      fodderRating = message.rating || await getFodderRating();
       strategyMode = message.strategyMode || await getStrategyMode();
       minMargin = message.minMargin || await getMinMargin();
       carteAcquistate = 0;
       carteVinteCiclo = 0;
-
+      consecutive401Errors = 0;
+      consecutiveBidErrors = 0;
+      consecutiveSnipeErrors = 0;
+      consecutiveSearchErrors = 0;
 
       chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Avvio operazione (' + (strategyMode === 'bidding' ? 'Mass Bidding' : 'Sniping') + ')' });
       chrome.runtime.sendMessage({ tipo: 'CARTA_ACQUISTATA', valore: "" });
@@ -132,39 +179,42 @@ chrome.runtime.onMessage.addListener(async (message) => {
         chrome.runtime.sendMessage({ tipo: 'CREDITI', valore: crediti });
       }
 
-      switch (ricercaFodder) {
-        case true:
-          if (strategyMode === "bidding") {
-            chrome.runtime.sendMessage({ tipo: 'LOG', valore: `Avvio MASS BIDDING Fodder (Rating ${fodderRating}, Margine min ${minMargin})` });
-            await sendFodderBiddingRequest();
-          } else {
-            chrome.runtime.sendMessage({ tipo: 'LOG', valore: `Avvio SNIPING Fodder (Rating ${fodderRating})` });
-            await sendFodderResearchRequest();
-          }
-          break;
+      if (targetMode === "consumables") {
+        const styleName = chemStyle === "all" ? "Rotazione (Ombra & Cacciatore)" : (CHEM_STYLES[chemStyle]?.name || `Stile ${chemStyle}`);
+        if (strategyMode === "bidding") {
+          chrome.runtime.sendMessage({ tipo: 'LOG', valore: `Avvio MASS BIDDING Consumabili (${styleName}, Margine min ${minMargin})` });
+          await sendConsumableBiddingRequest();
+        } else {
+          chrome.runtime.sendMessage({ tipo: 'LOG', valore: `Avvio SNIPING Consumabili (${styleName})` });
+          await sendConsumableResearchRequest();
+        }
+      } else if (targetMode === "fodder" || ricercaFodder === true) {
+        if (strategyMode === "bidding") {
+          chrome.runtime.sendMessage({ tipo: 'LOG', valore: `Avvio MASS BIDDING Fodder (Rating ${fodderRating}, Margine min ${minMargin})` });
+          await sendFodderBiddingRequest();
+        } else {
+          chrome.runtime.sendMessage({ tipo: 'LOG', valore: `Avvio SNIPING Fodder (Rating ${fodderRating})` });
+          await sendFodderResearchRequest();
+        }
+      } else {
+        let i = 0;
+        while (start == true && i < numeroTentativi) {
+          await sendResearchRequest();
 
-        case false:
+          //aggiorno contatore tentativi rimasti
+          chrome.runtime.sendMessage({ tipo: 'TENTATIVI_RIMASTI', valore: numeroTentativi - (i + 1) });
 
-          let i = 0;
-          while (start == true && i < numeroTentativi) {
-            await sendResearchRequest();
+          let randomValue;
+          if ((i + 1) % 5 == 0) randomValue = getRandomGaussian(3.5, 0.6, 2.0, 5.0); // pausa ogni 5 tentativi
+          else randomValue = getRandomGaussian(1.0, 0.2, 0.5, 1.8); // sleep gaussiano tra le ricerche
 
-            //aggiorno contatore tentativi rimasti
-            chrome.runtime.sendMessage({ tipo: 'TENTATIVI_RIMASTI', valore: numeroTentativi - (i + 1) });
+          await sleep(randomValue * 1000);
 
-            let randomValue;
-            if ((i + 1) % 5 == 0) randomValue = getRandomGaussian(3.5, 0.6, 2.0, 5.0); // pausa ogni 5 tentativi
-            else randomValue = getRandomGaussian(1.0, 0.2, 0.5, 1.8); // sleep gaussiano tra le ricerche
+          i++;
+        }
 
-            await sleep(randomValue * 1000);
-
-            i++;
-          }
-
-          //pulisco la lista trasferimenti dagli elementi venduti a fine ricerche
-          await clearSoldItem()
-
-          break;
+        //pulisco la lista trasferimenti dagli elementi venduti a fine ricerche
+        await clearSoldItem()
       }
 
       chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Ricerca terminata\n' });
@@ -220,7 +270,45 @@ const getStrategyMode = () => {
 const getMinMargin = () => {
   return new Promise((resolve) => {
     chrome.storage.local.get(['minMargin'], (result) => {
-      resolve(result.minMargin ? parseInt(result.minMargin) : 250);
+      resolve(result.minMargin ? parseInt(result.minMargin) : 200);
+    });
+  });
+};
+
+// Funzione per ottenere targetMode come Promise
+const getTargetMode = () => {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['targetMode', 'fodderMode'], (result) => {
+      if (result.targetMode) resolve(result.targetMode);
+      else if (result.fodderMode !== undefined) resolve(result.fodderMode ? "fodder" : "manual");
+      else resolve("fodder");
+    });
+  });
+};
+
+// Funzione per ottenere chemStyle come Promise
+const getChemStyle = () => {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['chemStyle'], (result) => {
+      resolve(result.chemStyle || "268");
+    });
+  });
+};
+
+// Funzione per ottenere autoBin come Promise
+const getAutoBin = () => {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['autoBin'], (result) => {
+      resolve(result.autoBin !== undefined ? result.autoBin : true);
+    });
+  });
+};
+
+// Funzione per ottenere manualBin come Promise
+const getManualBin = () => {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['manualBin'], (result) => {
+      resolve(result.manualBin ? parseInt(result.manualBin) : 0);
     });
   });
 };
@@ -317,6 +405,21 @@ function roundDownToStep(price) {
   return Math.floor(price / step) * step;
 }
 
+// Calcola il margine di profitto netto dinamico in base al valore di mercato della carta
+function calculateTargetMargin(marketPrice, minMarginBase = 200) {
+  // Fascia 1: Economiche (<= 5.000 crediti) -> 250 crediti netti per massimizzare frequenza vincite su carte ad alto traffico
+  if (marketPrice <= 5000) {
+    return minMarginBase > 0 ? minMarginBase : 250;
+  }
+  // Fascia 2: Medie (5.001 - 15.000 crediti) -> 450 crediti netti (ottimo bilanciamento profitto/aggressività)
+  if (marketPrice <= 15000) {
+    return Math.max(450, minMarginBase);
+  }
+  // Fascia 3: Élite (> 15.000 crediti, es. Doué, Isak, Bremer, Alvarez) -> 5% con minimo 1.000 crediti netti
+  const percentMargin = Math.floor(marketPrice * 0.05);
+  return Math.max(1000, percentMargin, minMarginBase);
+}
+
 // Restituisce i millisecondi rimanenti alla scadenza dell'asta attiva più vicina
 function getUrgentAuctionTimeRemaining() {
   const now = Date.now();
@@ -329,7 +432,8 @@ function getUrgentAuctionTimeRemaining() {
         activeBids.delete(tradeId);
         continue;
       }
-      if (diff < minRemainingMs) {
+      // Consideriamo urgente SOLO un'asta che sta ancora attivamente correndo (diff > 0)
+      if (diff > 0 && diff < minRemainingMs) {
         minRemainingMs = diff;
       }
     }
@@ -353,8 +457,12 @@ async function getCrediti() {
     });
 
     if (!response.ok) {
+      if (response.status === 401) {
+        await handle401Error("Crediti");
+      }
       return 'N/D';
     }
+    consecutive401Errors = 0;
 
     const data = await response.json();
     return data?.credits ?? data?.credit ?? 0;
@@ -365,7 +473,6 @@ async function getCrediti() {
 }
 
 async function clearSoldItem() {
-
   const headers = new Headers({
     "accept": "*/*",
     "accept-language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
@@ -379,11 +486,82 @@ async function clearSoldItem() {
       headers: headers,
     });
 
-    console.log('[FC Sniper] Lista trasferimenti pulita');
-
+    console.log('[FC Sniper] Lista trasferimenti pulita da venduti');
   } catch (error) {
     console.error('[ERROR clearing sold items]', error);
-    return 'N/D';
+  }
+
+  // Controlla e rimette in vendita automaticamente eventuali carte scadute/invendute
+  await checkAndRelistExpiredItems();
+}
+
+// Controlla la lista trasferimenti per rilevare oggetti scaduti/invenduti e rimetterli in vendita
+async function checkAndRelistExpiredItems() {
+  if (!xUtSid) return;
+
+  const tradepileUrl = "https://utas.mob.v1.prd.futc-ext.gcp.ea.com/ut/game/fc27/tradepile";
+  const relistUrl = "https://utas.mob.v1.prd.futc-ext.gcp.ea.com/ut/game/fc27/auctionhouse/relist";
+
+  const headers = new Headers({
+    "accept": "*/*",
+    "accept-language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
+    "content-type": "application/json",
+    "x-ut-sid": xUtSid
+  });
+
+  try {
+    const res = await fetch(tradepileUrl, { method: "GET", headers });
+    if (!res.ok) {
+      if (res.status === 401) await handle401Error("Tradepile Check");
+      return;
+    }
+    consecutive401Errors = 0;
+    const data = await res.json();
+    const auctions = data.auctionInfo || [];
+
+    // Cerchiamo le carte scadute e non vendute nella lista trasferimenti
+    const expiredUnsold = auctions.filter(a =>
+      (a.tradeState === "closed" || a.tradeState === "expired") &&
+      (!a.currentBid || a.currentBid === 0)
+    );
+
+    if (expiredUnsold.length > 0) {
+      console.log(`[FC Sniper Tradepile] Rilevate ${expiredUnsold.length} carte scadute/invendute. Rimetto in vendita...`);
+      chrome.runtime.sendMessage({
+        tipo: 'LOG',
+        valore: `[Tradepile] Rilevate ${expiredUnsold.length} carte invendute. Rimetto in vendita al prezzo precedente...`
+      });
+
+      // Chiamata all'endpoint nativo EA di rilistaggio di massa
+      const relistRes = await fetch(relistUrl, {
+        method: "PUT",
+        headers: headers,
+        body: JSON.stringify({})
+      });
+
+      if (relistRes.ok) {
+        console.log(`[FC Sniper Tradepile] ${expiredUnsold.length} carte scadute rimesse in vendita con successo!`);
+        chrome.runtime.sendMessage({
+          tipo: 'LOG',
+          valore: `[Tradepile] ${expiredUnsold.length} carte rimesse in vendita sul mercato!`
+        });
+      } else if (relistRes.status === 401) {
+        await handle401Error("Relist Tradepile");
+      } else {
+        // Fallback: se la chiamata bulk fallisce, le rimettiamo in vendita singolarmente con il loro prezzo originale
+        console.warn(`[FC Sniper Tradepile] Relist bulk ${relistRes.status}, rilistaggio elemento per elemento...`);
+        for (const item of expiredUnsold) {
+          const buyNow = item.buyNowPrice;
+          const itemId = item.itemData?.id;
+          if (itemId && buyNow > 0) {
+            await sellSingleItem(itemId, buyNow);
+            await sleep(getRandomGaussian(1.5, 0.2, 1.2, 2.0) * 1000);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[FC Sniper Tradepile Error]", err);
   }
 }
 
@@ -424,6 +602,8 @@ async function sendResearchRequest() {
 
     // Controlla la risposta
     if (response.ok) {
+      consecutiveSearchErrors = 0;
+      consecutive401Errors = 0;
       const data = await response.json();
       if (data.auctionInfo && data.auctionInfo.length > 0) {
         idCarteAcquistate = [];
@@ -439,7 +619,31 @@ async function sendResearchRequest() {
 
         if (idCarteAcquistate.length > 0) await sendToTransferList();
 
-      } else if (!data.auctionInfo) {
+      }
+    } else {
+      if (response.status === 401) {
+        await handle401Error("Ricerca Sniping");
+      } else if (response.status === 458) {
+        console.warn("[FC Sniper Ricerca] CAPTCHA 458 rilevato!");
+        chrome.runtime.sendMessage({
+          tipo: 'LOG',
+          valore: '[ATTENZIONE - CAPTCHA RILEVATO] Verifica richiesta nella Web App. Bot arrestato.'
+        });
+        start = false;
+      } else if (response.status === 429 || response.status === 521 || response.status === 426) {
+        consecutiveSearchErrors++;
+        console.warn(`[FC Sniper Ricerca] Rate limit EA (${response.status}). Errori consecutivi: ${consecutiveSearchErrors}`);
+        if (consecutiveSearchErrors >= 5) {
+          chrome.runtime.sendMessage({
+            tipo: 'LOG',
+            valore: `[SOFT-BAN RICERCHE RILEVATO] Limite ricerche EA raggiunto (${response.status}). Pausa di sicurezza di 10 min...`
+          });
+          consecutiveSearchErrors = 0;
+          await sleep(600 * 1000);
+        } else {
+          await sleep(getRandomGaussian(3.5, 0.3, 3.0, 4.2) * 1000);
+        }
+      } else {
         console.error("Errore nella ricerca:", response.status, response.statusText);
       }
     }
@@ -480,6 +684,8 @@ async function sendBuyNowRequest(tradeId, buyNowPrice, itemId) {
       body: body
     });
     if (response.ok) {
+      consecutiveSnipeErrors = 0;
+      consecutive401Errors = 0;
       const data = await response.json();
       carteAcquistate += 1;
       idCarteAcquistate.push(itemId);
@@ -487,7 +693,44 @@ async function sendBuyNowRequest(tradeId, buyNowPrice, itemId) {
       chrome.runtime.sendMessage({ tipo: 'CARTA_ACQUISTATA', valore: carteAcquistate });
 
     } else {
-      console.error("Errore nell'acquisto:", response.status, response.statusText);
+      let errorDetails = "";
+      try {
+        const errJson = await response.json();
+        errorDetails = errJson.reason || errJson.message || JSON.stringify(errJson);
+      } catch {
+        try { errorDetails = await response.text(); } catch {}
+      }
+
+      if (response.status === 401) {
+        await handle401Error("BuyNow");
+      } else if (response.status === 458) {
+        console.warn(`[FC Sniper] CAPTCHA Rilevato (458) su Buy Now!`);
+        chrome.runtime.sendMessage({
+          tipo: 'LOG',
+          valore: `[ATTENZIONE - CAPTCHA RILEVATO] EA richiede verifica nella Web App. Bot arrestato.`
+        });
+        start = false;
+      } else if (response.status === 429 || response.status === 426 || response.status === 512 || response.status === 521) {
+        consecutiveSnipeErrors++;
+        console.warn(`[Snipe Fallito ${response.status} - Rate Limit EA] Trade ${tradeId}, prezzo ${buyNowPrice}. Dettagli EA: ${errorDetails}. Errori consecutivi: ${consecutiveSnipeErrors}`);
+
+        if (consecutiveSnipeErrors >= 5) {
+          console.warn(`[FC Sniper] Rilevati ${consecutiveSnipeErrors} errori consecutivi di Snipe Soft-Ban (${response.status}). Attivazione pausa di sicurezza...`);
+          chrome.runtime.sendMessage({
+            tipo: 'LOG',
+            valore: `[SOFT-BAN SNIPE RILEVATO] Limite acquisti EA raggiunto (${response.status}). Pausa di sicurezza di 10 min per sbloccare l'account...`
+          });
+          consecutiveSnipeErrors = 0;
+          await sleep(600 * 1000); // 10 minuti di pausa di sicurezza
+        } else {
+          await sleep(getRandomGaussian(3.5, 0.3, 3.0, 4.2) * 1000);
+        }
+      } else if (response.status === 478 || response.status === 461) {
+        // Carta già acquistata da un altro utente (normale durante lo sniping)
+        console.log(`[FC Sniper] Carta già acquistata da un altro utente (${response.status}) su Trade ${tradeId}`);
+      } else {
+        console.error("Errore nell'acquisto:", response.status, response.statusText, errorDetails);
+      }
     }
   } catch (error) {
     console.error("Errore durante l'invio della richiesta di acquisto:", error);
@@ -532,7 +775,10 @@ async function sendToTransferList() {
         body: bodyJson
       });
       if (response.ok) {
+        consecutive401Errors = 0;
         console.log('[FC Sniper] Carte inviate alla lista trasferimenti');
+      } else if (response.status === 401) {
+        await handle401Error("Transfer List");
       }
     } catch (error) {
       console.error("[FC Sniper] Errore durante l'invio alla lista trasferimenti:", error);
@@ -549,14 +795,21 @@ async function sendFodderResearchRequest() {
   let i = 0
   while (start == true && i < numeroTentativi) {
 
-    // Ad inizio e ad ogni giro completo della lista, ricarica i prezzi da Futwiz
+    // Ad inizio e ad ogni giro completo della lista, ricarica i prezzi dal server
     if (i == 0 || indexFodder == 0 || listaFodder.length == 0) {
       if (i > 0) {
-        console.log('[FC Sniper] Giro fodder completato. Ricarico lista e prezzi aggiornati da Futwiz...');
+        console.log('[FC Sniper] Giro fodder completato. Ricarico lista e prezzi aggiornati...');
       }
       listaFodder = [];
       indexFodder = 0;
       await getFdderList();
+    }
+
+    if (listaFodder.length === 0) {
+      console.log('[FC Sniper] Nessun fodder disponibile. Attendo 3s...');
+      await sleep(3000);
+      i++;
+      continue;
     }
 
     const next = getNextFodder();
@@ -614,6 +867,8 @@ async function sendFodderResearchRequest() {
 
       // Controlla la risposta
       if (response.ok) {
+        consecutiveSearchErrors = 0;
+        consecutive401Errors = 0;
         const data = await response.json();
         if (data.auctionInfo && data.auctionInfo.length > 0) {
           console.log('[FC Sniper] Ho trovato ' + data.auctionInfo.length + ' carte');
@@ -635,7 +890,31 @@ async function sendFodderResearchRequest() {
             await sellFodder(next.price);
           }
 
-        } else if (!data.auctionInfo) {
+        }
+      } else {
+        if (response.status === 401) {
+          await handle401Error("Ricerca Fodder Sniping");
+        } else if (response.status === 458) {
+          console.warn("[FC Sniper Ricerca Fodder] CAPTCHA 458 rilevato!");
+          chrome.runtime.sendMessage({
+            tipo: 'LOG',
+            valore: '[ATTENZIONE - CAPTCHA RILEVATO] Verifica richiesta nella Web App. Bot arrestato.'
+          });
+          start = false;
+        } else if (response.status === 429 || response.status === 521 || response.status === 426) {
+          consecutiveSearchErrors++;
+          console.warn(`[FC Sniper Ricerca Fodder] Rate limit EA (${response.status}). Errori consecutivi: ${consecutiveSearchErrors}`);
+          if (consecutiveSearchErrors >= 5) {
+            chrome.runtime.sendMessage({
+              tipo: 'LOG',
+              valore: `[SOFT-BAN RICERCHE RILEVATO] Limite ricerche EA raggiunto (${response.status}). Pausa di sicurezza di 10 min...`
+            });
+            consecutiveSearchErrors = 0;
+            await sleep(600 * 1000);
+          } else {
+            await sleep(getRandomGaussian(3.5, 0.3, 3.0, 4.2) * 1000);
+          }
+        } else {
           console.error("Errore nella ricerca:", response.status, response.statusText);
         }
       }
@@ -668,63 +947,79 @@ async function sendFodderResearchRequest() {
 
 
 
-async function getFdderList() {
+// Converte prezzi in formato stringa ("2K", "2.1K", "11.75K", "1.2M", "2,500") o numerico in crediti interi
+function parseFodderPrice(price) {
+  if (typeof price === 'number') return Math.round(price);
+  if (!price || typeof price !== 'string') return 0;
 
-
-  let futWizUrl = 'http://localhost:3000/fut/fodder?rating=' + fodderRating;
-
-  if (!futWizUrl) {
-    console.error("URL o Header non definiti per FUTWIZZ");
-    return;
+  const raw = price.trim().toUpperCase();
+  if (raw.endsWith('M')) {
+    const numStr = raw.slice(0, -1).replace(',', '.');
+    const val = parseFloat(numStr);
+    return isNaN(val) ? 0 : Math.round(val * 1000000);
+  }
+  if (raw.endsWith('K')) {
+    const numStr = raw.slice(0, -1).replace(',', '.');
+    const val = parseFloat(numStr);
+    return isNaN(val) ? 0 : Math.round(val * 1000);
   }
 
-  const headers = new Headers({
-    "accept": "text/x-component",
-    "accept-language": "it-IT,it;q=0.8",
-    "content-type": "text/plain;charset=UTF-8",
-    "next-action": "7f738887f1d746cf4daefba82830317ddb96a802c6",
-    "next-router-state-tree":
-      "%5B%22%22%2C%7B%22children%22%3A%5B%5B%22game%22%2C%22fc26%22%2C%22d%22%5D%2C%7B%22children%22%3A%5B%22players%22%2C%7B%22children%22%3A%5B%22__PAGE__%3F%7B%5C%22sort%5C%22%3A%5C%22price%5C%22%2C%5C%22direction%5C%22%3A%5C%22asc%5C%22%2C%5C%22rating_min%5C%22%3A%5C%2284%5C%22%2C%5C%22rating_max%5C%22%3A%5C%2284%5C%22%2C%5C%22priceRange_min%5C%22%3A%5C%22200%5C%22%7D%22%2C%7B%7D%2C%22%2Ffc26%2Fplayers%3Fsort%3Dprice%26direction%3Dasc%26rating_min%3D84%26rating_max%3D84%26priceRange_min%3D200%22%2C%22refresh%22%5D%7D%5D%7D%5D%7D%2Cnull%2Cnull%2Ctrue%5D",
-    "priority": "u=1, i",
-    "sec-ch-ua": "\"Chromium\";v=\"142\", \"Brave\";v=\"142\", \"Not_A Brand\";v=\"99\"",
-    "sec-ch-ua-mobile": "?0",
-    "sec-ch-ua-platform": "\"Windows\"",
-    "sec-fetch-dest": "empty",
-    "sec-fetch-mode": "cors",
-    "sec-fetch-site": "same-origin",
-    "sec-gpc": "1"
-  });
+  const clean = raw.replace(/[^\d.]/g, '');
+  const val = parseFloat(clean);
+  return isNaN(val) ? 0 : Math.round(val);
+}
 
-  // Invio la richiesta GET
+async function getFdderList() {
+  const fodderUrl = 'http://localhost:3000/fut/fodder?rating=' + fodderRating;
+
   try {
-    const response = await fetch(futWizUrl, {
+    const response = await fetch(fodderUrl, {
       method: "GET",
-      headers: headers,
-      referrer: futWizUrl,
+      headers: {
+        "Accept": "application/json"
+      }
     });
+
     if (response.ok) {
       const data = await response.json();
 
-      //se trovo risultati, aggiungo alla lista dei fodder
-      if (Array.isArray(data.data) && data?.data?.length) {
-        //Estraggo gli id interni delle carte ed i relativi prezzi
-        data.data.forEach(item => {
-          let fodder = {
-            "pid": item.pid,
-            "price": item.prices.console.bin
+      // Supporta sia il nuovo formato ("players") sia il precedente ("data") o array diretto
+      const rawList = Array.isArray(data.players)
+        ? data.players
+        : Array.isArray(data.data)
+          ? data.data
+          : Array.isArray(data)
+            ? data
+            : [];
+
+      if (rawList.length > 0) {
+        rawList.forEach(item => {
+          const pid = item.id || item.pid || item.assetId || item.resourceId || item.definitionid;
+          const rawPrice = item.price ?? item.prices?.console?.bin ?? item.prices?.ps?.bin ?? item.bin;
+          const parsedPrice = parseFodderPrice(rawPrice);
+
+          if (pid && parsedPrice > 0) {
+            listaFodder.push({
+              pid: String(pid),
+              name: item.name || "",
+              price: parsedPrice,
+              rating: item.rating || Number(fodderRating)
+            });
           }
-          listaFodder.push(fodder)
         });
 
-        console.log('[FC Sniper] Ho recuperato la lista dei fodder (rating ' + fodderRating + ') da FUTWIZ');
+        const source = data.source || "server";
+        console.log(`[FC Sniper] Ho recuperato ${listaFodder.length} fodder (rating ${fodderRating}) da ${source}`);
+      } else {
+        console.warn(`[FC Sniper] Nessun fodder trovato nella risposta per rating ${fodderRating}`);
       }
+    } else {
+      console.error(`[FC Sniper] Errore risposta server fodder: ${response.status} ${response.statusText}`);
     }
   } catch (error) {
-    chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Errore durante recupero lista dei fodder da FUTWIZ' });
-    console.error("Errore durante recupero lista dei fodder da FUTWIZ:", error);
+    chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Errore durante recupero lista dei fodder dal server' });
+    console.error("Errore durante recupero lista dei fodder dal server:", error);
   }
-
-
 }
 
 
@@ -733,6 +1028,10 @@ async function getFdderList() {
 chrome.runtime.onMessage.addListener(async (message) => {
   if (message.tipo === 'FODDER_MODE') {
     ricercaFodder = message.valore;
+    if (message.targetMode) targetMode = message.targetMode;
+    if (message.chemStyle) chemStyle = message.chemStyle;
+    if (message.autoBin !== undefined) autoBin = message.autoBin;
+    if (message.manualBin !== undefined) manualBin = message.manualBin;
     if (message.rating) {
       fodderRating = message.rating;
     }
@@ -796,10 +1095,14 @@ async function sellFodder(price) {
       });
 
       if (response.ok) {
+        consecutive401Errors = 0;
         const data = await response.json();
 
         chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Carta messa in vendita a: ' + price + ' crediti' });
       } else {
+        if (response.status === 401) {
+          await handle401Error("Messa in Vendita Fodder");
+        }
         console.error(`[FC Sniper] Errore HTTP: ${response.status} ${response.statusText} nella messa in vendita`);
         chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Errore nella messa in vendita a ' + price + ' crediti' });
       }
@@ -818,6 +1121,16 @@ async function sendBidRequest(tradeId, bidAmount, itemId) {
   if (!xUtSid) {
     console.error("X-UT-SID non definito");
     return false;
+  }
+
+  // Queue Anti-Collisione Globale:
+  // Garantisce che nessun'offerta verso EA possa partire a meno di 1.2s dalla precedente,
+  // impedendo a pacchetti simultanei di sovrapporsi e colpire il server nello stesso millisecondo.
+  const elapsed = Date.now() - lastBidTimestamp;
+  const MIN_BID_INTERVAL_MS = 1200;
+  if (elapsed < MIN_BID_INTERVAL_MS) {
+    const waitMs = MIN_BID_INTERVAL_MS - elapsed;
+    await sleep(waitMs);
   }
 
   triggerPinEvent("TRIGGER_PIN_BID", { tradeId, bidAmount, itemId });
@@ -840,8 +1153,12 @@ async function sendBidRequest(tradeId, bidAmount, itemId) {
       body: body
     });
 
+    lastBidTimestamp = Date.now();
+    lastBidErrorStatus = response.status;
+
     if (response.ok) {
       consecutiveBidErrors = 0;
+      consecutive401Errors = 0;
       console.log(`[FC Sniper] Offerta di ${bidAmount} crediti inviata (Trade: ${tradeId})`);
       return true;
     } else {
@@ -854,13 +1171,12 @@ async function sendBidRequest(tradeId, bidAmount, itemId) {
       }
 
       if (response.status === 401) {
-        console.warn(`[Bid Fallito 401 - Sessione scaduta] In attesa di token aggiornato da Web App...`);
-        await sleep(3000);
+        await handle401Error("Bid");
       } else if (response.status === 429 || response.status === 426 || response.status === 512 || response.status === 521) {
         consecutiveBidErrors++;
         console.warn(`[Bid Fallito ${response.status} - Rate Limit EA] Trade ${tradeId}, offerta ${bidAmount}. Dettagli EA: ${errorDetails}. Errori consecutivi: ${consecutiveBidErrors}`);
 
-        if (consecutiveBidErrors >= 5) {
+        if (consecutiveBidErrors >= 3) {
           console.warn(`[FC Sniper] Rilevati ${consecutiveBidErrors} errori consecutivi di Bid Soft-Ban (${response.status}). Attivazione pausa di sicurezza...`);
           chrome.runtime.sendMessage({
             tipo: 'LOG',
@@ -869,7 +1185,8 @@ async function sendBidRequest(tradeId, bidAmount, itemId) {
           consecutiveBidErrors = 0;
           await sleep(600 * 1000); // 10 minuti di pausa di sicurezza
         } else {
-          await sleep(getRandomGaussian(3.5, 0.3, 3.0, 4.2) * 1000);
+          // Raffreddamento immediato al primo/secondo errore rate-limit
+          await sleep(getRandomGaussian(8.0, 1.0, 6.0, 10.0) * 1000);
         }
       } else {
         console.warn(`[Bid Fallito ${response.status}] Trade ${tradeId}, offerta ${bidAmount}. Dettagli EA: ${errorDetails}`);
@@ -928,12 +1245,45 @@ async function sellSingleItem(itemId, price) {
       mode: "cors"
     });
     if (resp.ok) {
+      consecutive401Errors = 0;
       console.log(`[FC Sniper] Carta vinta messa in vendita al BIN: ${price} crediti`);
       return true;
+    } else if (resp.status === 401) {
+      await handle401Error("Listing");
     }
     return false;
   } catch (e) {
     console.error("Errore listing carta vinta:", e);
+    return false;
+  }
+}
+
+// Aggiunge un'asta alla Watchlist (Lista Osservati) senza effettuare offerte
+async function addToWatchlist(tradeId) {
+  if (!xUtSid) return false;
+
+  const url = "https://utas.mob.v1.prd.futc-ext.gcp.ea.com/ut/game/fc27/watchlist";
+  const headers = new Headers({
+    "accept": "*/*",
+    "accept-language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
+    "content-type": "application/json",
+    "x-ut-sid": xUtSid
+  });
+  const body = JSON.stringify({ auctionInfo: [{ id: tradeId }] });
+
+  try {
+    const res = await fetch(url, { method: "PUT", headers, body });
+    if (res.ok) {
+      consecutive401Errors = 0;
+      return true;
+    } else if (res.status === 401) {
+      await handle401Error("AddToWatchlist");
+    } else {
+      console.warn(`[FC Sniper Watchlist] Aggiunta agli osservati fallita per Trade ${tradeId} (Status: ${res.status})`);
+    }
+    return false;
+  } catch (err) {
+    console.error("[FC Sniper AddToWatchlist Error]", err);
     return false;
   }
 }
@@ -971,19 +1321,29 @@ async function getFodderPriceForItem(itemData) {
     }
   }
 
-  // 2. Se non presente in memoria e abbiamo il rating, interroga il proxy locale Futwiz
+  // 2. Se non presente in memoria e abbiamo il rating, interroga il server locale
   if (rating) {
     try {
       const res = await fetch('http://localhost:3000/fut/fodder?rating=' + rating);
       if (res.ok) {
         const json = await res.json();
-        if (Array.isArray(json.data) && json.data.length > 0) {
+        const rawList = Array.isArray(json.players)
+          ? json.players
+          : Array.isArray(json.data)
+            ? json.data
+            : Array.isArray(json)
+              ? json
+              : [];
+        if (rawList.length > 0) {
           if (assetId) {
-            const match = json.data.find(d => d.pid == assetId || d.definitionid == assetId);
-            if (match?.prices?.console?.bin) return match.prices.console.bin;
-            if (match?.price) return match.price;
+            const match = rawList.find(d => (d.id || d.pid || d.assetId || d.resourceId || d.definitionid) == assetId);
+            if (match) {
+              const rawPrice = match.price ?? match.prices?.console?.bin ?? match.prices?.ps?.bin ?? match.bin;
+              const p = parseFodderPrice(rawPrice);
+              if (p > 0) return p;
+            }
           }
-          const bins = json.data.map(d => d.prices?.console?.bin || d.price).filter(p => p > 0);
+          const bins = rawList.map(d => parseFodderPrice(d.price ?? d.prices?.console?.bin ?? d.prices?.ps?.bin ?? d.bin)).filter(p => p > 0);
           if (bins.length > 0) return Math.min(...bins);
         }
       }
@@ -1035,7 +1395,11 @@ async function reconcileWatchlistOnStartup() {
           let sellPrice = tracked?.sellPrice;
 
           if (!sellPrice || sellPrice <= 0) {
-            sellPrice = await getFodderPriceForItem(item.itemData);
+            if (item.itemData?.playStyle) {
+              sellPrice = await discoverConsumableLowestBin(item.itemData.playStyle, manualBin);
+            } else {
+              sellPrice = await getFodderPriceForItem(item.itemData);
+            }
           }
 
           await moveSingleItemToTrade(itemId);
@@ -1104,11 +1468,11 @@ async function resolveWatchlist() {
     });
 
     if (response.status === 401) {
-      console.warn("[FC Sniper] Watchlist 401 (Sessione scaduta). In attesa di refresh token...");
-      await sleep(3000);
+      await handle401Error("Watchlist");
       return;
     }
     if (!response.ok) return;
+    consecutive401Errors = 0;
     const data = await response.json();
     if (data.credits !== undefined) {
       crediti = data.credits;
@@ -1142,7 +1506,11 @@ async function resolveWatchlist() {
           let sellPrice = tracked?.sellPrice;
 
           if (!sellPrice || sellPrice <= 0) {
-            sellPrice = await getFodderPriceForItem(item.itemData);
+            if (item.itemData?.playStyle) {
+              sellPrice = await discoverConsumableLowestBin(item.itemData.playStyle, manualBin);
+            } else {
+              sellPrice = await getFodderPriceForItem(item.itemData);
+            }
           }
 
           const buyPrice = item.currentBid || tracked?.bidAmount || 'N/D';
@@ -1159,49 +1527,114 @@ async function resolveWatchlist() {
           await removeStoredPendingBid(tradeId);
           activeBids.delete(String(tradeId));
           activeBids.delete(Number(tradeId));
-        } else if (bidState === "outbid") {
+        } else {
           await deleteFromWatchlist(tradeId);
           await removeStoredPendingBid(tradeId);
           activeBids.delete(String(tradeId));
           activeBids.delete(Number(tradeId));
-          console.log(`[FC Sniper] Asta superata e chiusa (Trade: ${tradeId}). Rimossa per recuperare crediti.`);
+          console.log(`[FC Sniper Watchlist] Asta conclusa non vinta (Trade: ${tradeId}). Rimossa dagli osservati.`);
         }
-      } else if (tradeState === "active" && bidState === "outbid") {
-        // Siamo stati superati mentre l'asta è ancora attiva: valutiamo se CONTRORILANCIARE
+      }
+    }
+
+    // Queue Bidding & Controrilanci Watchlist:
+    // Raccoglie:
+    // 1) Aste OSSERVATE (non ancora offerte) che sono entrate nella finestra di partecipazione (<= 20s)
+    // 2) Aste già contese su cui siamo stati SUPERATI (outbid <= 8s)
+    const eligibleActions = [];
+    for (const item of auctions) {
+      if (item.tradeState === "active") {
+        const tradeId = item.tradeId;
+        const tracked = storedBids[String(tradeId)] || activeBids.get(tradeId) || activeBids.get(Number(tradeId));
         if (tracked && tracked.maxBidAllowed) {
-          let nextBid = calculateNextBid(item.startingBid, item.currentBid);
-
-          // Se l'offerta precedente a questo stesso importo era già fallita (probabile offerta rivale già registrata o cache EA disallineata),
-          // proviamo lo scalino successivo per evitare di ripetere un'offerta già rifiutata dai server
-          if (tracked.lastFailedBid && tracked.lastFailedBid >= nextBid) {
-            nextBid = calculateNextBid(tracked.lastFailedBid, tracked.lastFailedBid);
-            console.log(`[FC Sniper] Offerta precedente a ${tracked.lastFailedBid} fallita/superata. Ricalcolo controrilancio a ${nextBid}...`);
-          }
-
-          // Se il rilancio rispetta il tetto massimo e l'asta scade nei prossimi 120s
-          if (nextBid <= tracked.maxBidAllowed && item.expires <= 120) {
-            console.log(`[FC Sniper] CONTRORILANCIO su Trade ${tradeId}: superato a ${item.currentBid}, rilancio a ${nextBid} crediti (Max: ${tracked.maxBidAllowed})`);
-
-            const ok = await sendBidRequest(tradeId, nextBid, itemId);
-            if (ok) {
-              tracked.bidAmount = nextBid;
-              delete tracked.lastFailedBid;
-              tracked.expiresAt = Date.now() + (item.expires * 1000);
-              await storePendingBid(tradeId, tracked);
-              activeBids.set(String(tradeId), tracked);
-            } else {
-              tracked.lastFailedBid = nextBid;
-              await storePendingBid(tradeId, tracked);
-              activeBids.set(String(tradeId), tracked);
-            }
-            // Pausa rapida e gaussiana (500-950ms, media ~700ms) per rapidità ed efficacia nel controrilancio
-            await sleep(getRandomGaussian(0.70, 0.12, 0.50, 0.95) * 1000);
-          } else if (nextBid > tracked.maxBidAllowed) {
-            console.log(`[FC Sniper] Asta Trade ${tradeId} superata a ${item.currentBid}. Il prossimo rilancio (${nextBid}) supererebbe il limite (${tracked.maxBidAllowed}). Abbandono.`);
+          const nextBid = calculateNextBid(item.startingBid, item.currentBid);
+          // Se il prossimo rilancio supera già il tetto massimo, abbandoniamo subito senza aspettare
+          if (nextBid > tracked.maxBidAllowed) {
+            console.log(`[FC Sniper Watchlist] Asta Trade ${tradeId} (${tracked.name || 'Trade ' + tradeId}) superata a ${item.currentBid}. Il prossimo rilancio (${nextBid}) supererebbe il limite (${tracked.maxBidAllowed}). Abbandono.`);
+            await deleteFromWatchlist(tradeId);
             await removeStoredPendingBid(tradeId);
             activeBids.delete(String(tradeId));
             activeBids.delete(Number(tradeId));
+            continue;
           }
+
+          if (tracked.isWatched) {
+            // Carta OSSERVATA: controlliamo se è arrivato il momento di partecipare all'asta (<= 20s)
+            if (item.expires !== undefined && item.expires <= 20) {
+              eligibleActions.push({ item, tracked, isInitialSniper: true });
+            }
+          } else if (item.bidState === "outbid") {
+            // Carta SUPERATA: finestra sniper di controrilancio (<= 8s)
+            if (item.expires !== undefined && item.expires <= 8) {
+              eligibleActions.push({ item, tracked, isInitialSniper: false });
+            }
+          }
+        }
+      }
+    }
+
+    if (eligibleActions.length > 0) {
+      // Ordina per urgenza: chi scade prima riceve l'offerta per primo
+      eligibleActions.sort((a, b) => (a.item.expires || 0) - (b.item.expires || 0));
+
+      for (const { item, tracked, isInitialSniper } of eligibleActions) {
+        // Circuit Breaker: se l'offerta precedente ha ricevuto un rate-limit da EA, fermiamo la coda
+        if (lastBidErrorStatus === 429 || lastBidErrorStatus === 426 || lastBidErrorStatus === 512 || lastBidErrorStatus === 521) {
+          console.warn(`[FC Sniper Queue] Rate limit EA attivo (${lastBidErrorStatus}). Sospendo la coda offerte Watchlist.`);
+          break;
+        }
+
+        const tradeId = item.tradeId;
+        const itemId = item.itemData?.id || tracked?.itemId;
+        let nextBid = calculateNextBid(item.startingBid, item.currentBid);
+
+        const nextRebidNumber = isInitialSniper ? 0 : ((tracked.rebidCount || 0) + 1);
+
+        // All-In Tattico (dopo 5 controrilanci di fila, dal 6° rilancio in poi):
+        if (nextRebidNumber > 5 && nextBid < tracked.maxBidAllowed) {
+          console.log(`[FC Sniper All-In Tattico] Asta fortemente contesa (${nextRebidNumber}° rilancio) su Trade ${tradeId}. Salto direttamente al Max Bid (${tracked.maxBidAllowed} crediti) per risolvere subito l'asta!`);
+          nextBid = tracked.maxBidAllowed;
+        }
+
+        if (tracked.lastFailedBid && tracked.lastFailedBid >= nextBid) {
+          nextBid = calculateNextBid(tracked.lastFailedBid, tracked.lastFailedBid);
+          console.log(`[FC Sniper] Offerta precedente a ${tracked.lastFailedBid} fallita/superata. Ricalcolo controrilancio a ${nextBid}...`);
+        }
+
+        if (nextBid <= tracked.maxBidAllowed) {
+          if (isInitialSniper) {
+            console.log(`[FC Sniper Watchlist] Asta osservata in scadenza (${item.expires}s) per ${tracked.name || 'Trade ' + tradeId}: È IL MOMENTO DI PARTECIPARE! Offro ${nextBid} crediti (Max: ${tracked.maxBidAllowed})`);
+          } else {
+            console.log(`[FC Sniper Queue] CONTRORILANCIO #${nextRebidNumber} (Sniper a ${item.expires}s) su Trade ${tradeId}: superato a ${item.currentBid}, rilancio a ${nextBid} crediti (Max: ${tracked.maxBidAllowed})`);
+          }
+
+          const ok = await sendBidRequest(tradeId, nextBid, itemId);
+          if (ok) {
+            tracked.isWatched = false; // Ora l'offerta è attiva a tutti gli effetti
+            tracked.bidAmount = nextBid;
+            tracked.rebidCount = nextRebidNumber;
+            delete tracked.lastFailedBid;
+            tracked.expiresAt = Date.now() + (item.expires * 1000);
+            await storePendingBid(tradeId, tracked);
+            activeBids.set(String(tradeId), tracked);
+            // Ritardo rapido tra offerte consecutive
+            await sleep(getRandomGaussian(1.0, 0.1, 0.85, 1.2) * 1000);
+          } else {
+            tracked.lastFailedBid = nextBid;
+            await storePendingBid(tradeId, tracked);
+            activeBids.set(String(tradeId), tracked);
+            // Se fallito per rate limit EA, interrompiamo subito la coda per non accumulare errori
+            if (lastBidErrorStatus === 429 || lastBidErrorStatus === 426 || lastBidErrorStatus === 512 || lastBidErrorStatus === 521) {
+              console.warn(`[FC Sniper Queue] Errore ${lastBidErrorStatus} su Trade ${tradeId}. Arresto coda offerte.`);
+              break;
+            }
+          }
+        } else if (nextBid > tracked.maxBidAllowed) {
+          console.log(`[FC Sniper] Asta Trade ${tradeId} superata a ${item.currentBid}. Il prossimo rilancio (${nextBid}) supererebbe il limite (${tracked.maxBidAllowed}). Abbandono.`);
+          await deleteFromWatchlist(tradeId);
+          await removeStoredPendingBid(tradeId);
+          activeBids.delete(String(tradeId));
+          activeBids.delete(Number(tradeId));
         }
       }
     }
@@ -1225,15 +1658,16 @@ async function sendFodderBiddingRequest() {
       const secLeft = Math.max(0, Math.round(getUrgentAuctionTimeRemaining() / 1000));
       console.log(`[FC Sniper] Asta urgente in chiusura a breve (~${secLeft}s). Sospendo ricerche e monitoro watchlist per rilancio/vittoria...`);
       await resolveWatchlist();
-      await sleep(getRandomGaussian(3.5, 0.4, 3.0, 4.2) * 1000);
+      // Polling rapido e preciso (1.5-2.5s, media ~2.0s) per colpire la finestra sniper (<=8s)
+      await sleep(getRandomGaussian(2.0, 0.25, 1.5, 2.5) * 1000);
     }
 
     if (start !== true) break;
 
-    // Ad inizio e ad ogni giro completo della lista, ricarica i prezzi da Futwiz
+    // Ad inizio e ad ogni giro completo della lista, ricarica i prezzi dal server
     if (i === 0 || indexFodder === 0 || listaFodder.length === 0) {
       if (i > 0) {
-        console.log('[FC Sniper] Giro fodder completato. Ricarico lista e prezzi aggiornati da Futwiz...');
+        console.log('[FC Sniper] Giro fodder completato. Ricarico lista e prezzi aggiornati dal server...');
       }
       listaFodder = [];
       indexFodder = 0;
@@ -1241,20 +1675,21 @@ async function sendFodderBiddingRequest() {
     }
 
     if (listaFodder.length === 0) {
-      console.log('[FC Sniper] Nessun fodder disponibile da Futwiz. Attendo...');
+      console.log('[FC Sniper] Nessun fodder disponibile dal server. Attendo...');
       await sleep(3000);
       i++;
       continue;
     }
 
     const next = getNextFodder();
-    const marketPrice = next.price; // Lowest BIN live da Futwiz
+    const marketPrice = next.price; // Lowest BIN live dal server
     const netIncome = Math.floor(marketPrice * 0.95);
-    const maxBidAllowed = roundDownToStep(netIncome - minMargin);
+    const targetMargin = calculateTargetMargin(marketPrice, minMargin);
+    const maxBidAllowed = roundDownToStep(netIncome - targetMargin);
 
     // Protezione margine zero (se maxBidAllowed < 700 per un oro raro, non c'è margine)
     if (maxBidAllowed < 700) {
-      console.log(`[FC Sniper] Fodder PID ${next.pid} (Rating ${fodderRating}, BIN ${marketPrice}): margine insufficiente (Max Bid ${maxBidAllowed} < 700). Salto.`);
+      console.log(`[FC Sniper] Fodder ${next.name ? next.name + ' (PID ' + next.pid + ')' : 'PID ' + next.pid} (Rating ${fodderRating}, BIN ${marketPrice}): margine insufficiente (Max Bid ${maxBidAllowed} < 700). Salto.`);
       i++;
       await sleep(600);
       continue;
@@ -1267,6 +1702,13 @@ async function sendFodderBiddingRequest() {
 
     for (let attempt = 0; attempt < minBidBumps.length; attempt++) {
       if (start !== true) break;
+
+      // Check rapido prima di ogni tentativo di ricerca: se un'asta attiva è diventata urgente (<= 25s),
+      // interrompiamo subito la ricerca per andare a difendere l'asta in chiusura
+      if (activeBids.size > 0 && getUrgentAuctionTimeRemaining() <= 25000) {
+        console.log(`[FC Sniper] Rilevata asta urgente (<= 25s) durante la ricerca. Interrompo per difenderla subito.`);
+        break;
+      }
 
       const url = new URL(baseUrl);
       url.searchParams.set("num", "21");
@@ -1290,54 +1732,89 @@ async function sendFodderBiddingRequest() {
       try {
         const response = await fetch(url.href, { method: "GET", headers });
         if (response.ok) {
+          consecutive401Errors = 0;
           const data = await response.json();
           const auctions = data.auctionInfo || [];
 
-          // Filtriamo le aste valide in scadenza (<= 120s) e non già nostre
-          const eligibleAuctions = auctions.filter(a => a.bidState !== "highest" && a.expires <= 120);
+          // Separiamo le aste trovate:
+          // 1) Aste in chiusura immediata (<= 20s): offerta diretta
+          // 2) Aste con margine ma a > 20s (e <= 300s): le aggiungiamo agli osservati per ricontrollarle al momento giusto!
+          const SNIPER_WINDOW_SEC = 20;
+          let watchedCount = 0;
 
-          if (eligibleAuctions.length > 0) {
-            for (const auction of eligibleAuctions) {
-              if (start !== true) break;
+          for (const auction of auctions) {
+            if (start !== true) break;
+            const tradeIdStr = String(auction.tradeId);
+            if (activeBids.has(tradeIdStr) || auction.bidState === "highest") continue;
 
-              const nextBid = calculateNextBid(auction.startingBid, auction.currentBid);
+            const nextBid = calculateNextBid(auction.startingBid, auction.currentBid);
+            if (nextBid > maxBidAllowed) continue;
 
-              if (nextBid <= maxBidAllowed) {
-                console.log(`[FC Sniper] Asta in scadenza (${auction.expires}s): offro ${nextBid} crediti (Max: ${maxBidAllowed}, BIN: ${marketPrice})`);
+            // Caso A: Asta in chiusura immediata (<= 20s) -> Offerta diretta
+            if (auction.expires > 0 && auction.expires <= SNIPER_WINDOW_SEC) {
+              console.log(`[FC Sniper] Asta in chiusura (${auction.expires}s) per ${next.name || 'PID ' + next.pid}: offro ${nextBid} crediti (Max: ${maxBidAllowed}, BIN: ${marketPrice}, Margine: ${targetMargin})`);
 
-                const ok = await sendBidRequest(auction.tradeId, nextBid, auction.itemData?.id);
-                if (ok) {
-                  offersCount++;
-                  const bidData = {
-                    pid: next.pid,
-                    sellPrice: marketPrice,
-                    maxBidAllowed: maxBidAllowed,
-                    bidAmount: nextBid,
-                    rating: fodderRating,
-                    itemId: auction.itemData?.id,
-                    expiresAt: Date.now() + (auction.expires * 1000)
-                  };
-                  activeBids.set(String(auction.tradeId), bidData);
-                  await storePendingBid(auction.tradeId, bidData);
-                }
+              const ok = await sendBidRequest(auction.tradeId, nextBid, auction.itemData?.id);
+              if (ok) {
+                offersCount++;
+                const bidData = {
+                  pid: next.pid,
+                  name: next.name,
+                  sellPrice: marketPrice,
+                  maxBidAllowed: maxBidAllowed,
+                  bidAmount: nextBid,
+                  rating: fodderRating,
+                  itemId: auction.itemData?.id,
+                  expiresAt: Date.now() + (auction.expires * 1000),
+                  rebidCount: 0,
+                  isWatched: false
+                };
+                activeBids.set(tradeIdStr, bidData);
+                await storePendingBid(auction.tradeId, bidData);
+              } else if (lastBidErrorStatus === 429 || lastBidErrorStatus === 426 || lastBidErrorStatus === 512 || lastBidErrorStatus === 521) {
+                console.warn(`[FC Sniper Queue] Rate limit EA durante offerta su ${next.name || next.pid}. Interrompo ulteriori offerte su questo calciatore.`);
+                break;
+              }
 
-                // Ritardo rapido e gaussiano (500-950ms, media ~700ms) per vincere le aste senza cadere nel flood rate-limit
-                await sleep(getRandomGaussian(0.70, 0.12, 0.50, 0.95) * 1000);
+              // Ritardo rapido e fluido tra offerte
+              await sleep(getRandomGaussian(1.1, 0.15, 0.9, 1.35) * 1000);
+            }
+            // Caso B: Asta a > 20s con margine -> Aggiunta agli osservati per ricontrollarla al momento giusto!
+            else if (auction.expires > SNIPER_WINDOW_SEC && auction.expires <= 300 && activeBids.size < 40) {
+              const watchOk = await addToWatchlist(auction.tradeId);
+              if (watchOk) {
+                watchedCount++;
+                const watchData = {
+                  pid: next.pid,
+                  name: next.name,
+                  sellPrice: marketPrice,
+                  maxBidAllowed: maxBidAllowed,
+                  bidAmount: 0,
+                  rating: fodderRating,
+                  itemId: auction.itemData?.id,
+                  expiresAt: Date.now() + (auction.expires * 1000),
+                  rebidCount: 0,
+                  isWatched: true
+                };
+                activeBids.set(tradeIdStr, watchData);
+                await storePendingBid(auction.tradeId, watchData);
+                console.log(`[FC Sniper Watchlist] Asta con margine per ${next.name || 'PID ' + next.pid} a ${auction.expires}s (Trade: ${auction.tradeId}): aggiunta agli osservati per monitoraggio!`);
+                await sleep(getRandomGaussian(0.50, 0.05, 0.40, 0.60) * 1000);
               }
             }
+          }
 
-            if (offersCount > 0) {
-              console.log(`[FC Sniper] Piazzate ${offersCount} offerte per PID ${next.pid}.`);
-            }
-            // Trovate aste utili: usciamo dal ciclo di tentativi e proseguiamo
+          if (offersCount > 0 || watchedCount > 0) {
+            console.log(`[FC Sniper] ${offersCount} offerte piazzate, ${watchedCount} aste aggiunte agli osservati per ${next.name || 'PID ' + next.pid}.`);
             break;
           } else {
-            // Nessuna asta utile trovata: proviamo ad aggiornare la cache con micr successivo
             if (attempt < minBidBumps.length - 1) {
-              console.log(`[FC Sniper] Nessuna asta <= 120s per PID ${next.pid} (su ${auctions.length} trovate). Aggiorno cache EA (tentativo ${attempt + 2}/3 con micr=${minBidBumps[attempt + 1]})...`);
-              await sleep(getRandomGaussian(0.70, 0.10, 0.55, 0.85) * 1000);
+              await sleep(getRandomGaussian(0.50, 0.08, 0.40, 0.65) * 1000);
             }
           }
+        } else if (response.status === 401) {
+          await handle401Error("Ricerca Bidding");
+          break;
         }
       } catch (err) {
         console.error("Errore ricerca bidding:", err);
@@ -1354,21 +1831,44 @@ async function sendFodderBiddingRequest() {
       await resolveWatchlist();
     }
 
+    // Check rapido post-ricerca / tra calciatori:
+    // Se la risoluzione ha rilevato che un'asta è diventata urgente (<= 25s),
+    // entriamo subito nel ciclo di monitoraggio prioritario per difenderla/rilanciare.
+    // Se invece le aste attive non sono urgenti (> 25s, es. ~40s), NON restiamo fermi in attesa e riprendiamo la ricerca.
+    while (getUrgentAuctionTimeRemaining() <= 25000 && activeBids.size > 0 && start === true) {
+      const secLeft = Math.max(0, Math.round(getUrgentAuctionTimeRemaining() / 1000));
+      console.log(`[FC Sniper] Asta urgente in chiusura a breve (~${secLeft}s). Sospendo ricerche e monitoro watchlist per rilancio/vittoria...`);
+      await resolveWatchlist();
+      await sleep(getRandomGaussian(2.0, 0.25, 1.5, 2.5) * 1000);
+    }
+
     // Aggiornamento contatore tentativi rimasti
     chrome.runtime.sendMessage({ tipo: 'TENTATIVI_RIMASTI', valore: numeroTentativi - (i + 1) });
 
     let randomValue;
     if ((i + 1) % 50 == 0 && i != numeroTentativi - 1) {
-      randomValue = getRandomInRange(300, 420); // sleep random tra 5 minuti e 7 minuti ogni 50 tentativi
+      randomValue = getRandomInRange(120, 180); // sleep tra 2 e 3 minuti ogni 50 tentativi (ridotto da 5-7 min)
       chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Cool down di: ' + randomValue + ' sec' });
       await clearSoldItem();
     } else if ((i + 1) % 5 == 0) {
-      randomValue = getRandomGaussian(5.5, 0.8, 4.5, 7.0); // pausa più lunga ogni 5 calciatori
+      randomValue = getRandomGaussian(4.0, 0.4, 3.4, 4.8); // breve pausa ogni 5 calciatori
     } else {
-      randomValue = getRandomGaussian(3.8, 0.6, 3.0, 5.0); // 3-5 secondi tra un calciatore e l'altro
+      randomValue = getRandomGaussian(2.4, 0.3, 2.0, 2.9); // 2.0-2.8 secondi tra un calciatore e l'altro
     }
 
-    await sleep(randomValue * 1000);
+    // Pausa naturale tra calciatori (o cool down ogni 50 tentativi).
+    // Se ci sono aste non urgenti (> 25s, es. ~40s), non attendiamo 40s a vuoto: attendiamo solo la normale pausa fisiologica (es. ~2.4s)
+    // e riprendiamo subito a scansionare il mercato.
+    // Se durante questa pausa fisiologica un'asta entra nei 25s, interrompiamo subito per difenderla.
+    let remainingSleepMs = randomValue * 1000;
+    while (remainingSleepMs > 0 && start === true) {
+      if (activeBids.size > 0 && getUrgentAuctionTimeRemaining() <= 25000) {
+        break; // Sveglia immediata: l'asta è diventata urgente!
+      }
+      const chunk = Math.min(500, remainingSleepMs);
+      await sleep(chunk);
+      remainingSleepMs -= chunk;
+    }
     i++;
   }
 
@@ -1395,6 +1895,420 @@ async function sendFodderBiddingRequest() {
     tipo: 'LOG',
     valore: `[TENTATIVI COMPLETATI] Tutte le aste sono concluse! Carte vinte in questa sessione: ${carteAcquistate}`
   });
+  await clearSoldItem();
+}
+
+// Auto-Discovery del Lowest BIN reale sul mercato per uno Stile Intesa
+async function discoverConsumableLowestBin(playStyleId, manualBinOverride = 0, forceRefresh = false) {
+  if (manualBinOverride && manualBinOverride > 0) {
+    console.log(`[FC Sniper Consumabili] Usato BIN manuale impostato dall'utente: ${manualBinOverride} crediti`);
+    return manualBinOverride;
+  }
+
+  const styleMeta = CHEM_STYLES[String(playStyleId)] || { id: playStyleId, name: `Stile ${playStyleId}`, defaultGuess: 3000 };
+
+  if (!forceRefresh && consumableBinCache.has(String(playStyleId))) {
+    const cached = consumableBinCache.get(String(playStyleId));
+    if (Date.now() - cached.timestamp < 5 * 60 * 1000) {
+      return cached.price;
+    }
+  }
+
+  console.log(`[FC Sniper Consumabili] Rilevamento automatico Lowest BIN per ${styleMeta.name}...`);
+  chrome.runtime.sendMessage({
+    tipo: 'LOG',
+    valore: `[Auto-Discovery] Cerco il Lowest BIN attuale sul mercato per ${styleMeta.name}...`
+  });
+
+  const baseUrl = "https://utas.mob.v1.prd.futc-ext.gcp.ea.com/ut/game/fc27/transfermarket";
+  let guess = styleMeta.defaultGuess || 3000;
+  let foundBin = 0;
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const testMaxb = guess + (attempt * 1000);
+    const url = new URL(baseUrl);
+    url.searchParams.set("num", "21");
+    url.searchParams.set("start", "0");
+    url.searchParams.set("type", "training");
+    url.searchParams.set("cat", "playStyle");
+    url.searchParams.set("playStyle", String(playStyleId));
+    url.searchParams.set("maxb", String(testMaxb));
+
+    triggerPinEvent("TRIGGER_PIN_SEARCH");
+
+    const headers = new Headers({
+      "Accept": "*/*",
+      "Accept-Encoding": "gzip, deflate, br, zstd",
+      "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
+      "Cache-Control": "no-cache",
+      "Content-Type": "application/json",
+      "X-UT-SID": xUtSid
+    });
+
+    try {
+      const resp = await fetch(url.href, { method: "GET", headers });
+      if (resp.status === 401) {
+        await handle401Error("AutoDiscovery Consumabili");
+        break;
+      }
+      if (!resp.ok) break;
+
+      const data = await resp.json();
+      const auctions = data.auctionInfo || [];
+
+      if (auctions.length > 0) {
+        const buyNowPrices = auctions.map(a => a.buyNowPrice).filter(p => p > 0);
+        if (buyNowPrices.length > 0) {
+          foundBin = Math.min(...buyNowPrices);
+
+          // Verifica se esistono carte a un gradino inferiore
+          const lowerStep = getEaStep(foundBin);
+          const checkMaxb = Math.max(200, foundBin - lowerStep);
+
+          await sleep(getRandomGaussian(1.0, 0.15, 0.8, 1.3) * 1000);
+
+          const checkUrl = new URL(baseUrl);
+          checkUrl.searchParams.set("num", "21");
+          checkUrl.searchParams.set("start", "0");
+          checkUrl.searchParams.set("type", "training");
+          checkUrl.searchParams.set("cat", "playStyle");
+          checkUrl.searchParams.set("playStyle", String(playStyleId));
+          checkUrl.searchParams.set("maxb", String(checkMaxb));
+
+          const checkResp = await fetch(checkUrl.href, { method: "GET", headers });
+          if (checkResp.ok) {
+            const checkData = await checkResp.json();
+            const checkAuctions = checkData.auctionInfo || [];
+            if (checkAuctions.length > 0) {
+              const lowerPrices = checkAuctions.map(a => a.buyNowPrice).filter(p => p > 0);
+              if (lowerPrices.length > 0) {
+                foundBin = Math.min(...lowerPrices);
+              }
+            }
+          }
+          break;
+        }
+      }
+    } catch (e) {
+      console.error("[AutoDiscovery Error]", e);
+      break;
+    }
+    await sleep(getRandomGaussian(1.0, 0.15, 0.8, 1.3) * 1000);
+  }
+
+  if (!foundBin || foundBin <= 0) {
+    foundBin = styleMeta.defaultGuess;
+    console.warn(`[FC Sniper Consumabili] Auto-Discovery fallita per ${styleMeta.name}. Utilizzo valore stimato di default: ${foundBin} crediti`);
+  } else {
+    console.log(`[FC Sniper Consumabili] Lowest BIN confermato per ${styleMeta.name}: ${foundBin} crediti`);
+    chrome.runtime.sendMessage({
+      tipo: 'LOG',
+      valore: `[Auto-Discovery] Lowest BIN confermato per ${styleMeta.name}: ${foundBin} crediti`
+    });
+  }
+
+  consumableBinCache.set(String(playStyleId), { price: foundBin, timestamp: Date.now() });
+  return foundBin;
+}
+
+// Motore principale di MASS BIDDING Consumabili (Stili Intesa)
+async function sendConsumableBiddingRequest() {
+  let i = 0;
+  const targetStyles = (chemStyle === "all") ? ["268", "266"] : [chemStyle];
+  let styleIndex = 0;
+
+  while (start === true && i < numeroTentativi) {
+    // 1. Controllo prioritario aste urgenti (<= 25s)
+    while (getUrgentAuctionTimeRemaining() <= 25000 && activeBids.size > 0 && start === true) {
+      const secLeft = Math.max(0, Math.round(getUrgentAuctionTimeRemaining() / 1000));
+      console.log(`[FC Sniper Consumabili] Asta urgente in chiusura a breve (~${secLeft}s). Sospendo ricerche e monitoro watchlist per rilancio/vittoria...`);
+      await resolveWatchlist();
+      await sleep(getRandomGaussian(2.0, 0.25, 1.5, 2.5) * 1000);
+    }
+
+    if (start !== true) break;
+
+    const currentStyleId = targetStyles[styleIndex];
+    styleIndex = (styleIndex + 1) % targetStyles.length;
+    const styleMeta = CHEM_STYLES[currentStyleId] || { id: currentStyleId, name: `Stile ${currentStyleId}`, defaultGuess: 3000 };
+
+    // Recupera Lowest BIN live (aggiorna la prima volta o ogni 5 minuti)
+    const marketPrice = await discoverConsumableLowestBin(currentStyleId, manualBin, i === 0);
+    const netIncome = Math.floor(marketPrice * 0.95);
+    // Su consumabili ad alta rotazione (Ombra e Cacciatore), sottraendo 200 con roundDownToStep
+    // il tetto scendeva a 2100-2200 (margine reale 270 crediti) facendoci perdere le aste contro i bot a 2300 (Hunter) e 3200 (Shadow).
+    // Calibriamo a minMargin - 50 (minimo 100) per allineare l'offerta massima esattamente alla soglia vincente (2300 su Hunter, 3100-3200 su Shadow):
+    const effectiveMargin = Math.max(100, (minMargin || 200) - 50);
+    const maxBidAllowed = roundDownToStep(netIncome - effectiveMargin);
+    const targetMargin = netIncome - maxBidAllowed; // Margine netto reale
+
+    if (maxBidAllowed < 200) {
+      console.log(`[FC Sniper Consumabili] Margine insufficiente per ${styleMeta.name} (Max Bid ${maxBidAllowed} < 200). Salto.`);
+      i++;
+      await sleep(800);
+      continue;
+    }
+
+    const baseUrl = "https://utas.mob.v1.prd.futc-ext.gcp.ea.com/ut/game/fc27/transfermarket";
+    const minBidBumps = [150, 200, 250];
+    let offersCount = 0;
+
+    for (let attempt = 0; attempt < minBidBumps.length; attempt++) {
+      if (start !== true) break;
+
+      if (activeBids.size > 0 && getUrgentAuctionTimeRemaining() <= 25000) {
+        console.log(`[FC Sniper Consumabili] Rilevata asta urgente (<= 25s) durante la ricerca. Interrompo per difenderla subito.`);
+        break;
+      }
+
+      const url = new URL(baseUrl);
+      url.searchParams.set("num", "21");
+      url.searchParams.set("start", "0");
+      url.searchParams.set("type", "training");
+      url.searchParams.set("cat", "playStyle");
+      url.searchParams.set("playStyle", String(currentStyleId));
+      url.searchParams.set("macr", String(maxBidAllowed));
+      url.searchParams.set("micr", String(minBidBumps[attempt]));
+
+      triggerPinEvent("TRIGGER_PIN_SEARCH");
+
+      const headers = new Headers({
+        "Accept": "*/*",
+        "Accept-Encoding": "gzip, deflate, br, zstd",
+        "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Cache-Control": "no-cache",
+        "Content-Type": "application/json",
+        "X-UT-SID": xUtSid
+      });
+
+      try {
+        const response = await fetch(url.href, { method: "GET", headers });
+        if (response.ok) {
+          consecutive401Errors = 0;
+          const data = await response.json();
+          const auctions = data.auctionInfo || [];
+
+          // Separiamo le aste trovate:
+          // 1) Aste in chiusura immediata (<= 20s): piazziamo l'offerta sniper
+          // 2) Aste a > 20s con margine: le aggiungiamo agli osservati per ricontrollarle al momento giusto!
+          const SNIPER_WINDOW_SEC = 20;
+          let watchedCount = 0;
+
+          for (const auction of auctions) {
+            if (start !== true) break;
+            const tradeIdStr = String(auction.tradeId);
+            if (activeBids.has(tradeIdStr) || auction.bidState === "highest") continue;
+
+            const nextBid = calculateNextBid(auction.startingBid, auction.currentBid);
+            if (nextBid > maxBidAllowed) continue; // Nessun margine utile
+
+            // Caso A: Asta in chiusura immediata (<= 20s) -> Offerta diretta
+            if (auction.expires > 0 && auction.expires <= SNIPER_WINDOW_SEC) {
+              console.log(`[FC Sniper Consumabili] Asta in chiusura (${auction.expires}s) per ${styleMeta.name}: offro ${nextBid} crediti (Max: ${maxBidAllowed}, BIN: ${marketPrice}, Margine: ${targetMargin})`);
+
+              const ok = await sendBidRequest(auction.tradeId, nextBid, auction.itemData?.id);
+              if (ok) {
+                offersCount++;
+                const bidData = {
+                  playStyleId: currentStyleId,
+                  name: styleMeta.name,
+                  sellPrice: marketPrice,
+                  maxBidAllowed: maxBidAllowed,
+                  bidAmount: nextBid,
+                  itemId: auction.itemData?.id,
+                  expiresAt: Date.now() + (auction.expires * 1000),
+                  rebidCount: 0,
+                  isWatched: false,
+                  isConsumable: true
+                };
+                activeBids.set(tradeIdStr, bidData);
+                await storePendingBid(auction.tradeId, bidData);
+              } else if (lastBidErrorStatus === 429 || lastBidErrorStatus === 426 || lastBidErrorStatus === 512 || lastBidErrorStatus === 521) {
+                console.warn(`[FC Sniper Queue] Rate limit EA durante offerta su ${styleMeta.name}. Interrompo offerte su questo stile.`);
+                break;
+              }
+
+              // Ritardo rapido e fluido tra offerte
+              await sleep(getRandomGaussian(1.1, 0.15, 0.9, 1.35) * 1000);
+            }
+            // Caso B: Asta a > 20s con margine -> Aggiunta agli osservati per ricontrollarla al momento giusto!
+            else if (auction.expires > SNIPER_WINDOW_SEC && auction.expires <= 300 && activeBids.size < 40) {
+              const watchOk = await addToWatchlist(auction.tradeId);
+              if (watchOk) {
+                watchedCount++;
+                const watchData = {
+                  playStyleId: currentStyleId,
+                  name: styleMeta.name,
+                  sellPrice: marketPrice,
+                  maxBidAllowed: maxBidAllowed,
+                  bidAmount: 0,
+                  itemId: auction.itemData?.id,
+                  expiresAt: Date.now() + (auction.expires * 1000),
+                  rebidCount: 0,
+                  isWatched: true,
+                  isConsumable: true
+                };
+                activeBids.set(tradeIdStr, watchData);
+                await storePendingBid(auction.tradeId, watchData);
+                console.log(`[FC Sniper Watchlist] Asta con margine per ${styleMeta.name} a ${auction.expires}s (Trade: ${auction.tradeId}): aggiunta agli osservati per monitoraggio!`);
+                await sleep(getRandomGaussian(0.50, 0.05, 0.40, 0.60) * 1000);
+              }
+            }
+          }
+
+          if (offersCount > 0 || watchedCount > 0) {
+            console.log(`[FC Sniper Consumabili] ${offersCount} offerte piazzate, ${watchedCount} aste aggiunte agli osservati per ${styleMeta.name}.`);
+            break;
+          } else {
+            if (attempt < minBidBumps.length - 1) {
+              await sleep(getRandomGaussian(0.50, 0.08, 0.40, 0.65) * 1000);
+            }
+          }
+        } else if (response.status === 401) {
+          await handle401Error("Ricerca Bidding Consumabili");
+          break;
+        }
+      } catch (err) {
+        console.error("Errore ricerca bidding consumabili:", err);
+        break;
+      }
+    }
+
+    if (offersCount > 0 || activeBids.size > 0) {
+      await sleep(getRandomGaussian(1.5, 0.25, 1.2, 2.0) * 1000);
+      await resolveWatchlist();
+    }
+
+    while (getUrgentAuctionTimeRemaining() <= 25000 && activeBids.size > 0 && start === true) {
+      const secLeft = Math.max(0, Math.round(getUrgentAuctionTimeRemaining() / 1000));
+      console.log(`[FC Sniper Consumabili] Asta urgente in chiusura a breve (~${secLeft}s). Sospendo ricerche e monitoro watchlist per rilancio/vittoria...`);
+      await resolveWatchlist();
+      await sleep(getRandomGaussian(2.0, 0.25, 1.5, 2.5) * 1000);
+    }
+
+    chrome.runtime.sendMessage({ tipo: 'TENTATIVI_RIMASTI', valore: numeroTentativi - (i + 1) });
+
+    let randomValue;
+    if ((i + 1) % 50 == 0 && i != numeroTentativi - 1) {
+      randomValue = getRandomInRange(120, 180);
+      chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Cool down di: ' + randomValue + ' sec' });
+      await clearSoldItem();
+    } else if ((i + 1) % 5 == 0) {
+      randomValue = getRandomGaussian(4.0, 0.4, 3.4, 4.8);
+    } else {
+      randomValue = getRandomGaussian(2.4, 0.3, 2.0, 2.9);
+    }
+
+    let remainingSleepMs = randomValue * 1000;
+    while (remainingSleepMs > 0 && start === true) {
+      if (activeBids.size > 0 && getUrgentAuctionTimeRemaining() <= 25000) {
+        break;
+      }
+      const chunk = Math.min(500, remainingSleepMs);
+      await sleep(chunk);
+      remainingSleepMs -= chunk;
+    }
+    i++;
+  }
+
+  let activeRemaining = await resolveWatchlist();
+  if (activeRemaining > 0 && start === true) {
+    chrome.runtime.sendMessage({
+      tipo: 'LOG',
+      valore: `Tentativi terminati. In attesa della chiusura di ${activeRemaining} aste in corso...`
+    });
+
+    let waitTimer = 0;
+    while (waitTimer < 130 && start === true) {
+      await sleep(10000);
+      waitTimer += 10;
+      activeRemaining = await resolveWatchlist();
+      if (activeRemaining === 0) break;
+    }
+  }
+
+  await resolveWatchlist();
+  chrome.runtime.sendMessage({
+    tipo: 'LOG',
+    valore: `[TENTATIVI COMPLETATI] Tutte le aste sono concluse! Carte vinte in questa sessione: ${carteAcquistate}`
+  });
+  await clearSoldItem();
+}
+
+// Motore di SNIPING Consumabili (Stili Intesa)
+async function sendConsumableResearchRequest() {
+  let i = 0;
+  const targetStyles = (chemStyle === "all") ? ["268", "266"] : [chemStyle];
+  let styleIndex = 0;
+
+  while (start === true && i < numeroTentativi) {
+    const currentStyleId = targetStyles[styleIndex];
+    styleIndex = (styleIndex + 1) % targetStyles.length;
+    const styleMeta = CHEM_STYLES[currentStyleId] || { id: currentStyleId, name: `Stile ${currentStyleId}`, defaultGuess: 3000 };
+
+    const marketPrice = await discoverConsumableLowestBin(currentStyleId, manualBin, i === 0);
+    const snipePrice = Math.floor((marketPrice * 0.85) / 100) * 100;
+
+    const baseUrl = "https://utas.mob.v1.prd.futc-ext.gcp.ea.com/ut/game/fc27/transfermarket";
+    const url = new URL(baseUrl);
+    url.searchParams.set("num", "21");
+    url.searchParams.set("start", "0");
+    url.searchParams.set("type", "training");
+    url.searchParams.set("cat", "playStyle");
+    url.searchParams.set("playStyle", String(currentStyleId));
+    url.searchParams.set("maxb", String(snipePrice));
+
+    triggerPinEvent("TRIGGER_PIN_SEARCH");
+
+    const headers = new Headers({
+      "Accept": "*/*",
+      "Accept-Encoding": "gzip, deflate, br, zstd",
+      "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
+      "Cache-Control": "no-cache",
+      "Content-Type": "application/json",
+      "X-UT-SID": xUtSid
+    });
+
+    try {
+      const response = await fetch(url.href, { method: "GET", headers });
+      if (response.ok) {
+        consecutiveSearchErrors = 0;
+        consecutive401Errors = 0;
+        const data = await response.json();
+        if (data.auctionInfo && data.auctionInfo.length > 0) {
+          console.log(`[FC Sniper Consumabili] Trovate ${data.auctionInfo.length} carte da snipare per ${styleMeta.name}`);
+          idCarteAcquistate = [];
+          for (const auction of data.auctionInfo) {
+            await sendBuyNowRequest(auction.tradeId, auction.buyNowPrice, auction.itemData?.id);
+          }
+          if (idCarteAcquistate.length > 0) {
+            await sendToTransferList();
+            for (const id of idCarteAcquistate) {
+              await sellSingleItem(id, marketPrice);
+            }
+          }
+        }
+      } else if (response.status === 401) {
+        await handle401Error("Ricerca Sniping Consumabili");
+      }
+    } catch (error) {
+      console.error("Errore ricerca sniping consumabili:", error);
+    }
+
+    chrome.runtime.sendMessage({ tipo: 'TENTATIVI_RIMASTI', valore: numeroTentativi - (i + 1) });
+    let randomValue;
+    if ((i + 1) % 50 == 0 && i != numeroTentativi - 1) {
+      randomValue = getRandomInRange(300, 420);
+      chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Cool down di: ' + randomValue + ' sec' });
+      await clearSoldItem();
+    } else if ((i + 1) % 5 == 0) {
+      randomValue = getRandomGaussian(3.5, 0.6, 2.0, 5.0);
+    } else {
+      randomValue = getRandomGaussian(1.0, 0.2, 0.5, 1.8);
+    }
+    await sleep(randomValue * 1000);
+    i++;
+  }
   await clearSoldItem();
 }
 
