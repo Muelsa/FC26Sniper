@@ -91,22 +91,82 @@
     }
   }, 1500);
 
+  function getPinService() {
+    if (window.services && window.services.PIN && typeof window.services.PIN.sendData === "function") {
+      eaPinService = window.services.PIN;
+      return eaPinService;
+    }
+    if (eaPinService && typeof eaPinService.sendData === "function") {
+      return eaPinService;
+    }
+    return null;
+  }
+
+  let lastSearchPin = 0;
+
   // Metodi dedicati ai PIN per le azioni critiche
   function handlePinSearch() {
-    // La Web App di EA gestisce la telemetria in modo nativo e autonomo.
-    // L'iniezione attiva di eventi fasulli corrompe il flusso di pin-river causando il reset della sessione (401).
+    const now = Date.now();
+    if (now - lastSearchPin < 1000) return; // evita flood ravvicinati
+    lastSearchPin = now;
+
+    const pin = getPinService();
+    if (pin) {
+      try {
+        pin.sendData("page_view", { type: "menu", pgid: "Transfer Market Results - List View" });
+        logBridge(`[FC Sniper PinBridge] Emulato PIN: Transfer Market Results - List View (stepCounter: ${pin.stepCounter})`);
+      } catch (e) {
+        logBridge("[FC Sniper PinBridge] Errore sendData search:", e);
+      }
+    }
   }
 
   function handlePinBuyNow(itemInfo) {
+    const pin = getPinService();
+    if (pin) {
+      try {
+        pin.sendData("page_view", { type: "menu", pgid: "Item - Detail View" });
+        logBridge(`[FC Sniper PinBridge] Emulato PIN: Item - Detail View (Buy Now) (stepCounter: ${pin.stepCounter})`);
+      } catch (e) {
+        logBridge("[FC Sniper PinBridge] Errore sendData buy now:", e);
+      }
+    }
   }
 
   function handlePinBid(itemInfo) {
+    const pin = getPinService();
+    if (pin) {
+      try {
+        pin.sendData("page_view", { type: "menu", pgid: "Item - Detail View" });
+        logBridge(`[FC Sniper PinBridge] Emulato PIN: Item - Detail View (Bid) (stepCounter: ${pin.stepCounter})`);
+      } catch (e) {
+        logBridge("[FC Sniper PinBridge] Errore sendData bid:", e);
+      }
+    }
   }
 
   function handlePinWatchlist() {
+    const pin = getPinService();
+    if (pin) {
+      try {
+        pin.sendData("page_view", { type: "menu", pgid: "Hub - Transfers" });
+        logBridge(`[FC Sniper PinBridge] Emulato PIN: Hub - Transfers (stepCounter: ${pin.stepCounter})`);
+      } catch (e) {
+        logBridge("[FC Sniper PinBridge] Errore sendData watchlist:", e);
+      }
+    }
   }
 
   function handlePinSell(itemInfo) {
+    const pin = getPinService();
+    if (pin) {
+      try {
+        pin.sendData("page_view", { type: "menu", pgid: "Transfer Market Results - List View" });
+        logBridge(`[FC Sniper PinBridge] Emulato PIN: Transfer Market Results (Sell) (stepCounter: ${pin.stepCounter})`);
+      } catch (e) {
+        logBridge("[FC Sniper PinBridge] Errore sendData sell:", e);
+      }
+    }
   }
 
   // Ascolta messaggi inoltrati da content.js (tramite window.postMessage)

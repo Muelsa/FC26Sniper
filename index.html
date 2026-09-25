@@ -9,7 +9,7 @@
 
 <body>
     <h2 style="text-align: center; margin-top: 1rem;">FC27</h2>
-    <p id="versione" style="text-align: center;">v2.2.0</p>
+    <p id="versione" style="text-align: center;">v2.2.1</p>
 
     <div class="container-fluid">
 
@@ -96,6 +96,13 @@
                                 <option value="260">Motore (Engine)</option>
                                 <option value="267">Catalizzatore (Catalyst)</option>
                             </select>
+
+                            <div class="mb-2">
+                                <label for="maxSnipePriceInput" class="form-label form-label-sm text-muted mb-0"
+                                    style="font-size: 0.8rem;">Max Compra Ora (Snipe):</label>
+                                <input type="number" class="form-control form-control-sm" id="maxSnipePriceInput"
+                                    placeholder="Automatico (-15%)" min="200" step="100" style="width: 200px;">
+                            </div>
 
                             <div class="form-check form-switch mb-1">
                                 <input class="form-check-input" type="checkbox" id="autoBinCheck" checked>

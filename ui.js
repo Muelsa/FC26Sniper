@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const strategyModeRadios = document.querySelectorAll('input[name="strategyMode"]');
   const biddingConfigContainer = document.getElementById('biddingConfigContainer');
   const minMarginInput = document.getElementById('minMargin');
+  const maxSnipePriceInput = document.getElementById('maxSnipePriceInput');
 
   const getSelectedTargetMode = () => {
     const checkedRadio = document.querySelector('input[name="targetMode"]:checked');
@@ -44,6 +45,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const getManualBinPrice = () => {
     return manualBinInput ? (parseInt(manualBinInput.value) || 0) : 0;
+  };
+
+  const getMaxSnipePrice = () => {
+    return maxSnipePriceInput ? (parseInt(maxSnipePriceInput.value) || 0) : 0;
   };
 
   const toggleTargetContainers = () => {
@@ -89,6 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (chemStyleSelect) disabled ? chemStyleSelect.setAttribute('disabled', 'true') : chemStyleSelect.removeAttribute('disabled');
     if (autoBinCheck) disabled ? autoBinCheck.setAttribute('disabled', 'true') : autoBinCheck.removeAttribute('disabled');
     if (manualBinInput) disabled ? manualBinInput.setAttribute('disabled', 'true') : manualBinInput.removeAttribute('disabled');
+    if (maxSnipePriceInput) disabled ? maxSnipePriceInput.setAttribute('disabled', 'true') : maxSnipePriceInput.removeAttribute('disabled');
     if (minMarginInput) disabled ? minMarginInput.setAttribute('disabled', 'true') : minMarginInput.removeAttribute('disabled');
   };
 
@@ -112,6 +118,12 @@ document.addEventListener('DOMContentLoaded', () => {
   if (manualBinInput) {
     manualBinInput.addEventListener('change', () => {
       chrome.storage.local.set({ manualBin: parseInt(manualBinInput.value) || 0 });
+    });
+  }
+
+  if (maxSnipePriceInput) {
+    maxSnipePriceInput.addEventListener('change', () => {
+      chrome.storage.local.set({ maxSnipePrice: parseInt(maxSnipePriceInput.value) || 0 });
     });
   }
 
@@ -143,7 +155,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Ripristino stato salvato all'avvio
   chrome.storage.local.get([
     'numeroTentativi', 'targetMode', 'fodderMode', 'fodderRating',
-    'chemStyle', 'autoBin', 'manualBin', 'strategyMode', 'minMargin'
+    'chemStyle', 'autoBin', 'manualBin', 'strategyMode', 'minMargin', 'maxSnipePrice'
   ], (result) => {
     if (result.numeroTentativi) {
       numeroTentativi.value = result.numeroTentativi;
@@ -177,6 +189,10 @@ document.addEventListener('DOMContentLoaded', () => {
       manualBinInput.value = result.manualBin;
     }
 
+    if (result.maxSnipePrice && maxSnipePriceInput) {
+      maxSnipePriceInput.value = result.maxSnipePrice;
+    }
+
     if (result.strategyMode) {
       const targetStrategy = document.querySelector(`input[name="strategyMode"][value="${result.strategyMode}"]`);
       if (targetStrategy) targetStrategy.checked = true;
@@ -198,6 +214,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const selectedChemStyle = getSelectedChemStyle();
     const autoBin = isAutoBinEnabled();
     const manualBin = getManualBinPrice();
+    const maxSnipePrice = getMaxSnipePrice();
     const minMargin = minMarginInput ? (parseInt(minMarginInput.value) || 200) : 200;
 
     chrome.storage.local.set({
@@ -208,6 +225,7 @@ document.addEventListener('DOMContentLoaded', () => {
       chemStyle: selectedChemStyle,
       autoBin: autoBin,
       manualBin: manualBin,
+      maxSnipePrice: maxSnipePrice,
       strategyMode: selectedStrategy,
       minMargin: minMargin
     });
@@ -221,6 +239,7 @@ document.addEventListener('DOMContentLoaded', () => {
       chemStyle: selectedChemStyle,
       autoBin: autoBin,
       manualBin: manualBin,
+      maxSnipePrice: maxSnipePrice,
       rating: selectedRating
     };
 
