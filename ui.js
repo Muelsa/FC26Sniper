@@ -19,6 +19,13 @@ document.addEventListener('DOMContentLoaded', () => {
   const biddingConfigContainer = document.getElementById('biddingConfigContainer');
   const minMarginInput = document.getElementById('minMargin');
   const maxSnipePriceInput = document.getElementById('maxSnipePriceInput');
+  const lazyConfigContainer = document.getElementById('lazyConfigContainer');
+  const targetTradepileSizeInput = document.getElementById('targetTradepileSizeInput');
+  const lazyMarkupPercentInput = document.getElementById('lazyMarkupPercentInput');
+  const lazySleepMinutesInput = document.getElementById('lazySleepMinutesInput');
+  const modeLazy = document.getElementById('modeLazy');
+  const labelModeLazy = document.getElementById('labelModeLazy') || document.querySelector('label[for="modeLazy"]');
+  const snipeSpecificContainer = document.getElementById('snipeSpecificContainer');
 
   const getSelectedTargetMode = () => {
     const checkedRadio = document.querySelector('input[name="targetMode"]:checked');
@@ -51,20 +58,56 @@ document.addEventListener('DOMContentLoaded', () => {
     return maxSnipePriceInput ? (parseInt(maxSnipePriceInput.value) || 0) : 0;
   };
 
+  const getTargetTradepileSize = () => {
+    return targetTradepileSizeInput ? (parseInt(targetTradepileSizeInput.value) || 50) : 50;
+  };
+
+  const getLazyMarkupPercent = () => {
+    return lazyMarkupPercentInput ? (parseInt(lazyMarkupPercentInput.value) || 10) : 10;
+  };
+
+  const getLazySleepMinutes = () => {
+    return lazySleepMinutesInput ? (parseInt(lazySleepMinutesInput.value) || 63) : 63;
+  };
+
   const toggleTargetContainers = () => {
     const target = getSelectedTargetMode();
     if (target === 'fodder') {
       fodderRatingContainer.classList.remove('d-none');
       consumablesConfigContainer.classList.add('d-none');
       if (switchFodder) switchFodder.checked = true;
+
+      // Nascondi pulsante Lazy sui Fodder
+      if (modeLazy) modeLazy.classList.add('d-none');
+      if (labelModeLazy) labelModeLazy.classList.add('d-none');
+      if (modeLazy && modeLazy.checked) {
+        const snipingRadio = document.getElementById('modeSniping');
+        if (snipingRadio) snipingRadio.checked = true;
+        toggleStrategyContainers();
+        chrome.storage.local.set({ strategyMode: 'sniping' });
+      }
     } else if (target === 'consumables') {
       fodderRatingContainer.classList.add('d-none');
       consumablesConfigContainer.classList.remove('d-none');
       if (switchFodder) switchFodder.checked = false;
+
+      // Mostra pulsante Lazy SOLO per Consumabili
+      if (modeLazy) modeLazy.classList.remove('d-none');
+      if (labelModeLazy) labelModeLazy.classList.remove('d-none');
     } else {
       fodderRatingContainer.classList.add('d-none');
       consumablesConfigContainer.classList.add('d-none');
       if (switchFodder) switchFodder.checked = false;
+
+      // Nascondi pulsante Lazy su Manuale
+      if (modeLazy) modeLazy.classList.add('d-none');
+      if (labelModeLazy) labelModeLazy.classList.add('d-none');
+      if (modeLazy && modeLazy.checked) {
+        const snipingRadio = document.getElementById('modeSniping');
+        if (snipingRadio) snipingRadio.checked = true;
+        toggleStrategyContainers();
+        chrome.storage.local.set({ strategyMode: 'sniping' });
+      }
     }
   };
 
@@ -78,12 +121,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   };
 
-  const toggleBiddingVisibility = () => {
+  const toggleStrategyContainers = () => {
     const strategy = getSelectedStrategy();
     if (strategy === 'bidding') {
-      biddingConfigContainer.classList.remove('d-none');
+      if (biddingConfigContainer) biddingConfigContainer.classList.remove('d-none');
+      if (lazyConfigContainer) lazyConfigContainer.classList.add('d-none');
+      if (snipeSpecificContainer) snipeSpecificContainer.classList.add('d-none');
+    } else if (strategy === 'lazy') {
+      if (biddingConfigContainer) biddingConfigContainer.classList.add('d-none');
+      if (lazyConfigContainer) lazyConfigContainer.classList.remove('d-none');
+      if (snipeSpecificContainer) snipeSpecificContainer.classList.add('d-none');
+      // Per il Lazy Trading, impostiamo automaticamente obiettivo su Consumabili
+      const consRadio = document.querySelector('input[name="targetMode"][value="consumables"]');
+      if (consRadio && !consRadio.checked) {
+        consRadio.checked = true;
+        toggleTargetContainers();
+        chrome.storage.local.set({ targetMode: 'consumables', fodderMode: false });
+      }
     } else {
-      biddingConfigContainer.classList.add('d-none');
+      // Sniping
+      if (biddingConfigContainer) biddingConfigContainer.classList.add('d-none');
+      if (lazyConfigContainer) lazyConfigContainer.classList.add('d-none');
+      if (snipeSpecificContainer) snipeSpecificContainer.classList.remove('d-none');
     }
   };
 
@@ -96,6 +155,9 @@ document.addEventListener('DOMContentLoaded', () => {
     if (manualBinInput) disabled ? manualBinInput.setAttribute('disabled', 'true') : manualBinInput.removeAttribute('disabled');
     if (maxSnipePriceInput) disabled ? maxSnipePriceInput.setAttribute('disabled', 'true') : maxSnipePriceInput.removeAttribute('disabled');
     if (minMarginInput) disabled ? minMarginInput.setAttribute('disabled', 'true') : minMarginInput.removeAttribute('disabled');
+    if (targetTradepileSizeInput) disabled ? targetTradepileSizeInput.setAttribute('disabled', 'true') : targetTradepileSizeInput.removeAttribute('disabled');
+    if (lazyMarkupPercentInput) disabled ? lazyMarkupPercentInput.setAttribute('disabled', 'true') : lazyMarkupPercentInput.removeAttribute('disabled');
+    if (lazySleepMinutesInput) disabled ? lazySleepMinutesInput.setAttribute('disabled', 'true') : lazySleepMinutesInput.removeAttribute('disabled');
   };
 
   targetModeRadios.forEach(radio => {
@@ -141,7 +203,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   strategyModeRadios.forEach(radio => {
     radio.addEventListener('change', () => {
-      toggleBiddingVisibility();
+      toggleStrategyContainers();
       chrome.storage.local.set({ strategyMode: radio.value });
     });
   });
@@ -152,11 +214,42 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  if (targetTradepileSizeInput) {
+    targetTradepileSizeInput.addEventListener('change', () => {
+      chrome.storage.local.set({ targetTradepileSize: parseInt(targetTradepileSizeInput.value) || 50 });
+    });
+  }
+
+  if (lazyMarkupPercentInput) {
+    lazyMarkupPercentInput.addEventListener('change', () => {
+      chrome.storage.local.set({ lazyMarkupPercent: parseInt(lazyMarkupPercentInput.value) || 10 });
+    });
+  }
+
+  if (lazySleepMinutesInput) {
+    lazySleepMinutesInput.addEventListener('change', () => {
+      chrome.storage.local.set({ lazySleepMinutes: parseInt(lazySleepMinutesInput.value) || 63 });
+    });
+  }
+
   // Ripristino stato salvato all'avvio
   chrome.storage.local.get([
     'numeroTentativi', 'targetMode', 'fodderMode', 'fodderRating',
-    'chemStyle', 'autoBin', 'manualBin', 'strategyMode', 'minMargin', 'maxSnipePrice'
+    'chemStyle', 'autoBin', 'manualBin', 'strategyMode', 'minMargin', 'maxSnipePrice',
+    'targetTradepileSize', 'lazyMarkupPercent', 'lazySleepMinutes',
+    'tradepileCount', 'crediti', 'carteAcquistate'
   ], (result) => {
+    if (result.tradepileCount) {
+      const tpEl = document.getElementById('tradepileCount');
+      if (tpEl) tpEl.textContent = result.tradepileCount;
+    }
+    if (result.crediti !== undefined && crediti) {
+      crediti.textContent = typeof result.crediti === 'number' ? result.crediti.toLocaleString('it-IT') : String(result.crediti);
+    }
+    if (result.carteAcquistate !== undefined && carteAcquistate) {
+      carteAcquistate.textContent = String(result.carteAcquistate);
+    }
+
     if (result.numeroTentativi) {
       numeroTentativi.value = result.numeroTentativi;
     }
@@ -193,10 +286,28 @@ document.addEventListener('DOMContentLoaded', () => {
       maxSnipePriceInput.value = result.maxSnipePrice;
     }
 
+    if (result.targetTradepileSize && targetTradepileSizeInput) {
+      targetTradepileSizeInput.value = result.targetTradepileSize;
+    }
+
+    if (result.lazyMarkupPercent && lazyMarkupPercentInput) {
+      lazyMarkupPercentInput.value = result.lazyMarkupPercent;
+    }
+
+    if (result.lazySleepMinutes && lazySleepMinutesInput) {
+      lazySleepMinutesInput.value = result.lazySleepMinutes;
+    }
+
     if (result.strategyMode) {
+      if (result.strategyMode === 'lazy' && savedTarget !== 'consumables') {
+        savedTarget = 'consumables';
+        const targetRadio = document.querySelector('input[name="targetMode"][value="consumables"]');
+        if (targetRadio) targetRadio.checked = true;
+        toggleTargetContainers();
+      }
       const targetStrategy = document.querySelector(`input[name="strategyMode"][value="${result.strategyMode}"]`);
       if (targetStrategy) targetStrategy.checked = true;
-      toggleBiddingVisibility();
+      toggleStrategyContainers();
     }
 
     if (result.minMargin && minMarginInput) {
@@ -208,14 +319,23 @@ document.addEventListener('DOMContentLoaded', () => {
   stopBtn.setAttribute('disabled', 'true');
 
   startBtn.addEventListener('click', () => {
-    const selectedTarget = getSelectedTargetMode();
+    let selectedTarget = getSelectedTargetMode();
     const selectedRating = getSelectedRating();
     const selectedStrategy = getSelectedStrategy();
+
+    // Se la strategia è Lazy, l'obiettivo deve essere SOLO consumabili
+    if (selectedStrategy === 'lazy') {
+      selectedTarget = 'consumables';
+    }
+
     const selectedChemStyle = getSelectedChemStyle();
     const autoBin = isAutoBinEnabled();
     const manualBin = getManualBinPrice();
     const maxSnipePrice = getMaxSnipePrice();
     const minMargin = minMarginInput ? (parseInt(minMarginInput.value) || 200) : 200;
+    const targetTradepileSize = getTargetTradepileSize();
+    const lazyMarkupPercent = getLazyMarkupPercent();
+    const lazySleepMinutes = getLazySleepMinutes();
 
     chrome.storage.local.set({
       numeroTentativi: numeroTentativi.value,
@@ -227,7 +347,10 @@ document.addEventListener('DOMContentLoaded', () => {
       manualBin: manualBin,
       maxSnipePrice: maxSnipePrice,
       strategyMode: selectedStrategy,
-      minMargin: minMargin
+      minMargin: minMargin,
+      targetTradepileSize: targetTradepileSize,
+      lazyMarkupPercent: lazyMarkupPercent,
+      lazySleepMinutes: lazySleepMinutes
     });
 
     const startPayload = {
@@ -240,7 +363,10 @@ document.addEventListener('DOMContentLoaded', () => {
       autoBin: autoBin,
       manualBin: manualBin,
       maxSnipePrice: maxSnipePrice,
-      rating: selectedRating
+      rating: selectedRating,
+      targetTradepileSize: targetTradepileSize,
+      lazyMarkupPercent: lazyMarkupPercent,
+      lazySleepMinutes: lazySleepMinutes
     };
 
     chrome.runtime.sendMessage(startPayload);
@@ -254,7 +380,10 @@ document.addEventListener('DOMContentLoaded', () => {
       autoBin: autoBin,
       manualBin: manualBin,
       strategyMode: selectedStrategy,
-      minMargin: minMargin
+      minMargin: minMargin,
+      targetTradepileSize: targetTradepileSize,
+      lazyMarkupPercent: lazyMarkupPercent,
+      lazySleepMinutes: lazySleepMinutes
     });
 
     // Disabilito i controlli e abilito il tasto stop
@@ -272,7 +401,38 @@ document.addEventListener('DOMContentLoaded', () => {
     tentativiInput.removeAttribute('disabled');
     setControlsDisabled(false);
     stopBtn.setAttribute('disabled', 'true');
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const statusSubtext = document.getElementById('statusSubtext');
+    if (statusDot) statusDot.className = 'text-secondary';
+    if (statusText) statusText.textContent = 'Arrestato';
+    if (statusSubtext) statusSubtext.textContent = 'Operazione interrotta dall\'utente';
   });
+
+  // Gestione pulsanti di filtro del log
+  const filterBtns = document.querySelectorAll('#logFilterGroup button');
+  filterBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      filterBtns.forEach(b => b.classList.remove('active', 'text-white'));
+      btn.classList.add('active', 'text-white');
+      currentFilter = btn.dataset.filter || 'all';
+      applyLogFilter();
+    });
+  });
+
+  // Pulsante pulizia console
+  const clearBtn = document.getElementById('clearLogBtn');
+  if (clearBtn) {
+    clearBtn.addEventListener('click', () => {
+      const logConsole = document.getElementById('logConsole');
+      if (logConsole) logConsole.innerHTML = '';
+      const logViewer = document.getElementById('logViewer');
+      if (logViewer) logViewer.value = '';
+      totalLogEvents = 0;
+      const logCount = document.getElementById('logCount');
+      if (logCount) logCount.textContent = '0 eventi';
+    });
+  }
 
   // Ascolto i messaggi di log dalla background script
   chrome.runtime.onMessage.addListener(async (message) => {
@@ -288,29 +448,233 @@ document.addEventListener('DOMContentLoaded', () => {
       tentativiInput.removeAttribute('disabled');
       setControlsDisabled(false);
       stopBtn.setAttribute('disabled', 'true');
+      const statusDot = document.getElementById('statusDot');
+      const statusText = document.getElementById('statusText');
+      const statusSubtext = document.getElementById('statusSubtext');
+      if (statusDot) statusDot.className = 'text-secondary';
+      if (statusText) statusText.textContent = 'Completato / Pronto';
+      if (statusSubtext) statusSubtext.textContent = 'Sessione terminata';
     }
     else if (message.tipo == 'TENTATIVI_RIMASTI') {
-      tentativiRimasti.textContent = "Tentativi rimasti: " + message.valore;
+      tentativiRimasti.textContent = message.valore !== "" ? String(message.valore) : "-";
     }
     else if (message.tipo == 'CARTA_ACQUISTATA') {
-      carteAcquistate.textContent = "Carte acquistate: " + message.valore;
+      carteAcquistate.textContent = message.valore !== "" ? String(message.valore) : "0";
+    }
+    else if (message.tipo == 'TRADEPILE_COUNT') {
+      const tradepileCount = document.getElementById('tradepileCount');
+      if (tradepileCount) {
+        tradepileCount.textContent = message.valore !== "" ? String(message.valore) : "-";
+      }
     }
   });
 
   // Ascolto i messaggi per l'aggiornamento dei crediti
   chrome.runtime.onMessage.addListener(async (message) => {
     if (message.tipo === 'CREDITI') {
-      crediti.textContent = `Crediti: ${message.valore ?? 'N/D'}`;
+      crediti.textContent = typeof message.valore === 'number'
+        ? message.valore.toLocaleString('it-IT')
+        : (message.valore ? String(message.valore) : 'N/D');
     }
   });
 });
 
-// Funzione per aggiungere log al campo di testo
+let currentFilter = 'all';
+let totalLogEvents = 0;
+
+function applyLogFilter() {
+  const rows = document.querySelectorAll('#logConsole .log-row');
+  rows.forEach(r => {
+    const cat = r.dataset.category;
+    if (currentFilter === 'all') {
+      r.style.display = '';
+    } else if (currentFilter === 'trade' && (cat === 'trade' || cat === 'bid')) {
+      r.style.display = '';
+    } else if (currentFilter === 'sleep' && (cat === 'sleep' || cat === 'status')) {
+      r.style.display = '';
+    } else if (currentFilter === 'warn' && cat === 'warn') {
+      r.style.display = '';
+    } else {
+      r.style.display = 'none';
+    }
+  });
+  const logConsole = document.getElementById('logConsole');
+  if (logConsole) logConsole.scrollTop = logConsole.scrollHeight;
+}
+
+function classifyLogMessage(raw) {
+  const text = String(raw || '').trim();
+
+  // 1. Trades: Acquisti e Vendite
+  if (/acquisto|acquistata|acquistate|vinta|vendita|listata|listato/i.test(text) && !/errore/i.test(text)) {
+    let clean = text.replace(/^\[(ACQUISTO RIUSCITO|LAZY BUY NOW|ASTA VINTA|Reconciliation)\]\s*/i, '');
+    let tag = 'ACQUISTO';
+    if (/vendita|listat/i.test(text) && !/acquist/i.test(text)) tag = 'VENDITA';
+    if (/vinta/i.test(text)) tag = 'VINTA';
+    return { category: 'trade', tag, text: clean };
+  }
+
+  // 2. Offerte / Bidding
+  if (/offerta|bid|bidding|rilancio/i.test(text) && !/errore|terminat/i.test(text)) {
+    let clean = text.replace(/^\[(LAZY BID|MASS BID|FC Sniper)\]\s*/i, '');
+    return { category: 'bid', tag: 'OFFERTA', text: clean };
+  }
+
+  // 3. Pause / Sleep / Heartbeat
+  if (/pausa|dormiente|heartbeat|cool\s*down|attesa|attendo/i.test(text)) {
+    let clean = text.replace(/^\[(LAZY HEARTBEAT|PAUSA DI SICUREZZA[^\]]*|PAUSA)\]\s*/i, '');
+    return { category: 'sleep', tag: 'PAUSA', text: clean };
+  }
+
+  // 4. Avvisi ed Errori / 461 / Captcha / Limiti
+  if (/errore|461|401|429|458|captcha|soft-ban|fallit|attenzione/i.test(text)) {
+    let clean = text.replace(/^\[(ATTENZIONE[^\]]*|SNIPE 461|SOFT-BAN[^\]]*)\]\s*/i, '');
+    let tag = 'AVVISO';
+    if (/461/i.test(text)) tag = '461 PRESA';
+    if (/captcha|458/i.test(text)) tag = 'CAPTCHA';
+    if (/401/i.test(text)) tag = 'AUTH 401';
+    if (/soft-ban|429/i.test(text)) tag = 'RATE LIMIT';
+    return { category: 'warn', tag, text: clean };
+  }
+
+  // 5. Telemetria PIN
+  if (/pin\s*telemetry|telemetr/i.test(text)) {
+    let clean = text.replace(/^\[(PIN TELEMETRY)\]\s*/i, '');
+    return { category: 'status', tag: 'PIN EVENT', text: clean };
+  }
+
+  // 6. Stato, Target, Configurazione e Cicli
+  if (/avvio|ciclo|fase|target|completat|pronto|inizializz|terminat|filtro|riconciliazione|tradepile/i.test(text)) {
+    let clean = text.replace(/^\[(SNIPING TARGET|LAZY TRADING|LAZY BIDDING|TENTATIVI COMPLETATI)\]\s*/i, '');
+    return { category: 'status', tag: 'STATO', text: clean };
+  }
+
+  // 7. Generico Info
+  return { category: 'info', tag: 'INFO', text: text.replace(/^\[[^\]]+\]\s*/, '') };
+}
+
+function updateBotStatusBar(category, tag, text) {
+  const statusDot = document.getElementById('statusDot');
+  const statusText = document.getElementById('statusText');
+  const statusSubtext = document.getElementById('statusSubtext');
+  if (!statusText || !statusDot || !statusSubtext) return;
+
+  if (category === 'trade') {
+    statusDot.className = 'text-success';
+    statusText.textContent = tag === 'VENDITA' ? 'Carta in vendita' : 'Acquisto riuscito!';
+    statusSubtext.textContent = text.length > 38 ? text.substring(0, 35) + '...' : text;
+  } else if (category === 'bid') {
+    statusDot.className = 'text-primary';
+    statusText.textContent = 'Offerta piazzata';
+    statusSubtext.textContent = text.length > 38 ? text.substring(0, 35) + '...' : text;
+  } else if (category === 'sleep') {
+    statusDot.className = 'text-warning';
+    statusText.textContent = 'In pausa (Attesa)';
+    statusSubtext.textContent = text.length > 38 ? text.substring(0, 35) + '...' : text;
+  } else if (category === 'warn') {
+    statusDot.className = 'text-danger';
+    statusText.textContent = tag;
+    statusSubtext.textContent = text.length > 38 ? text.substring(0, 35) + '...' : text;
+  } else if (category === 'status') {
+    statusDot.className = 'text-info';
+    statusText.textContent = 'In esecuzione';
+    statusSubtext.textContent = text.length > 38 ? text.substring(0, 35) + '...' : text;
+  }
+}
+
+// Funzione avanzata per aggiungere log formattati alla console interattiva
 function logToScreen(message) {
+  if (!message) return;
+  const logConsole = document.getElementById('logConsole');
   const logViewer = document.getElementById('logViewer');
+  const logCount = document.getElementById('logCount');
+
+  // Fallback per logViewer grezzo (mantiene compatibilità)
   if (logViewer) {
     const timestamp = new Date().toLocaleTimeString();
     logViewer.value += `[${timestamp}] ${message}\n`;
-    logViewer.scrollTop = logViewer.scrollHeight;
+  }
+
+  if (!logConsole) return;
+
+  const now = new Date();
+  const timeStr = now.toTimeString().split(' ')[0]; // HH:MM:SS
+  const { category, tag, text } = classifyLogMessage(message);
+
+  updateBotStatusBar(category, tag, text);
+
+  const row = document.createElement('div');
+  row.className = `log-row filter-${category}`;
+  row.dataset.category = category;
+
+  if (currentFilter !== 'all') {
+    if (currentFilter === 'trade' && category !== 'trade' && category !== 'bid') {
+      row.style.display = 'none';
+    } else if (currentFilter === 'sleep' && category !== 'sleep' && category !== 'status') {
+      row.style.display = 'none';
+    } else if (currentFilter === 'warn' && category !== 'warn') {
+      row.style.display = 'none';
+    }
+  }
+
+  const timeSpan = document.createElement('span');
+  timeSpan.className = 'log-time';
+  timeSpan.textContent = timeStr;
+
+  const tagSpan = document.createElement('span');
+  tagSpan.className = `log-tag tag-${category}`;
+  tagSpan.textContent = tag;
+
+  const msgSpan = document.createElement('span');
+  msgSpan.className = 'log-msg';
+  msgSpan.textContent = text;
+
+  row.appendChild(timeSpan);
+  row.appendChild(tagSpan);
+  row.appendChild(msgSpan);
+
+  logConsole.appendChild(row);
+
+  totalLogEvents++;
+  if (logCount) {
+    logCount.textContent = `${totalLogEvents} eventi`;
+  }
+
+  // Massimo 250 righe mantenute in DOM per garantire memoria leggera e reattività
+  while (logConsole.childElementCount > 250) {
+    logConsole.removeChild(logConsole.firstElementChild);
+  }
+
+  logConsole.scrollTop = logConsole.scrollHeight;
+}
+
+// Keep-Alive Connection dalla UI per prevenire la chiusura del Service Worker in Manifest V3
+let uiKeepAlivePort = null;
+function setupUiKeepAlive() {
+  try {
+    uiKeepAlivePort = chrome.runtime.connect({ name: "KEEP_ALIVE_PORT" });
+    uiKeepAlivePort.onDisconnect.addListener(() => {
+      const _ = chrome.runtime.lastError;
+      uiKeepAlivePort = null;
+      setTimeout(setupUiKeepAlive, 1000);
+    });
+    uiKeepAlivePort.onMessage.addListener(() => {});
+  } catch (e) {
+    setTimeout(setupUiKeepAlive, 1000);
   }
 }
+setupUiKeepAlive();
+
+// Ping ogni 20 secondi: azzera il timer di inattività del Service Worker finché la UI è aperta
+setInterval(() => {
+  try {
+    if (uiKeepAlivePort) {
+      uiKeepAlivePort.postMessage({ type: "KEEP_ALIVE_PING" });
+    } else {
+      setupUiKeepAlive();
+    }
+  } catch (e) {
+    setupUiKeepAlive();
+  }
+}, 20000);
+

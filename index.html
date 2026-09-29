@@ -5,13 +5,146 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <title>FC27</title>
     <meta charset="utf-8">
+    <style>
+        body {
+            min-width: 520px;
+            background-color: #f8fafc;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+
+        .log-container {
+            background-color: #0d1117;
+            border: 1px solid #30363d;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .log-header {
+            background-color: #161b22;
+            border-bottom: 1px solid #30363d;
+            padding: 6px 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .log-console {
+            height: 240px;
+            overflow-y: auto;
+            padding: 8px 10px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 11px;
+            line-height: 1.5;
+            background-color: #0d1117;
+            color: #c9d1d9;
+        }
+
+        .log-row {
+            margin-bottom: 3px;
+            display: flex;
+            align-items: flex-start;
+            word-break: break-word;
+        }
+
+        .log-time {
+            color: #8b949e;
+            margin-right: 6px;
+            font-size: 10px;
+            flex-shrink: 0;
+            user-select: none;
+        }
+
+        .log-tag {
+            font-size: 9.5px;
+            font-weight: 700;
+            padding: 1px 5px;
+            border-radius: 3px;
+            margin-right: 6px;
+            flex-shrink: 0;
+            letter-spacing: 0.3px;
+            text-transform: uppercase;
+            user-select: none;
+        }
+
+        .tag-trade {
+            background: rgba(46, 160, 67, 0.2);
+            color: #3fb950;
+            border: 1px solid rgba(46, 160, 67, 0.4);
+        }
+
+        .tag-bid {
+            background: rgba(163, 113, 247, 0.2);
+            color: #d2a8ff;
+            border: 1px solid rgba(163, 113, 247, 0.4);
+        }
+
+        .tag-sleep {
+            background: rgba(210, 153, 34, 0.2);
+            color: #e3b341;
+            border: 1px solid rgba(210, 153, 34, 0.4);
+        }
+
+        .tag-status {
+            background: rgba(88, 166, 255, 0.2);
+            color: #58a6ff;
+            border: 1px solid rgba(88, 166, 255, 0.4);
+        }
+
+        .tag-warn {
+            background: rgba(248, 81, 73, 0.2);
+            color: #ff7b72;
+            border: 1px solid rgba(248, 81, 73, 0.4);
+        }
+
+        .tag-info {
+            background: rgba(110, 118, 129, 0.2);
+            color: #8b949e;
+            border: 1px solid rgba(110, 118, 129, 0.4);
+        }
+
+        .log-msg {
+            color: #f0f6fc;
+        }
+
+        .log-console::-webkit-scrollbar {
+            width: 5px;
+        }
+
+        .log-console::-webkit-scrollbar-track {
+            background: #0d1117;
+        }
+
+        .log-console::-webkit-scrollbar-thumb {
+            background: #30363d;
+            border-radius: 3px;
+        }
+
+        .status-pill {
+            background-color: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 8px 12px;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+        }
+    </style>
 </head>
 
 <body>
-    <h2 style="text-align: center; margin-top: 1rem;">FC27</h2>
-    <p id="versione" style="text-align: center;">v2.2.1</p>
+    <div class="px-3 pt-2 pb-1 border-bottom d-flex justify-content-between align-items-center bg-white">
+        <h5 class="m-0 fw-bold text-primary">FC27 Sniper & Trader</h5>
+        <span id="versione" class="badge bg-light text-secondary border">v2.4.2</span>
+    </div>
 
-    <div class="container-fluid">
+    <div class="container-fluid px-3 pt-2">
+        <!-- Barra di Stato in Evidenza -->
+        <div id="botStatusBar"
+            class="alert alert-secondary py-1 px-2 mb-2 d-flex align-items-center justify-content-between"
+            style="font-size: 0.78rem;">
+            <span><strong id="statusDot" class="text-secondary">●</strong> <span id="statusText"
+                    class="fw-semibold">Pronto</span></span>
+            <span id="statusSubtext" class="text-muted font-monospace">Nessuna operazione in corso</span>
+        </div>
 
         <div class="d-flex align-items-start" style="margin-top: 20px;">
 
@@ -47,11 +180,16 @@
                             <div class="btn-group btn-group-sm w-100" role="group" aria-label="Strategia">
                                 <input type="radio" class="btn-check" name="strategyMode" id="modeSniping"
                                     value="sniping" autocomplete="off" checked>
-                                <label class="btn btn-outline-success" for="modeSniping">Sniping (BIN)</label>
+                                <label class="btn btn-outline-success" for="modeSniping">Sniping</label>
 
                                 <input type="radio" class="btn-check" name="strategyMode" id="modeBidding"
                                     value="bidding" autocomplete="off">
-                                <label class="btn btn-outline-warning" for="modeBidding">Mass Bidding</label>
+                                <label class="btn btn-outline-warning" for="modeBidding">Bidding</label>
+
+                                <input type="radio" class="btn-check d-none" name="strategyMode" id="modeLazy"
+                                    value="lazy" autocomplete="off">
+                                <label class="btn btn-outline-info d-none" id="labelModeLazy"
+                                    for="modeLazy">Lazy</label>
                             </div>
                         </div>
                         <div id="biddingConfigContainer" class="mt-2 mb-2 d-none">
@@ -59,6 +197,30 @@
                                 style="font-size: 0.8rem;">Margine min. netto:</label>
                             <input type="number" class="form-control form-control-sm" id="minMargin" value="200"
                                 min="50" step="50" style="width: 200px;">
+                        </div>
+                        <div id="lazyConfigContainer" class="mt-2 mb-2 d-none">
+                            <div class="mb-2">
+                                <label for="targetTradepileSizeInput" class="form-label form-label-sm text-muted mb-0"
+                                    style="font-size: 0.8rem;">Target Carte in Vendita:</label>
+                                <input type="number" class="form-control form-control-sm" id="targetTradepileSizeInput"
+                                    value="50" min="5" max="100" step="5" style="width: 200px;">
+                            </div>
+                            <div class="mb-2">
+                                <label for="lazyMarkupPercentInput" class="form-label form-label-sm text-muted mb-0"
+                                    style="font-size: 0.8rem;">Ricarico Vendita (%):</label>
+                                <input type="number" class="form-control form-control-sm" id="lazyMarkupPercentInput"
+                                    value="10" min="5" max="50" step="1" style="width: 200px;">
+                            </div>
+                            <div class="mb-2">
+                                <label for="lazySleepMinutesInput" class="form-label form-label-sm text-muted mb-0"
+                                    style="font-size: 0.8rem;">Pausa Ciclo (minuti):</label>
+                                <input type="number" class="form-control form-control-sm" id="lazySleepMinutesInput"
+                                    value="63" min="10" max="180" step="1" style="width: 200px;">
+                            </div>
+                            <small class="text-muted d-block" style="font-size: 0.72rem; max-width: 200px;">
+                                Ciclo 63m: pulizia venduti, relist invenduti, restock al BIN live e heartbeat keep-alive
+                                ogni 7.5m.
+                            </small>
                         </div>
                         <div id="fodderRatingContainer" class="mt-2 mb-2">
                             <label class="form-label form-label-sm d-block mb-1 text-muted"
@@ -97,24 +259,26 @@
                                 <option value="267">Catalizzatore (Catalyst)</option>
                             </select>
 
-                            <div class="mb-2">
-                                <label for="maxSnipePriceInput" class="form-label form-label-sm text-muted mb-0"
-                                    style="font-size: 0.8rem;">Max Compra Ora (Snipe):</label>
-                                <input type="number" class="form-control form-control-sm" id="maxSnipePriceInput"
-                                    placeholder="Automatico (-15%)" min="200" step="100" style="width: 200px;">
-                            </div>
+                            <div id="snipeSpecificContainer">
+                                <div class="mb-2">
+                                    <label for="maxSnipePriceInput" class="form-label form-label-sm text-muted mb-0"
+                                        style="font-size: 0.8rem;">Max Compra Ora (Snipe):</label>
+                                    <input type="number" class="form-control form-control-sm" id="maxSnipePriceInput"
+                                        placeholder="Automatico (-15%)" min="200" step="100" style="width: 200px;">
+                                </div>
 
-                            <div class="form-check form-switch mb-1">
-                                <input class="form-check-input" type="checkbox" id="autoBinCheck" checked>
-                                <label class="form-check-label text-muted" for="autoBinCheck"
-                                    style="font-size: 0.8rem;">Auto-Discovery BIN</label>
-                            </div>
+                                <div class="form-check form-switch mb-1">
+                                    <input class="form-check-input" type="checkbox" id="autoBinCheck" checked>
+                                    <label class="form-check-label text-muted" for="autoBinCheck"
+                                        style="font-size: 0.8rem;">Auto-Discovery BIN</label>
+                                </div>
 
-                            <div id="manualBinContainer" class="d-none">
-                                <label for="manualBinInput" class="form-label form-label-sm text-muted mb-0"
-                                    style="font-size: 0.8rem;">BIN vendita forzato:</label>
-                                <input type="number" class="form-control form-control-sm" id="manualBinInput"
-                                    placeholder="es. 4000" min="200" step="100" style="width: 200px;">
+                                <div id="manualBinContainer" class="d-none">
+                                    <label for="manualBinInput" class="form-label form-label-sm text-muted mb-0"
+                                        style="font-size: 0.8rem;">BIN vendita forzato:</label>
+                                    <input type="number" class="form-control form-control-sm" id="manualBinInput"
+                                        placeholder="es. 4000" min="200" step="100" style="width: 200px;">
+                                </div>
                             </div>
                         </div>
                         <button type="button" class="btn btn-primary" style="margin-top: 5px;"
@@ -127,22 +291,60 @@
                     </div>
                 </div>
             </div>
-            <div class="ms-3">
-                <label id="tentativiRimasti"></label>
-                <br>
-                <label id="carteAcquistate"></label>
-                <br>
-                <label id="crediti"></label>
-
+            <div class="ms-3 flex-grow-1">
+                <div class="status-pill mb-2">
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-muted" style="font-size: 0.8rem;">Crediti EA:</span>
+                        <strong id="crediti" class="text-success font-monospace" style="font-size: 0.95rem;">-</strong>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-muted" style="font-size: 0.8rem;">Carte Acquistate:</span>
+                        <strong id="carteAcquistate" class="text-primary font-monospace"
+                            style="font-size: 0.95rem;">0</strong>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-muted" style="font-size: 0.8rem;">Lista Trasferimenti:</span>
+                        <strong id="tradepileCount" class="text-warning font-monospace"
+                            style="font-size: 0.85rem;">-</strong>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="text-muted" style="font-size: 0.8rem;">Tentativi Residui:</span>
+                        <strong id="tentativiRimasti" class="text-secondary font-monospace"
+                            style="font-size: 0.85rem;">-</strong>
+                    </div>
+                </div>
             </div>
 
         </div>
 
-        <div class="collapse" id="logCollapse" style="margin-top: 20px;">
-            <div class="card" style="height: 300px; width: 50%;">
-                <div class="card-body">
-                    <textarea id="logViewer" readonly style="width: 100%; height: 100%"></textarea>
+        <!-- Terminale Log Interattivo Formattato -->
+        <div class="collapse show" id="logCollapse" style="margin-top: 15px; margin-bottom: 15px;">
+            <div class="log-container">
+                <div class="log-header">
+                    <div class="btn-group btn-group-sm" role="group" id="logFilterGroup">
+                        <button type="button" class="btn btn-dark active py-0 px-2 text-white border-secondary"
+                            style="font-size: 0.72rem;" data-filter="all">Tutti</button>
+                        <button type="button" class="btn btn-dark py-0 px-2 text-success border-secondary"
+                            style="font-size: 0.72rem;" data-filter="trade">Acquisti & Vendite</button>
+                        <button type="button" class="btn btn-dark py-0 px-2 text-warning border-secondary"
+                            style="font-size: 0.72rem;" data-filter="sleep">Stato & Pause</button>
+                        <button type="button" class="btn btn-dark py-0 px-2 text-danger border-secondary"
+                            style="font-size: 0.72rem;" data-filter="warn">Avvisi</button>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <span id="logCount" class="text-muted font-monospace" style="font-size: 0.7rem;">0 eventi</span>
+                        <button type="button" class="btn btn-outline-secondary py-0 px-2 text-white" id="clearLogBtn"
+                            style="font-size: 0.72rem;" title="Pulisci console">Pulisci</button>
+                    </div>
                 </div>
+                <div id="logConsole" class="log-console">
+                    <div class="log-row">
+                        <span class="log-time">--:--:--</span>
+                        <span class="log-tag tag-info">INFO</span>
+                        <span class="log-msg text-muted">Console pronta. Configura i parametri e premi Start.</span>
+                    </div>
+                </div>
+                <textarea id="logViewer" class="d-none" readonly></textarea>
             </div>
         </div>
     </div>

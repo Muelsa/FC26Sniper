@@ -8,6 +8,7 @@
     "storage",
     "tabs",
     "scripting",
+    "alarms",
     "declarativeNetRequest"
   ],
   "host_permissions": [

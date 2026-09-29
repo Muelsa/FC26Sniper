@@ -1,0 +1,802 @@
+[2026-09-27T16:48:00.397Z] [SERVER_START] Telemetry server avviato 
+[2026-09-27T16:57:39.999Z] [START] Bot avviato {"strategyMode":"lazy","targetTradepileSize":100,"chemStyle":"all"}
+[2026-09-27T16:58:30.590Z] [RATE_LIMIT] Errore transitorio su offerta (512) (1/3) {"status":512,"count":1}
+[2026-09-27T16:58:41.688Z] [RATE_LIMIT] Errore transitorio su offerta (429) (2/3) {"status":429,"count":2}
+[2026-09-27T16:58:51.220Z] [SOFT_BAN] Soft-ban 3/3 confermato su offerta (512). Transizione immediata a Vendita. {"status":512}
+[2026-09-27T16:58:52.546Z] [COOLDOWN_START] Pausa rigenerativa soft-ban (63 min) avviata {"sleepMins":63,"marketRestricted":true}
+[2026-09-27T17:00:54.042Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":22271,"remainingMinutes":61}
+[2026-09-27T17:02:45.435Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":22271,"remainingMinutes":59}
+[2026-09-27T17:04:51.218Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":25691,"remainingMinutes":57}
+[2026-09-27T17:06:52.721Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":25691,"remainingMinutes":55}
+[2026-09-27T17:08:54.149Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":25691,"remainingMinutes":53}
+[2026-09-27T17:10:55.516Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":25691,"remainingMinutes":51}
+[2026-09-27T17:12:56.850Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":25691,"remainingMinutes":49}
+[2026-09-27T17:14:58.210Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":25691,"remainingMinutes":47}
+[2026-09-27T17:16:59.389Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":25691,"remainingMinutes":45}
+[2026-09-27T17:19:00.601Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":25691,"remainingMinutes":43}
+[2026-09-27T17:21:02.035Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":25691,"remainingMinutes":41}
+[2026-09-27T17:23:03.606Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":25691,"remainingMinutes":39}
+[2026-09-27T17:25:05.577Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":25691,"remainingMinutes":37}
+[2026-09-27T17:27:06.976Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":25691,"remainingMinutes":35}
+[2026-09-27T17:29:08.472Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":25691,"remainingMinutes":33}
+[2026-09-27T17:31:09.879Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":25691,"remainingMinutes":31}
+[2026-09-27T17:33:11.282Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":25691,"remainingMinutes":29}
+[2026-09-27T17:35:12.614Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":25691,"remainingMinutes":27}
+[2026-09-27T17:37:13.894Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":25691,"remainingMinutes":25}
+[2026-09-27T17:39:15.280Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":25691,"remainingMinutes":23}
+[2026-09-27T17:41:16.579Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":25691,"remainingMinutes":21}
+[2026-09-27T17:43:59.711Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":69296,"remainingMinutes":19}
+[2026-09-27T17:46:11.760Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":69296,"remainingMinutes":17}
+[2026-09-27T17:48:13.188Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":69296,"remainingMinutes":15}
+[2026-09-27T17:50:14.657Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":69296,"remainingMinutes":13}
+[2026-09-27T17:52:15.996Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":69296,"remainingMinutes":11}
+[2026-09-27T17:54:17.617Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":69296,"remainingMinutes":9}
+[2026-09-27T17:56:19.084Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":69296,"remainingMinutes":7}
+[2026-09-27T17:58:47.038Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76136,"remainingMinutes":5}
+[2026-09-27T18:00:48.316Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76136,"remainingMinutes":3}
+[2026-09-27T18:02:49.757Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76136,"remainingMinutes":1}
+[2026-09-27T18:03:50.204Z] [CYCLE_START] Avvio Ciclo #2 {"cycle":2,"crediti":76136}
+[2026-09-27T18:04:07.206Z] [RATE_LIMIT] Errore transitorio su offerta (512) (1/3) {"status":512,"count":1}
+[2026-09-27T18:04:15.786Z] [RATE_LIMIT] Errore transitorio su offerta (426) (2/3) {"status":426,"count":2}
+[2026-09-27T18:04:27.387Z] [SOFT_BAN] Soft-ban 3/3 confermato su offerta (512). Transizione immediata a Vendita. {"status":512}
+[2026-09-27T18:04:28.811Z] [COOLDOWN_START] Pausa rigenerativa soft-ban (63 min) avviata {"sleepMins":63,"marketRestricted":true}
+[2026-09-27T18:06:34.572Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76136,"remainingMinutes":61}
+[2026-09-27T18:08:35.988Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76136,"remainingMinutes":59}
+[2026-09-27T18:10:37.539Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76136,"remainingMinutes":57}
+[2026-09-27T18:12:39.100Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76136,"remainingMinutes":55}
+[2026-09-27T18:14:40.517Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76136,"remainingMinutes":53}
+[2026-09-27T18:16:42.052Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76136,"remainingMinutes":51}
+[2026-09-27T18:18:43.436Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76136,"remainingMinutes":49}
+[2026-09-27T18:20:44.821Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76136,"remainingMinutes":47}
+[2026-09-27T18:22:46.147Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76136,"remainingMinutes":45}
+[2026-09-27T18:24:47.725Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76136,"remainingMinutes":43}
+[2026-09-27T18:26:49.137Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76136,"remainingMinutes":41}
+[2026-09-27T18:28:50.572Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76136,"remainingMinutes":39}
+[2026-09-27T18:30:51.916Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76136,"remainingMinutes":37}
+[2026-09-27T18:32:53.345Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76136,"remainingMinutes":35}
+[2026-09-27T18:34:54.663Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76136,"remainingMinutes":33}
+[2026-09-27T18:36:55.947Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76136,"remainingMinutes":31}
+[2026-09-27T18:38:57.352Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76136,"remainingMinutes":29}
+[2026-09-27T18:40:58.819Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76136,"remainingMinutes":27}
+[2026-09-27T18:43:00.276Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":85066,"remainingMinutes":25}
+[2026-09-27T18:45:24.820Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":124206,"remainingMinutes":23}
+[2026-09-27T18:47:33.947Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":133136,"remainingMinutes":21}
+[2026-09-27T18:49:35.365Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":133136,"remainingMinutes":19}
+[2026-09-27T18:51:36.882Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":133136,"remainingMinutes":17}
+[2026-09-27T18:53:38.155Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":133136,"remainingMinutes":15}
+[2026-09-27T18:55:39.758Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":133136,"remainingMinutes":13}
+[2026-09-27T18:57:41.068Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":133136,"remainingMinutes":11}
+[2026-09-27T19:00:05.580Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":139976,"remainingMinutes":9}
+[2026-09-27T19:02:07.067Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":139976,"remainingMinutes":7}
+[2026-09-27T19:04:08.453Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":139976,"remainingMinutes":5}
+[2026-09-27T19:06:09.946Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":139976,"remainingMinutes":3}
+[2026-09-27T19:08:15.827Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":139976,"remainingMinutes":1}
+[2026-09-27T19:09:16.368Z] [CYCLE_START] Avvio Ciclo #3 {"cycle":3,"crediti":139976}
+[2026-09-27T19:09:32.938Z] [RATE_LIMIT] Errore transitorio su offerta (521) (1/3) {"status":521,"count":1}
+[2026-09-27T19:09:42.933Z] [RATE_LIMIT] Errore transitorio su offerta (426) (2/3) {"status":426,"count":2}
+[2026-09-27T19:09:52.832Z] [SOFT_BAN] Soft-ban 3/3 confermato su offerta (426). Transizione immediata a Vendita. {"status":426}
+[2026-09-27T19:09:54.093Z] [COOLDOWN_START] Pausa rigenerativa soft-ban (63 min) avviata {"sleepMins":63,"marketRestricted":true}
+[2026-09-27T19:11:55.374Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":139976,"remainingMinutes":61}
+[2026-09-27T19:13:56.809Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":139976,"remainingMinutes":59}
+[2026-09-27T19:15:58.039Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":139976,"remainingMinutes":57}
+[2026-09-27T19:17:59.423Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":139976,"remainingMinutes":55}
+[2026-09-27T19:20:00.814Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":139976,"remainingMinutes":53}
+[2026-09-27T19:22:02.080Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":139976,"remainingMinutes":51}
+[2026-09-27T19:24:03.871Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":139976,"remainingMinutes":49}
+[2026-09-27T19:26:05.139Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":139976,"remainingMinutes":47}
+[2026-09-27T19:28:06.533Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":139976,"remainingMinutes":45}
+[2026-09-27T19:30:07.752Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":139976,"remainingMinutes":43}
+[2026-09-27T19:32:09.127Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":139976,"remainingMinutes":41}
+[2026-09-27T19:34:10.710Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":139976,"remainingMinutes":39}
+[2026-09-27T19:36:12.081Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":139976,"remainingMinutes":37}
+[2026-09-27T19:38:13.480Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":139976,"remainingMinutes":35}
+[2026-09-27T19:40:14.797Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":139976,"remainingMinutes":33}
+[2026-09-27T19:42:16.291Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":139976,"remainingMinutes":31}
+[2026-09-27T19:44:17.636Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":139976,"remainingMinutes":29}
+[2026-09-27T19:46:38.500Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":151186,"remainingMinutes":27}
+[2026-09-27T19:48:46.967Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":151186,"remainingMinutes":25}
+[2026-09-27T19:50:48.308Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":151186,"remainingMinutes":23}
+[2026-09-27T19:52:49.690Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":151186,"remainingMinutes":21}
+[2026-09-27T19:54:51.300Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":151186,"remainingMinutes":19}
+[2026-09-27T19:56:52.673Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":151186,"remainingMinutes":17}
+[2026-09-27T19:58:54.050Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":151186,"remainingMinutes":15}
+[2026-09-27T20:01:17.460Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":154511,"remainingMinutes":13}
+[2026-09-27T20:03:18.829Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":154511,"remainingMinutes":11}
+[2026-09-27T20:05:20.169Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":154511,"remainingMinutes":9}
+[2026-09-27T20:07:21.511Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":154511,"remainingMinutes":7}
+[2026-09-27T20:09:27.603Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":154511,"remainingMinutes":5}
+[2026-09-27T20:11:29.002Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":154511,"remainingMinutes":3}
+[2026-09-27T20:13:30.430Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":154511,"remainingMinutes":1}
+[2026-09-27T20:14:30.997Z] [CYCLE_START] Avvio Ciclo #4 {"cycle":4,"crediti":154511}
+[2026-09-27T20:14:47.153Z] [RATE_LIMIT] Errore transitorio su offerta (521) (1/3) {"status":521,"count":1}
+[2026-09-27T20:14:56.174Z] [RATE_LIMIT] Errore transitorio su offerta (429) (2/3) {"status":429,"count":2}
+[2026-09-27T20:15:06.860Z] [SOFT_BAN] Soft-ban 3/3 confermato su offerta (426). Transizione immediata a Vendita. {"status":426}
+[2026-09-27T20:15:08.111Z] [COOLDOWN_START] Pausa rigenerativa soft-ban (63 min) avviata {"sleepMins":63,"marketRestricted":true}
+[2026-09-27T20:17:09.440Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":154511,"remainingMinutes":61}
+[2026-09-27T20:19:10.723Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":154511,"remainingMinutes":59}
+[2026-09-27T20:21:12.195Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":154511,"remainingMinutes":57}
+[2026-09-27T20:23:13.572Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":154511,"remainingMinutes":55}
+[2026-09-27T20:25:16.210Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":154511,"remainingMinutes":53}
+[2026-09-27T20:27:17.497Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":154511,"remainingMinutes":51}
+[2026-09-27T20:29:18.887Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":154511,"remainingMinutes":49}
+[2026-09-27T20:31:20.252Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":154511,"remainingMinutes":47}
+[2026-09-27T20:33:21.676Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":154511,"remainingMinutes":45}
+[2026-09-27T20:35:23.195Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":154511,"remainingMinutes":43}
+[2026-09-27T20:37:24.601Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":154511,"remainingMinutes":41}
+[2026-09-27T20:39:25.934Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":154511,"remainingMinutes":39}
+[2026-09-27T20:41:27.417Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":154511,"remainingMinutes":37}
+[2026-09-27T20:43:28.741Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":154511,"remainingMinutes":35}
+[2026-09-27T20:45:30.232Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":154511,"remainingMinutes":33}
+[2026-09-27T20:47:49.090Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":157741,"remainingMinutes":31}
+[2026-09-27T20:49:57.749Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":157741,"remainingMinutes":29}
+[2026-09-27T20:51:59.238Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":157741,"remainingMinutes":27}
+[2026-09-27T20:54:00.940Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":157741,"remainingMinutes":25}
+[2026-09-27T20:56:02.345Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":157741,"remainingMinutes":23}
+[2026-09-27T20:58:03.762Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":157741,"remainingMinutes":21}
+[2026-09-27T21:00:05.043Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":157741,"remainingMinutes":19}
+[2026-09-27T21:02:26.277Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":160971,"remainingMinutes":17}
+[2026-09-27T21:04:27.795Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":160971,"remainingMinutes":15}
+[2026-09-27T21:06:29.157Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":160971,"remainingMinutes":13}
+[2026-09-27T21:08:30.555Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":160971,"remainingMinutes":11}
+[2026-09-27T21:10:36.738Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":160971,"remainingMinutes":9}
+[2026-09-27T21:12:38.038Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":160971,"remainingMinutes":7}
+[2026-09-27T21:14:39.471Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":160971,"remainingMinutes":5}
+[2026-09-27T21:16:40.849Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":160971,"remainingMinutes":3}
+[2026-09-27T21:18:42.268Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":160971,"remainingMinutes":1}
+[2026-09-27T21:19:42.809Z] [CYCLE_START] Avvio Ciclo #5 {"cycle":5,"crediti":160971}
+[2026-09-27T21:19:57.761Z] [RATE_LIMIT] Errore transitorio su offerta (429) (1/3) {"status":429,"count":1}
+[2026-09-27T21:20:05.829Z] [RATE_LIMIT] Errore transitorio su offerta (521) (2/3) {"status":521,"count":2}
+[2026-09-27T21:20:15.368Z] [SOFT_BAN] Soft-ban 3/3 confermato su offerta (521). Transizione immediata a Vendita. {"status":521}
+[2026-09-27T21:20:16.626Z] [COOLDOWN_START] Pausa rigenerativa soft-ban (63 min) avviata {"sleepMins":63,"marketRestricted":true}
+[2026-09-27T21:22:18.121Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":160971,"remainingMinutes":61}
+[2026-09-27T21:24:19.758Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":160971,"remainingMinutes":59}
+[2026-09-27T21:26:21.158Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":160971,"remainingMinutes":57}
+[2026-09-27T21:28:22.680Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":160971,"remainingMinutes":55}
+[2026-09-27T21:30:23.942Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":160971,"remainingMinutes":53}
+[2026-09-27T21:32:25.430Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":160971,"remainingMinutes":51}
+[2026-09-27T21:34:26.814Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":160971,"remainingMinutes":49}
+[2026-09-27T21:36:28.096Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":160971,"remainingMinutes":47}
+[2026-09-27T21:38:29.543Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":160971,"remainingMinutes":45}
+[2026-09-27T21:40:30.961Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":160971,"remainingMinutes":43}
+[2026-09-27T21:42:32.374Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":160971,"remainingMinutes":41}
+[2026-09-27T21:44:33.674Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":160971,"remainingMinutes":39}
+[2026-09-27T21:46:35.117Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":160971,"remainingMinutes":37}
+[2026-09-27T21:48:51.259Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":168761,"remainingMinutes":35}
+[2026-09-27T21:50:59.815Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":168761,"remainingMinutes":33}
+[2026-09-27T21:53:01.218Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":168761,"remainingMinutes":31}
+[2026-09-27T21:55:02.745Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":168761,"remainingMinutes":29}
+[2026-09-27T21:57:04.086Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":168761,"remainingMinutes":27}
+[2026-09-27T21:59:05.464Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":168761,"remainingMinutes":25}
+[2026-09-27T22:01:06.823Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":168761,"remainingMinutes":23}
+[2026-09-27T22:03:23.165Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181681,"remainingMinutes":21}
+[2026-09-27T22:05:24.512Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181681,"remainingMinutes":19}
+[2026-09-27T22:07:25.846Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181681,"remainingMinutes":17}
+[2026-09-27T22:09:27.086Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181681,"remainingMinutes":15}
+[2026-09-27T22:11:33.244Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181681,"remainingMinutes":13}
+[2026-09-27T22:13:34.522Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181681,"remainingMinutes":11}
+[2026-09-27T22:15:35.864Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181681,"remainingMinutes":9}
+[2026-09-27T22:17:37.293Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181681,"remainingMinutes":7}
+[2026-09-27T22:19:38.654Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181681,"remainingMinutes":5}
+[2026-09-27T22:21:39.969Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181681,"remainingMinutes":3}
+[2026-09-27T22:23:41.991Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181681,"remainingMinutes":1}
+[2026-09-27T22:24:42.503Z] [CYCLE_START] Avvio Ciclo #6 {"cycle":6,"crediti":181681}
+[2026-09-27T22:24:57.911Z] [RATE_LIMIT] Errore transitorio su offerta (429) (1/3) {"status":429,"count":1}
+[2026-09-27T22:25:09.976Z] [RATE_LIMIT] Errore transitorio su offerta (429) (2/3) {"status":429,"count":2}
+[2026-09-27T22:25:20.211Z] [SOFT_BAN] Soft-ban 3/3 confermato su offerta (512). Transizione immediata a Vendita. {"status":512}
+[2026-09-27T22:25:21.463Z] [COOLDOWN_START] Pausa rigenerativa soft-ban (63 min) avviata {"sleepMins":63,"marketRestricted":true}
+[2026-09-27T22:27:22.937Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181681,"remainingMinutes":61}
+[2026-09-27T22:29:24.191Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181681,"remainingMinutes":59}
+[2026-09-27T22:31:25.688Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181681,"remainingMinutes":57}
+[2026-09-27T22:33:27.046Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181681,"remainingMinutes":55}
+[2026-09-27T22:35:28.416Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181681,"remainingMinutes":53}
+[2026-09-27T22:37:29.649Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181681,"remainingMinutes":51}
+[2026-09-28T07:12:54.579Z] [SERVER_START] Telemetry server avviato 
+[2026-09-28T07:14:55.508Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":55}
+[2026-09-28T07:16:56.866Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":53}
+[2026-09-28T07:18:58.208Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":51}
+[2026-09-28T07:20:59.536Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":49}
+[2026-09-28T07:23:00.863Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":47}
+[2026-09-28T07:25:02.139Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":45}
+[2026-09-28T07:27:03.453Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":43}
+[2026-09-28T07:29:04.734Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":41}
+[2026-09-28T07:31:06.002Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":39}
+[2026-09-28T07:33:07.346Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":37}
+[2026-09-28T07:35:08.910Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":35}
+[2026-09-28T07:37:10.327Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":33}
+[2026-09-28T07:39:11.698Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":31}
+[2026-09-28T07:41:12.983Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":29}
+[2026-09-28T07:43:14.376Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":27}
+[2026-09-28T07:45:15.760Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":25}
+[2026-09-28T07:47:17.162Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":23}
+[2026-09-28T07:49:18.482Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":21}
+[2026-09-28T07:51:19.831Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":19}
+[2026-09-28T07:53:21.273Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":17}
+[2026-09-28T07:55:22.592Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":15}
+[2026-09-28T07:57:23.976Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":13}
+[2026-09-28T07:59:25.331Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":11}
+[2026-09-28T08:01:26.706Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":9}
+[2026-09-28T08:03:27.978Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":7}
+[2026-09-28T08:05:29.428Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":5}
+[2026-09-28T08:08:00.222Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":3}
+[2026-09-28T08:10:01.583Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":1}
+[2026-09-28T08:11:02.127Z] [CYCLE_START] Avvio Ciclo #2 {"cycle":2,"crediti":208946}
+[2026-09-28T08:11:16.236Z] [RATE_LIMIT] Errore transitorio su offerta (426) (1/3) {"status":426,"count":1}
+[2026-09-28T08:11:25.962Z] [RATE_LIMIT] Errore transitorio su offerta (426) (2/3) {"status":426,"count":2}
+[2026-09-28T08:11:36.976Z] [SOFT_BAN] Soft-ban 3/3 confermato su offerta (521). Transizione immediata a Vendita. {"status":521}
+[2026-09-28T08:11:38.231Z] [COOLDOWN_START] Pausa rigenerativa soft-ban (63 min) avviata {"sleepMins":63,"marketRestricted":true}
+[2026-09-28T08:13:39.595Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":61}
+[2026-09-28T08:15:40.840Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":59}
+[2026-09-28T08:17:42.102Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":57}
+[2026-09-28T08:19:43.490Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":55}
+[2026-09-28T08:21:44.938Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":53}
+[2026-09-28T08:23:46.342Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":51}
+[2026-09-28T08:25:47.684Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":49}
+[2026-09-28T08:27:49.098Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":47}
+[2026-09-28T08:29:50.504Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":45}
+[2026-09-28T08:31:51.938Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":43}
+[2026-09-28T08:33:53.349Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":41}
+[2026-09-28T08:35:55.117Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":39}
+[2026-09-28T08:37:56.458Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":37}
+[2026-09-28T08:39:57.819Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":35}
+[2026-09-28T08:41:59.260Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":33}
+[2026-09-28T08:44:00.601Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":31}
+[2026-09-28T08:46:01.974Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":29}
+[2026-09-28T08:48:03.392Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":27}
+[2026-09-28T08:50:04.761Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":25}
+[2026-09-28T08:52:06.182Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":23}
+[2026-09-28T08:54:07.600Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":21}
+[2026-09-28T08:56:08.873Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":19}
+[2026-09-28T08:58:10.143Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":17}
+[2026-09-28T09:00:11.412Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":15}
+[2026-09-28T09:02:12.796Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":13}
+[2026-09-28T09:04:14.082Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":11}
+[2026-09-28T09:06:15.595Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":9}
+[2026-09-28T09:08:46.288Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":7}
+[2026-09-28T09:10:47.603Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":5}
+[2026-09-28T09:12:48.944Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":3}
+[2026-09-28T09:14:50.170Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":208946,"remainingMinutes":1}
+[2026-09-28T09:15:50.703Z] [CYCLE_START] Avvio Ciclo #3 {"cycle":3,"crediti":208946}
+[2026-09-28T09:22:35.401Z] [PAUSE_START] Breve pausa anti-spam (3 min) {"sleepMins":3,"currentPile":30,"targetSize":100}
+[2026-09-28T09:24:39.667Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":171471,"remainingMinutes":1}
+[2026-09-28T09:25:40.201Z] [CYCLE_START] Avvio Ciclo #4 {"cycle":4,"crediti":171471}
+[2026-09-28T09:35:00.660Z] [PAUSE_START] Breve pausa anti-spam (3 min) {"sleepMins":3,"currentPile":40,"targetSize":100}
+[2026-09-28T09:37:03.560Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":149301,"remainingMinutes":1}
+[2026-09-28T09:38:04.087Z] [CYCLE_START] Avvio Ciclo #5 {"cycle":5,"crediti":149301}
+[2026-09-28T09:46:08.281Z] [PAUSE_START] Breve pausa anti-spam (3 min) {"sleepMins":3,"currentPile":52,"targetSize":100}
+[2026-09-28T09:48:12.105Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":103626,"remainingMinutes":1}
+[2026-09-28T09:49:12.652Z] [CYCLE_START] Avvio Ciclo #6 {"cycle":6,"crediti":103626}
+[2026-09-28T09:53:51.279Z] [RATE_LIMIT] Errore transitorio su Compra Ora (426) (1/3) {"status":426,"count":1}
+[2026-09-28T09:54:01.804Z] [RATE_LIMIT] Errore transitorio su Compra Ora (512) (1/3) {"status":512,"count":1}
+[2026-09-28T09:54:12.384Z] [RATE_LIMIT] Errore transitorio su Compra Ora (512) (1/3) {"status":512,"count":1}
+[2026-09-28T09:54:23.741Z] [RATE_LIMIT] Errore transitorio su Compra Ora (512) (1/3) {"status":512,"count":1}
+[2026-09-28T09:54:36.239Z] [RATE_LIMIT] Errore transitorio su Compra Ora (521) (1/3) {"status":521,"count":1}
+[2026-09-28T09:54:47.170Z] [RATE_LIMIT] Errore transitorio su Compra Ora (521) (1/3) {"status":521,"count":1}
+[2026-09-28T09:54:59.076Z] [RATE_LIMIT] Errore transitorio su Compra Ora (429) (1/3) {"status":429,"count":1}
+[2026-09-28T09:55:08.339Z] [RATE_LIMIT] Errore transitorio su Compra Ora (426) (1/3) {"status":426,"count":1}
+[2026-09-28T09:55:21.585Z] [RATE_LIMIT] Errore transitorio su Compra Ora (521) (1/3) {"status":521,"count":1}
+[2026-09-28T09:55:32.057Z] [RATE_LIMIT] Errore transitorio su Compra Ora (429) (1/3) {"status":429,"count":1}
+[2026-09-28T09:55:42.207Z] [RATE_LIMIT] Errore transitorio su Compra Ora (521) (1/3) {"status":521,"count":1}
+[2026-09-28T09:55:55.032Z] [RATE_LIMIT] Errore transitorio su Compra Ora (426) (1/3) {"status":426,"count":1}
+[2026-09-28T09:56:05.951Z] [RATE_LIMIT] Errore transitorio su Compra Ora (521) (1/3) {"status":521,"count":1}
+[2026-09-28T09:56:15.856Z] [RATE_LIMIT] Errore transitorio su Compra Ora (426) (1/3) {"status":426,"count":1}
+[2026-09-28T09:56:26.062Z] [RATE_LIMIT] Errore transitorio su Compra Ora (512) (1/3) {"status":512,"count":1}
+[2026-09-28T09:56:36.778Z] [RATE_LIMIT] Errore transitorio su Compra Ora (426) (1/3) {"status":426,"count":1}
+[2026-09-28T09:56:49.547Z] [RATE_LIMIT] Errore transitorio su Compra Ora (521) (1/3) {"status":521,"count":1}
+[2026-09-28T09:56:59.506Z] [RATE_LIMIT] Errore transitorio su Compra Ora (512) (1/3) {"status":512,"count":1}
+[2026-09-28T09:57:12.327Z] [RATE_LIMIT] Errore transitorio su Compra Ora (429) (1/3) {"status":429,"count":1}
+[2026-09-28T09:57:24.687Z] [RATE_LIMIT] Errore transitorio su Compra Ora (426) (1/3) {"status":426,"count":1}
+[2026-09-28T09:57:35.463Z] [RATE_LIMIT] Errore transitorio su Compra Ora (521) (1/3) {"status":521,"count":1}
+[2026-09-28T09:57:47.148Z] [RATE_LIMIT] Errore transitorio su Compra Ora (429) (1/3) {"status":429,"count":1}
+[2026-09-28T09:57:57.375Z] [RATE_LIMIT] Errore transitorio su Compra Ora (429) (1/3) {"status":429,"count":1}
+[2026-09-28T09:58:07.896Z] [RATE_LIMIT] Errore transitorio su Compra Ora (512) (1/3) {"status":512,"count":1}
+[2026-09-28T09:58:20.050Z] [RATE_LIMIT] Errore transitorio su Compra Ora (512) (1/3) {"status":512,"count":1}
+[2026-09-28T09:58:30.683Z] [RATE_LIMIT] Errore transitorio su Compra Ora (426) (1/3) {"status":426,"count":1}
+[2026-09-28T09:58:43.456Z] [RATE_LIMIT] Errore transitorio su Compra Ora (512) (1/3) {"status":512,"count":1}
+[2026-09-28T09:58:55.041Z] [RATE_LIMIT] Errore transitorio su Compra Ora (521) (1/3) {"status":521,"count":1}
+[2026-09-28T10:46:49.912Z] [START] Bot avviato {"strategyMode":"lazy","targetTradepileSize":100,"chemStyle":"all"}
+[2026-09-28T10:57:21.450Z] [PAUSE_START] Breve pausa anti-spam (3 min) {"sleepMins":3,"currentPile":62,"targetSize":100}
+[2026-09-28T10:59:25.264Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":66771,"remainingMinutes":1}
+[2026-09-28T11:00:25.656Z] [CYCLE_START] Avvio Ciclo #2 {"cycle":2,"crediti":66771}
+[2026-09-28T11:04:45.681Z] [PAUSE_START] Breve pausa anti-spam (3 min) {"sleepMins":3,"currentPile":72,"targetSize":100}
+[2026-09-28T11:06:51.488Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":17571,"remainingMinutes":1}
+[2026-09-28T11:07:51.890Z] [CYCLE_START] Avvio Ciclo #3 {"cycle":3,"crediti":17571}
+[2026-09-28T11:14:24.810Z] [RATE_LIMIT] Errore transitorio su offerta (426) (1/3) {"status":426,"count":1}
+[2026-09-28T11:14:35.478Z] [RATE_LIMIT] Errore transitorio su offerta (429) (2/3) {"status":429,"count":2}
+[2026-09-28T11:14:46.394Z] [SOFT_BAN] Soft-ban 3/3 confermato su offerta (429). Transizione immediata a Vendita. {"status":429}
+[2026-09-28T11:14:47.660Z] [COOLDOWN_START] Pausa rigenerativa soft-ban (63 min) avviata {"sleepMins":63,"marketRestricted":true}
+[2026-09-28T11:16:50.398Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":9421,"remainingMinutes":61}
+[2026-09-28T11:18:52.113Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":13571,"remainingMinutes":59}
+[2026-09-28T11:20:53.529Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":13571,"remainingMinutes":57}
+[2026-09-28T11:22:54.955Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":13571,"remainingMinutes":55}
+[2026-09-28T11:24:56.211Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":13571,"remainingMinutes":53}
+[2026-09-28T11:26:57.392Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":13571,"remainingMinutes":51}
+[2026-09-28T11:28:58.578Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":13571,"remainingMinutes":49}
+[2026-09-28T11:30:59.828Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":13571,"remainingMinutes":47}
+[2026-09-28T11:33:01.051Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":13571,"remainingMinutes":45}
+[2026-09-28T11:35:02.467Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":13571,"remainingMinutes":43}
+[2026-09-28T11:37:03.768Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":13571,"remainingMinutes":41}
+[2026-09-28T11:39:04.984Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":13571,"remainingMinutes":39}
+[2026-09-28T11:41:06.230Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":13571,"remainingMinutes":37}
+[2026-09-28T11:43:07.555Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":13571,"remainingMinutes":35}
+[2026-09-28T11:45:08.803Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":13571,"remainingMinutes":33}
+[2026-09-28T11:47:18.740Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":16801,"remainingMinutes":31}
+[2026-09-28T11:50:15.882Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":21456,"remainingMinutes":29}
+[2026-09-28T11:52:17.146Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":21456,"remainingMinutes":27}
+[2026-09-28T11:54:21.139Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":21456,"remainingMinutes":25}
+[2026-09-28T11:56:26.811Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":29341,"remainingMinutes":23}
+[2026-09-28T11:58:42.123Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":29341,"remainingMinutes":21}
+[2026-09-28T12:00:43.392Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":32476,"remainingMinutes":19}
+[2026-09-28T12:02:44.621Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":32476,"remainingMinutes":17}
+[2026-09-28T12:04:59.424Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":32476,"remainingMinutes":15}
+[2026-09-28T12:07:05.025Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":32476,"remainingMinutes":13}
+[2026-09-28T12:09:06.255Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":32476,"remainingMinutes":11}
+[2026-09-28T12:11:07.422Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":32476,"remainingMinutes":9}
+[2026-09-28T12:13:10.377Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":32476,"remainingMinutes":7}
+[2026-09-28T12:15:11.688Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":32476,"remainingMinutes":5}
+[2026-09-28T12:17:12.850Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":32476,"remainingMinutes":3}
+[2026-09-28T12:19:14.137Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":32476,"remainingMinutes":1}
+[2026-09-28T12:20:14.674Z] [CYCLE_START] Avvio Ciclo #4 {"cycle":4,"crediti":32476}
+[2026-09-28T12:30:05.683Z] [PAUSE_START] Breve pausa anti-spam (3 min) {"sleepMins":3,"currentPile":80,"targetSize":100}
+[2026-09-28T12:32:07.741Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":6776,"remainingMinutes":1}
+[2026-09-28T12:33:08.262Z] [CYCLE_START] Avvio Ciclo #5 {"cycle":5,"crediti":6776}
+[2026-09-28T12:36:47.660Z] [PAUSE_START] Breve pausa anti-spam (3 min) {"sleepMins":3,"currentPile":80,"targetSize":100}
+[2026-09-28T12:38:49.474Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":3976,"remainingMinutes":1}
+[2026-09-28T12:39:49.954Z] [CYCLE_START] Avvio Ciclo #6 {"cycle":6,"crediti":3976}
+[2026-09-28T12:43:44.757Z] [PAUSE_START] Breve pausa anti-spam (3 min) {"sleepMins":3,"currentPile":80,"targetSize":100}
+[2026-09-28T12:45:46.324Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":6776,"remainingMinutes":1}
+[2026-09-28T12:46:46.866Z] [CYCLE_START] Avvio Ciclo #7 {"cycle":7,"crediti":6776}
+[2026-09-28T12:48:11.023Z] [RATE_LIMIT] Errore transitorio su offerta (429) (1/3) {"status":429,"count":1}
+[2026-09-28T12:48:21.243Z] [RATE_LIMIT] Errore transitorio su offerta (521) (2/3) {"status":521,"count":2}
+[2026-09-28T12:48:32.151Z] [SOFT_BAN] Soft-ban 3/3 confermato su offerta (512). Transizione immediata a Vendita. {"status":512}
+[2026-09-28T12:48:33.431Z] [COOLDOWN_START] Pausa rigenerativa soft-ban (63 min) avviata {"sleepMins":63,"marketRestricted":true}
+[2026-09-28T12:51:39.791Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":10006,"remainingMinutes":61}
+[2026-09-28T12:53:41.623Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":10006,"remainingMinutes":59}
+[2026-09-28T12:55:46.219Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":10006,"remainingMinutes":57}
+[2026-09-28T12:56:54.845Z] [START] Bot avviato {"strategyMode":"lazy","targetTradepileSize":100,"chemStyle":"all"}
+[2026-09-28T12:57:19.780Z] [RATE_LIMIT] Errore transitorio su offerta (512) (1/3) {"status":512,"count":1}
+[2026-09-28T12:57:29.284Z] [RATE_LIMIT] Errore transitorio su offerta (426) (2/3) {"status":426,"count":2}
+[2026-09-28T12:57:38.808Z] [SOFT_BAN] Soft-ban 3/3 confermato su offerta (512). Transizione immediata a Vendita. {"status":512}
+[2026-09-28T12:57:40.194Z] [COOLDOWN_START] Pausa rigenerativa soft-ban (63 min) avviata {"sleepMins":63,"marketRestricted":true}
+[2026-09-28T12:59:53.422Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":17701,"remainingMinutes":61}
+[2026-09-28T13:01:54.717Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":17701,"remainingMinutes":59}
+[2026-09-28T13:03:56.103Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":17701,"remainingMinutes":57}
+[2026-09-28T13:06:11.474Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":17701,"remainingMinutes":55}
+[2026-09-28T13:08:16.116Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":22261,"remainingMinutes":53}
+[2026-09-28T13:10:17.700Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":22261,"remainingMinutes":51}
+[2026-09-28T13:12:19.199Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":22261,"remainingMinutes":49}
+[2026-09-28T13:14:22.315Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":22261,"remainingMinutes":47}
+[2026-09-28T13:16:23.762Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":22261,"remainingMinutes":45}
+[2026-09-28T13:18:25.131Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":22261,"remainingMinutes":43}
+[2026-09-28T13:20:26.397Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":22261,"remainingMinutes":41}
+[2026-09-28T13:22:27.741Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":22261,"remainingMinutes":39}
+[2026-09-28T13:24:30.400Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":22261,"remainingMinutes":37}
+[2026-09-28T13:26:31.843Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":22261,"remainingMinutes":35}
+[2026-09-28T13:28:36.315Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":22261,"remainingMinutes":33}
+[2026-09-28T13:30:44.849Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":26821,"remainingMinutes":31}
+[2026-09-28T13:32:46.675Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":26821,"remainingMinutes":29}
+[2026-09-28T13:34:48.388Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":26821,"remainingMinutes":27}
+[2026-09-28T13:36:49.820Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":26821,"remainingMinutes":25}
+[2026-09-28T13:38:51.279Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":26821,"remainingMinutes":23}
+[2026-09-28T13:40:52.631Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":26821,"remainingMinutes":21}
+[2026-09-28T13:42:54.126Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":26821,"remainingMinutes":19}
+[2026-09-28T13:44:55.461Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":26821,"remainingMinutes":17}
+[2026-09-28T13:46:56.853Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":26821,"remainingMinutes":15}
+[2026-09-28T13:48:58.219Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":26821,"remainingMinutes":13}
+[2026-09-28T13:51:23.210Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":45631,"remainingMinutes":11}
+[2026-09-28T13:53:55.746Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":48766,"remainingMinutes":9}
+[2026-09-28T13:55:58.791Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":51996,"remainingMinutes":7}
+[2026-09-28T13:58:01.318Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":56556,"remainingMinutes":5}
+[2026-09-28T14:00:13.497Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":61116,"remainingMinutes":3}
+[2026-09-28T14:02:14.837Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":61116,"remainingMinutes":1}
+[2026-09-28T14:03:15.379Z] [CYCLE_START] Avvio Ciclo #2 {"cycle":2,"crediti":61116}
+[2026-09-28T14:13:29.542Z] [PAUSE_START] Breve pausa anti-spam (3 min) {"sleepMins":3,"currentPile":68,"targetSize":100}
+[2026-09-28T14:15:49.532Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":21296,"remainingMinutes":1}
+[2026-09-28T14:16:50.143Z] [CYCLE_START] Avvio Ciclo #3 {"cycle":3,"crediti":21296}
+[2026-09-28T14:21:13.522Z] [PAUSE_START] Breve pausa anti-spam (3 min) {"sleepMins":3,"currentPile":78,"targetSize":100}
+[2026-09-28T14:23:15.209Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":15996,"remainingMinutes":1}
+[2026-09-28T14:24:15.707Z] [CYCLE_START] Avvio Ciclo #4 {"cycle":4,"crediti":15996}
+[2026-09-28T14:29:20.654Z] [PAUSE_START] Breve pausa anti-spam (3 min) {"sleepMins":3,"currentPile":82,"targetSize":100}
+[2026-09-28T14:31:31.226Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":2456,"remainingMinutes":1}
+[2026-09-28T14:32:31.707Z] [CYCLE_START] Avvio Ciclo #5 {"cycle":5,"crediti":2456}
+[2026-09-28T14:35:24.066Z] [PAUSE_START] Breve pausa anti-spam (3 min) {"sleepMins":3,"currentPile":83,"targetSize":100}
+[2026-09-28T14:37:25.905Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":2456,"remainingMinutes":1}
+[2026-09-28T14:38:26.449Z] [CYCLE_START] Avvio Ciclo #6 {"cycle":6,"crediti":2456}
+[2026-09-28T14:40:58.912Z] [PAUSE_START] Breve pausa anti-spam (3 min) {"sleepMins":3,"currentPile":83,"targetSize":100}
+[2026-09-28T14:43:00.329Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":2456,"remainingMinutes":1}
+[2026-09-28T14:44:00.821Z] [CYCLE_START] Avvio Ciclo #7 {"cycle":7,"crediti":2456}
+[2026-09-28T14:46:57.398Z] [PAUSE_START] Breve pausa anti-spam (3 min) {"sleepMins":3,"currentPile":83,"targetSize":100}
+[2026-09-28T14:48:59.052Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":2456,"remainingMinutes":1}
+[2026-09-28T14:49:59.541Z] [CYCLE_START] Avvio Ciclo #8 {"cycle":8,"crediti":2456}
+[2026-09-28T14:53:28.592Z] [PAUSE_START] Breve pausa anti-spam (3 min) {"sleepMins":3,"currentPile":67,"targetSize":100}
+[2026-09-28T14:56:26.703Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":4426,"remainingMinutes":1}
+[2026-09-28T14:57:27.171Z] [CYCLE_START] Avvio Ciclo #9 {"cycle":9,"crediti":4426}
+[2026-09-28T15:00:09.810Z] [RATE_LIMIT] Errore transitorio su offerta (426) (1/3) {"status":426,"count":1}
+[2026-09-28T15:00:19.904Z] [RATE_LIMIT] Errore transitorio su offerta (426) (2/3) {"status":426,"count":2}
+[2026-09-28T15:00:30.054Z] [SOFT_BAN] Soft-ban 3/3 confermato su offerta (429). Transizione immediata a Vendita. {"status":429}
+[2026-09-28T15:01:14.034Z] [COOLDOWN_START] Pausa rigenerativa soft-ban (63 min) avviata {"sleepMins":63,"marketRestricted":true}
+[2026-09-28T15:03:26.811Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":9476,"remainingMinutes":61}
+[2026-09-28T15:05:28.374Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":9476,"remainingMinutes":59}
+[2026-09-28T15:07:29.784Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":9476,"remainingMinutes":57}
+[2026-09-28T15:09:33.734Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":9476,"remainingMinutes":55}
+[2026-09-28T15:11:34.930Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":9476,"remainingMinutes":53}
+[2026-09-28T15:13:45.327Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":29616,"remainingMinutes":51}
+[2026-09-28T15:15:59.750Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":38736,"remainingMinutes":49}
+[2026-09-28T15:18:01.105Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":38736,"remainingMinutes":47}
+[2026-09-28T15:20:02.442Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":38736,"remainingMinutes":45}
+[2026-09-28T15:22:03.733Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":38736,"remainingMinutes":43}
+[2026-09-28T15:24:04.936Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":38736,"remainingMinutes":41}
+[2026-09-28T15:26:06.259Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":38736,"remainingMinutes":39}
+[2026-09-28T15:28:07.371Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":38736,"remainingMinutes":37}
+[2026-09-28T15:30:16.004Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":44816,"remainingMinutes":35}
+[2026-09-28T15:32:25.264Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":47856,"remainingMinutes":33}
+[2026-09-28T15:34:26.364Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":47856,"remainingMinutes":31}
+[2026-09-28T15:36:27.769Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":47856,"remainingMinutes":29}
+[2026-09-28T15:38:28.926Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":47856,"remainingMinutes":27}
+[2026-09-28T15:40:30.065Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":47856,"remainingMinutes":25}
+[2026-09-28T15:42:31.308Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":47856,"remainingMinutes":23}
+[2026-09-28T15:44:32.629Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":47856,"remainingMinutes":21}
+[2026-09-28T15:46:33.993Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":47856,"remainingMinutes":19}
+[2026-09-28T15:48:35.676Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":47856,"remainingMinutes":17}
+[2026-09-28T15:50:37.155Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":47856,"remainingMinutes":15}
+[2026-09-28T15:52:38.549Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":47856,"remainingMinutes":13}
+[2026-09-28T15:54:39.946Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":53936,"remainingMinutes":11}
+[2026-09-28T15:57:21.527Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":72176,"remainingMinutes":9}
+[2026-09-28T15:59:24.310Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":72176,"remainingMinutes":7}
+[2026-09-28T16:01:25.711Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":72176,"remainingMinutes":5}
+[2026-09-28T16:03:37.574Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":75216,"remainingMinutes":3}
+[2026-09-28T16:05:39.288Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":75216,"remainingMinutes":1}
+[2026-09-28T16:06:39.766Z] [CYCLE_START] Avvio Ciclo #10 {"cycle":10,"crediti":75216}
+[2026-09-28T16:13:23.321Z] [PAUSE_START] Breve pausa anti-spam (3 min) {"sleepMins":3,"currentPile":74,"targetSize":100}
+[2026-09-28T16:15:36.934Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":21396,"remainingMinutes":1}
+[2026-09-28T16:16:37.490Z] [CYCLE_START] Avvio Ciclo #11 {"cycle":11,"crediti":21396}
+[2026-09-28T16:20:50.421Z] [PAUSE_START] Breve pausa anti-spam (3 min) {"sleepMins":3,"currentPile":80,"targetSize":100}
+[2026-09-28T16:22:52.545Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":4996,"remainingMinutes":1}
+[2026-09-28T16:23:53.048Z] [CYCLE_START] Avvio Ciclo #12 {"cycle":12,"crediti":4996}
+[2026-09-28T16:28:48.024Z] [RATE_LIMIT] Errore transitorio su offerta (512) (1/3) {"status":512,"count":1}
+[2026-09-28T16:28:58.894Z] [RATE_LIMIT] Errore transitorio su offerta (429) (2/3) {"status":429,"count":2}
+[2026-09-28T16:29:09.978Z] [SOFT_BAN] Soft-ban 3/3 confermato su offerta (426). Transizione immediata a Vendita. {"status":426}
+[2026-09-28T16:29:59.439Z] [COOLDOWN_START] Pausa rigenerativa soft-ban (63 min) avviata {"sleepMins":63,"marketRestricted":true}
+[2026-09-28T16:32:09.152Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":1996,"remainingMinutes":61}
+[2026-09-28T16:34:17.891Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":1996,"remainingMinutes":59}
+[2026-09-28T16:36:19.580Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":1996,"remainingMinutes":57}
+[2026-09-28T16:38:21.066Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":1996,"remainingMinutes":55}
+[2026-09-28T16:40:22.439Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":1996,"remainingMinutes":53}
+[2026-09-28T16:42:23.862Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":1996,"remainingMinutes":51}
+[2026-09-28T16:44:25.378Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":1996,"remainingMinutes":49}
+[2026-09-28T16:46:26.763Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":1996,"remainingMinutes":47}
+[2026-09-28T16:48:28.393Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":1996,"remainingMinutes":45}
+[2026-09-28T16:50:29.830Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":1996,"remainingMinutes":43}
+[2026-09-28T16:52:31.395Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":1996,"remainingMinutes":41}
+[2026-09-28T16:54:32.828Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":1996,"remainingMinutes":39}
+[2026-09-28T16:56:34.300Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":41516,"remainingMinutes":37}
+[2026-09-28T16:58:57.250Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":46076,"remainingMinutes":35}
+[2026-09-28T17:01:00.310Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":46076,"remainingMinutes":33}
+[2026-09-28T17:03:02.713Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":53676,"remainingMinutes":31}
+[2026-09-28T17:05:12.770Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":53676,"remainingMinutes":29}
+[2026-09-28T17:07:14.207Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":53676,"remainingMinutes":27}
+[2026-09-28T17:09:15.581Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":53676,"remainingMinutes":25}
+[2026-09-28T17:11:16.992Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":58331,"remainingMinutes":23}
+[2026-09-28T17:13:35.403Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":67641,"remainingMinutes":21}
+[2026-09-28T17:15:44.274Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":74101,"remainingMinutes":19}
+[2026-09-28T17:17:57.867Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":74101,"remainingMinutes":17}
+[2026-09-28T17:19:59.336Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":77141,"remainingMinutes":15}
+[2026-09-28T17:22:05.593Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":81796,"remainingMinutes":13}
+[2026-09-28T17:24:07.044Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":81796,"remainingMinutes":11}
+[2026-09-28T17:26:08.436Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":87876,"remainingMinutes":9}
+[2026-09-28T17:28:09.859Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":87876,"remainingMinutes":7}
+[2026-09-28T17:30:11.267Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":87876,"remainingMinutes":5}
+[2026-09-28T17:32:17.141Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":90916,"remainingMinutes":3}
+[2026-09-28T17:34:19.955Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":107636,"remainingMinutes":1}
+[2026-09-28T17:35:20.469Z] [CYCLE_START] Avvio Ciclo #13 {"cycle":13,"crediti":107636}
+[2026-09-28T17:35:42.609Z] [RATE_LIMIT] Errore transitorio su offerta (426) (1/3) {"status":426,"count":1}
+[2026-09-28T17:35:52.089Z] [RATE_LIMIT] Errore transitorio su offerta (426) (2/3) {"status":426,"count":2}
+[2026-09-28T17:36:03.726Z] [SOFT_BAN] Soft-ban 3/3 confermato su offerta (429). Transizione immediata a Vendita. {"status":429}
+[2026-09-28T17:36:04.999Z] [COOLDOWN_START] Pausa rigenerativa soft-ban (63 min) avviata {"sleepMins":63,"marketRestricted":true}
+[2026-09-28T17:38:06.396Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":107636,"remainingMinutes":61}
+[2026-09-28T17:40:07.873Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":107636,"remainingMinutes":59}
+[2026-09-28T17:42:09.790Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":107636,"remainingMinutes":57}
+[2026-09-28T17:44:11.195Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":107636,"remainingMinutes":55}
+[2026-09-28T17:46:12.634Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":107636,"remainingMinutes":53}
+[2026-09-28T17:48:14.247Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":107636,"remainingMinutes":51}
+[2026-09-28T17:50:15.664Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":107636,"remainingMinutes":49}
+[2026-09-28T17:52:18.377Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":107636,"remainingMinutes":47}
+[2026-09-28T17:54:19.802Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":107636,"remainingMinutes":45}
+[2026-09-28T17:56:21.197Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":107636,"remainingMinutes":43}
+[2026-09-28T17:58:22.631Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":116756,"remainingMinutes":41}
+[2026-09-28T18:00:42.216Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":119796,"remainingMinutes":39}
+[2026-09-28T18:02:43.525Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":119796,"remainingMinutes":37}
+[2026-09-28T18:04:45.091Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":122836,"remainingMinutes":35}
+[2026-09-28T18:06:51.380Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":125876,"remainingMinutes":33}
+[2026-09-28T18:08:52.798Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":125876,"remainingMinutes":31}
+[2026-09-28T18:10:54.162Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":125876,"remainingMinutes":29}
+[2026-09-28T18:12:55.586Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":128916,"remainingMinutes":27}
+[2026-09-28T18:15:09.840Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":138036,"remainingMinutes":25}
+[2026-09-28T18:17:15.943Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":141076,"remainingMinutes":23}
+[2026-09-28T18:19:29.191Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":141076,"remainingMinutes":21}
+[2026-09-28T18:21:30.538Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":141076,"remainingMinutes":19}
+[2026-09-28T18:23:36.213Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":141076,"remainingMinutes":17}
+[2026-09-28T18:25:37.613Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":141076,"remainingMinutes":15}
+[2026-09-28T18:27:38.920Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":141076,"remainingMinutes":13}
+[2026-09-28T18:29:40.339Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":141076,"remainingMinutes":11}
+[2026-09-28T18:31:41.744Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":141076,"remainingMinutes":9}
+[2026-09-28T18:33:47.220Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":141076,"remainingMinutes":7}
+[2026-09-28T18:35:50.166Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":141076,"remainingMinutes":5}
+[2026-09-28T18:37:51.611Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":141076,"remainingMinutes":3}
+[2026-09-28T18:39:53.045Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":141076,"remainingMinutes":1}
+[2026-09-28T18:40:53.514Z] [CYCLE_START] Avvio Ciclo #14 {"cycle":14,"crediti":141076}
+[2026-09-28T18:41:08.248Z] [RATE_LIMIT] Errore transitorio su offerta (429) (1/3) {"status":429,"count":1}
+[2026-09-28T18:41:18.390Z] [RATE_LIMIT] Errore transitorio su offerta (512) (2/3) {"status":512,"count":2}
+[2026-09-28T18:41:27.923Z] [SOFT_BAN] Soft-ban 3/3 confermato su offerta (512). Transizione immediata a Vendita. {"status":512}
+[2026-09-28T18:41:29.185Z] [COOLDOWN_START] Pausa rigenerativa soft-ban (63 min) avviata {"sleepMins":63,"marketRestricted":true}
+[2026-09-28T18:43:30.672Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":141076,"remainingMinutes":61}
+[2026-09-28T18:45:32.094Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":141076,"remainingMinutes":59}
+[2026-09-28T18:47:33.409Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":141076,"remainingMinutes":57}
+[2026-09-28T18:49:34.817Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":141076,"remainingMinutes":55}
+[2026-09-28T18:51:36.365Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":141076,"remainingMinutes":53}
+[2026-09-28T18:53:37.886Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":141076,"remainingMinutes":51}
+[2026-09-28T18:55:39.365Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":141076,"remainingMinutes":49}
+[2026-09-28T18:57:40.754Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":141076,"remainingMinutes":47}
+[2026-09-28T18:59:42.217Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":141076,"remainingMinutes":45}
+[2026-09-28T19:02:02.068Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":141076,"remainingMinutes":43}
+[2026-09-28T19:04:03.440Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":141076,"remainingMinutes":41}
+[2026-09-28T19:06:05.106Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":141076,"remainingMinutes":39}
+[2026-09-28T19:08:10.943Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":141076,"remainingMinutes":37}
+[2026-09-28T19:10:12.333Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":141076,"remainingMinutes":35}
+[2026-09-28T19:12:13.746Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":141076,"remainingMinutes":33}
+[2026-09-28T19:14:15.029Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":141076,"remainingMinutes":31}
+[2026-09-28T19:16:26.565Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":148771,"remainingMinutes":29}
+[2026-09-28T19:18:32.341Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":148771,"remainingMinutes":27}
+[2026-09-28T19:20:44.711Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":148771,"remainingMinutes":25}
+[2026-09-28T19:22:46.172Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":148771,"remainingMinutes":23}
+[2026-09-28T19:24:52.057Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":148771,"remainingMinutes":21}
+[2026-09-28T19:26:53.383Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":148771,"remainingMinutes":19}
+[2026-09-28T19:28:54.771Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":148771,"remainingMinutes":17}
+[2026-09-28T19:30:56.073Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":148771,"remainingMinutes":15}
+[2026-09-28T19:32:57.390Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":148771,"remainingMinutes":13}
+[2026-09-28T19:35:01.932Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":153426,"remainingMinutes":11}
+[2026-09-28T19:37:04.598Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":153426,"remainingMinutes":9}
+[2026-09-28T19:39:05.945Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":153426,"remainingMinutes":7}
+[2026-09-28T19:41:07.327Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":153426,"remainingMinutes":5}
+[2026-09-28T19:43:08.703Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":153426,"remainingMinutes":3}
+[2026-09-28T19:45:10.091Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":153426,"remainingMinutes":1}
+[2026-09-28T19:46:10.587Z] [CYCLE_START] Avvio Ciclo #15 {"cycle":15,"crediti":153426}
+[2026-09-28T19:46:25.632Z] [RATE_LIMIT] Errore transitorio su offerta (521) (1/3) {"status":521,"count":1}
+[2026-09-28T19:46:34.367Z] [RATE_LIMIT] Errore transitorio su offerta (521) (2/3) {"status":521,"count":2}
+[2026-09-28T19:46:45.890Z] [SOFT_BAN] Soft-ban 3/3 confermato su offerta (512). Transizione immediata a Vendita. {"status":512}
+[2026-09-28T19:46:47.152Z] [COOLDOWN_START] Pausa rigenerativa soft-ban (63 min) avviata {"sleepMins":63,"marketRestricted":true}
+[2026-09-28T19:48:48.532Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":153426,"remainingMinutes":61}
+[2026-09-28T19:50:49.847Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":153426,"remainingMinutes":59}
+[2026-09-28T19:52:52.333Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":153426,"remainingMinutes":57}
+[2026-09-28T19:54:53.703Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":153426,"remainingMinutes":55}
+[2026-09-28T19:56:55.113Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":153426,"remainingMinutes":53}
+[2026-09-28T19:58:56.514Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":153426,"remainingMinutes":51}
+[2026-09-28T20:00:57.849Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":153426,"remainingMinutes":49}
+[2026-09-28T20:03:13.919Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":161311,"remainingMinutes":47}
+[2026-09-28T20:05:15.465Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":161311,"remainingMinutes":45}
+[2026-09-28T20:07:16.711Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":161311,"remainingMinutes":43}
+[2026-09-28T20:09:22.310Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":161311,"remainingMinutes":41}
+[2026-09-28T20:11:23.649Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":161311,"remainingMinutes":39}
+[2026-09-28T20:13:25.245Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":161311,"remainingMinutes":37}
+[2026-09-28T20:15:26.654Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":161311,"remainingMinutes":35}
+[2026-09-28T20:17:38.106Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":161311,"remainingMinutes":33}
+[2026-09-28T20:19:44.127Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":161311,"remainingMinutes":31}
+[2026-09-28T20:21:57.146Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":161311,"remainingMinutes":29}
+[2026-09-28T20:23:58.382Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":161311,"remainingMinutes":27}
+[2026-09-28T20:26:04.075Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":161311,"remainingMinutes":25}
+[2026-09-28T20:28:05.448Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":161311,"remainingMinutes":23}
+[2026-09-28T20:30:06.741Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":161311,"remainingMinutes":21}
+[2026-09-28T20:32:08.122Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":161311,"remainingMinutes":19}
+[2026-09-28T20:34:09.540Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":161311,"remainingMinutes":17}
+[2026-09-28T20:36:13.748Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":161311,"remainingMinutes":15}
+[2026-09-28T20:38:16.753Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":161311,"remainingMinutes":13}
+[2026-09-28T20:40:18.252Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":161311,"remainingMinutes":11}
+[2026-09-28T20:42:19.530Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":161311,"remainingMinutes":9}
+[2026-09-28T20:44:20.853Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":161311,"remainingMinutes":7}
+[2026-09-28T20:46:22.261Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":161311,"remainingMinutes":5}
+[2026-09-28T20:48:23.628Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":161311,"remainingMinutes":3}
+[2026-09-28T20:50:25.051Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":161311,"remainingMinutes":1}
+[2026-09-28T20:51:25.599Z] [CYCLE_START] Avvio Ciclo #16 {"cycle":16,"crediti":161311}
+[2026-09-28T20:51:41.952Z] [RATE_LIMIT] Errore transitorio su offerta (512) (1/3) {"status":512,"count":1}
+[2026-09-28T20:51:53.265Z] [RATE_LIMIT] Errore transitorio su offerta (429) (2/3) {"status":429,"count":2}
+[2026-09-28T20:52:01.652Z] [SOFT_BAN] Soft-ban 3/3 confermato su offerta (521). Transizione immediata a Vendita. {"status":521}
+[2026-09-28T20:52:02.919Z] [COOLDOWN_START] Pausa rigenerativa soft-ban (63 min) avviata {"sleepMins":63,"marketRestricted":true}
+[2026-09-28T20:54:04.380Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":161311,"remainingMinutes":61}
+[2026-09-28T20:56:05.774Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":161311,"remainingMinutes":59}
+[2026-09-28T20:58:07.131Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":161311,"remainingMinutes":57}
+[2026-09-28T21:00:08.491Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":161311,"remainingMinutes":55}
+[2026-09-28T21:02:10.017Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":161311,"remainingMinutes":53}
+[2026-09-28T21:04:24.999Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":165871,"remainingMinutes":51}
+[2026-09-28T21:06:26.840Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":165871,"remainingMinutes":49}
+[2026-09-28T21:08:28.429Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":165871,"remainingMinutes":47}
+[2026-09-28T21:10:33.940Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":165871,"remainingMinutes":45}
+[2026-09-28T21:12:35.298Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":165871,"remainingMinutes":43}
+[2026-09-28T21:14:36.768Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":165871,"remainingMinutes":41}
+[2026-09-28T21:16:38.362Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":165871,"remainingMinutes":39}
+[2026-09-28T21:18:50.284Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":165871,"remainingMinutes":37}
+[2026-09-28T21:20:52.863Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":173471,"remainingMinutes":35}
+[2026-09-28T21:23:06.278Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":173471,"remainingMinutes":33}
+[2026-09-28T21:25:07.676Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":173471,"remainingMinutes":31}
+[2026-09-28T21:27:10.536Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181071,"remainingMinutes":29}
+[2026-09-28T21:29:11.928Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181071,"remainingMinutes":27}
+[2026-09-28T21:31:13.225Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181071,"remainingMinutes":25}
+[2026-09-28T21:33:14.613Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181071,"remainingMinutes":23}
+[2026-09-28T21:35:16.225Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181071,"remainingMinutes":21}
+[2026-09-28T21:37:20.445Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181071,"remainingMinutes":19}
+[2026-09-28T21:39:23.385Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181071,"remainingMinutes":17}
+[2026-09-28T21:41:24.729Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181071,"remainingMinutes":15}
+[2026-09-28T21:43:26.021Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181071,"remainingMinutes":13}
+[2026-09-28T21:45:27.334Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181071,"remainingMinutes":11}
+[2026-09-28T21:47:28.618Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181071,"remainingMinutes":9}
+[2026-09-28T21:49:29.956Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181071,"remainingMinutes":7}
+[2026-09-28T21:51:31.333Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181071,"remainingMinutes":5}
+[2026-09-28T21:53:32.686Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181071,"remainingMinutes":3}
+[2026-09-28T21:55:34.046Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181071,"remainingMinutes":1}
+[2026-09-28T21:56:34.552Z] [CYCLE_START] Avvio Ciclo #17 {"cycle":17,"crediti":181071}
+[2026-09-28T21:56:49.875Z] [RATE_LIMIT] Errore transitorio su offerta (429) (1/3) {"status":429,"count":1}
+[2026-09-28T21:57:01.934Z] [RATE_LIMIT] Errore transitorio su offerta (429) (2/3) {"status":429,"count":2}
+[2026-09-28T21:57:11.615Z] [SOFT_BAN] Soft-ban 3/3 confermato su offerta (521). Transizione immediata a Vendita. {"status":521}
+[2026-09-28T21:57:12.856Z] [COOLDOWN_START] Pausa rigenerativa soft-ban (63 min) avviata {"sleepMins":63,"marketRestricted":true}
+[2026-09-28T21:59:14.170Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181071,"remainingMinutes":61}
+[2026-09-28T22:01:15.629Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181071,"remainingMinutes":59}
+[2026-09-28T22:03:17.019Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":181071,"remainingMinutes":57}
+[2026-09-28T22:05:26.910Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":194466,"remainingMinutes":55}
+[2026-09-28T22:07:29.111Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":194466,"remainingMinutes":53}
+[2026-09-29T07:04:10.180Z] [SERVER_START] Telemetry server avviato 
+[2026-09-29T07:05:01.422Z] [RATE_LIMIT] Errore transitorio su offerta (426) (1/3) {"status":426,"count":1}
+[2026-09-29T07:05:13.413Z] [RATE_LIMIT] Errore transitorio su offerta (429) (2/3) {"status":429,"count":2}
+[2026-09-29T07:05:24.154Z] [SOFT_BAN] Soft-ban 3/3 confermato su offerta (429). Transizione immediata a Vendita. {"status":429}
+[2026-09-29T07:05:25.410Z] [COOLDOWN_START] Pausa rigenerativa soft-ban #1 (63 min) avviata {"sleepMins":63,"consecutiveSoftBans":1,"marketRestricted":true}
+[2026-09-29T07:07:26.715Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":203396,"remainingMinutes":61}
+[2026-09-29T07:09:28.110Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":203396,"remainingMinutes":59}
+[2026-09-29T07:11:29.633Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":203396,"remainingMinutes":57}
+[2026-09-29T07:13:31.018Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":203396,"remainingMinutes":55}
+[2026-09-29T07:15:32.278Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":203396,"remainingMinutes":53}
+[2026-09-29T07:17:33.484Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":203396,"remainingMinutes":51}
+[2026-09-29T07:19:34.921Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":203396,"remainingMinutes":49}
+[2026-09-29T07:21:36.086Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":203396,"remainingMinutes":47}
+[2026-09-29T07:23:37.316Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":203396,"remainingMinutes":45}
+[2026-09-29T07:25:38.476Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":203396,"remainingMinutes":43}
+[2026-09-29T07:27:39.740Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":203396,"remainingMinutes":41}
+[2026-09-29T07:29:41.054Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":203396,"remainingMinutes":39}
+[2026-09-29T07:31:42.245Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":203396,"remainingMinutes":37}
+[2026-09-29T07:33:43.460Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":203396,"remainingMinutes":35}
+[2026-09-29T07:35:44.770Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":203396,"remainingMinutes":33}
+[2026-09-29T07:37:46.004Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":203396,"remainingMinutes":31}
+[2026-09-29T07:39:47.227Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":203396,"remainingMinutes":29}
+[2026-09-29T07:41:48.856Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":203396,"remainingMinutes":27}
+[2026-09-29T07:43:50.154Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":203396,"remainingMinutes":25}
+[2026-09-29T07:45:51.498Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":203396,"remainingMinutes":23}
+[2026-09-29T07:47:52.776Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":203396,"remainingMinutes":21}
+[2026-09-29T07:49:54.136Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":203396,"remainingMinutes":19}
+[2026-09-29T07:51:55.409Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":203396,"remainingMinutes":17}
+[2026-09-29T07:53:56.702Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":203396,"remainingMinutes":15}
+[2026-09-29T07:55:57.972Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":203396,"remainingMinutes":13}
+[2026-09-29T07:57:59.332Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":203396,"remainingMinutes":11}
+[2026-09-29T08:00:00.687Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":203396,"remainingMinutes":9}
+[2026-09-29T08:02:01.953Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":203396,"remainingMinutes":7}
+[2026-09-29T08:04:03.399Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":206436,"remainingMinutes":5}
+[2026-09-29T08:06:49.460Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":206436,"remainingMinutes":3}
+[2026-09-29T08:09:02.497Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":206436,"remainingMinutes":1}
+[2026-09-29T08:10:02.920Z] [CYCLE_START] Avvio Ciclo #2 {"cycle":2,"crediti":206436}
+[2026-09-29T08:10:53.551Z] [RATE_LIMIT] Errore transitorio su offerta (429) (1/3) {"status":429,"count":1}
+[2026-09-29T08:12:42.107Z] [RATE_LIMIT] Errore transitorio su offerta (512) (2/3) {"status":512,"count":2}
+[2026-09-29T08:12:52.649Z] [SOFT_BAN] Soft-ban 3/3 confermato su offerta (426). Transizione immediata a Vendita. {"status":426}
+[2026-09-29T08:12:53.914Z] [COOLDOWN_START] Pausa rigenerativa soft-ban #2 (95 min) avviata {"sleepMins":95,"consecutiveSoftBans":2,"marketRestricted":true}
+[2026-09-29T08:14:55.255Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":206436,"remainingMinutes":93}
+[2026-09-29T08:16:56.490Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":206436,"remainingMinutes":91}
+[2026-09-29T08:18:57.739Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":206436,"remainingMinutes":89}
+[2026-09-29T08:20:58.943Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":206436,"remainingMinutes":87}
+[2026-09-29T08:23:00.255Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":206436,"remainingMinutes":85}
+[2026-09-29T08:25:01.708Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":206436,"remainingMinutes":83}
+[2026-09-29T08:27:02.956Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":206436,"remainingMinutes":81}
+[2026-09-29T08:29:04.314Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":206436,"remainingMinutes":79}
+[2026-09-29T08:31:05.679Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":206436,"remainingMinutes":77}
+[2026-09-29T08:33:07.039Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":206436,"remainingMinutes":75}
+[2026-09-29T08:35:08.422Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":206436,"remainingMinutes":73}
+[2026-09-29T08:37:09.801Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":206436,"remainingMinutes":71}
+[2026-09-29T08:39:11.152Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":206436,"remainingMinutes":69}
+[2026-09-29T08:41:12.506Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":206436,"remainingMinutes":67}
+[2026-09-29T08:43:14.106Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":206436,"remainingMinutes":65}
+[2026-09-29T08:45:15.381Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":206436,"remainingMinutes":63}
+[2026-09-29T08:47:16.648Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":206436,"remainingMinutes":61}
+[2026-09-29T08:49:17.950Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":206436,"remainingMinutes":59}
+[2026-09-29T08:51:19.270Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":206436,"remainingMinutes":57}
+[2026-09-29T08:53:20.583Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":206436,"remainingMinutes":55}
+[2026-09-29T08:55:21.843Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":206436,"remainingMinutes":53}
+[2026-09-29T08:57:23.122Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":206436,"remainingMinutes":51}
+[2026-09-29T08:59:24.385Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":206436,"remainingMinutes":49}
+[2026-09-29T09:01:25.683Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":206436,"remainingMinutes":47}
+[2026-09-29T09:03:26.990Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":206436,"remainingMinutes":45}
+[2026-09-29T09:05:28.196Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":206436,"remainingMinutes":43}
+[2026-09-29T09:07:54.307Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":210996,"remainingMinutes":41}
+[2026-09-29T09:10:07.602Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":210996,"remainingMinutes":39}
+[2026-09-29T09:12:09.074Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":210996,"remainingMinutes":37}
+[2026-09-29T09:14:10.355Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":210996,"remainingMinutes":35}
+[2026-09-29T09:16:11.645Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":210996,"remainingMinutes":33}
+[2026-09-29T09:18:12.865Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":210996,"remainingMinutes":31}
+[2026-09-29T09:20:14.113Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":210996,"remainingMinutes":29}
+[2026-09-29T09:22:15.384Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":210996,"remainingMinutes":27}
+[2026-09-29T09:24:16.674Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":210996,"remainingMinutes":25}
+[2026-09-29T09:26:17.916Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":210996,"remainingMinutes":23}
+[2026-09-29T09:28:19.401Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":210996,"remainingMinutes":21}
+[2026-09-29T09:30:20.992Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":210996,"remainingMinutes":19}
+[2026-09-29T09:32:22.637Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":210996,"remainingMinutes":17}
+[2026-09-29T09:34:24.110Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":210996,"remainingMinutes":15}
+[2026-09-29T09:36:25.142Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":210996,"remainingMinutes":13}
+[2026-09-29T09:38:26.210Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":210996,"remainingMinutes":11}
+[2026-09-29T09:40:27.254Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":210996,"remainingMinutes":9}
+[2026-09-29T09:42:28.731Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":210996,"remainingMinutes":7}
+[2026-09-29T09:44:29.708Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":210996,"remainingMinutes":5}
+[2026-09-29T09:46:30.735Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":210996,"remainingMinutes":3}
+[2026-09-29T09:48:31.850Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":210996,"remainingMinutes":1}
+[2026-09-29T09:49:32.229Z] [CYCLE_START] Avvio Ciclo #3 {"cycle":3,"crediti":210996}
+[2026-09-29T10:02:02.854Z] [PAUSE_START] Pausa dinamica anti-spam (7 min) {"sleepMins":7,"currentPile":34,"targetSize":100}
+[2026-09-29T10:04:04.216Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":186076,"remainingMinutes":5}
+[2026-09-29T10:06:05.467Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":186076,"remainingMinutes":3}
+[2026-09-29T10:08:28.407Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":195196,"remainingMinutes":1}
+[2026-09-29T10:09:28.878Z] [CYCLE_START] Avvio Ciclo #4 {"cycle":4,"crediti":195196}
+[2026-09-29T10:16:00.515Z] [PAUSE_START] Pausa dinamica anti-spam (6 min) {"sleepMins":6,"currentPile":31,"targetSize":100}
+[2026-09-29T10:18:13.304Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":176351,"remainingMinutes":4}
+[2026-09-29T10:20:14.630Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":176351,"remainingMinutes":2}
+[2026-09-29T10:22:15.894Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":176351,"remainingMinutes":0}
+[2026-09-29T10:22:15.895Z] [CYCLE_START] Avvio Ciclo #5 {"cycle":5,"crediti":176351}
+[2026-09-29T10:29:01.920Z] [PAUSE_START] Pausa dinamica anti-spam (14 min) {"sleepMins":14,"currentPile":45,"targetSize":100}
+[2026-09-29T10:31:04.589Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":144426,"remainingMinutes":12}
+[2026-09-29T10:33:05.966Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":149936,"remainingMinutes":10}
+[2026-09-29T10:35:07.243Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":149936,"remainingMinutes":8}
+[2026-09-29T10:37:08.514Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":149936,"remainingMinutes":6}
+[2026-09-29T10:39:09.813Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":152691,"remainingMinutes":4}
+[2026-09-29T10:41:11.048Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":152691,"remainingMinutes":2}
+[2026-09-29T10:43:12.516Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":155446,"remainingMinutes":0}
+[2026-09-29T10:43:12.516Z] [CYCLE_START] Avvio Ciclo #6 {"cycle":6,"crediti":155446}
+[2026-09-29T10:48:38.793Z] [PAUSE_START] Pausa dinamica anti-spam (13 min) {"sleepMins":13,"currentPile":61,"targetSize":100}
+[2026-09-29T10:50:41.429Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":78101,"remainingMinutes":11}
+[2026-09-29T10:52:44.019Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":78101,"remainingMinutes":9}
+[2026-09-29T10:54:46.921Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":82661,"remainingMinutes":7}
+[2026-09-29T10:56:48.174Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":82661,"remainingMinutes":5}
+[2026-09-29T10:58:52.104Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":82661,"remainingMinutes":3}
+[2026-09-29T11:00:53.498Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":82661,"remainingMinutes":1}
+[2026-09-29T11:01:53.930Z] [CYCLE_START] Avvio Ciclo #7 {"cycle":7,"crediti":82661}
+[2026-09-29T11:04:11.208Z] [RATE_LIMIT] Errore transitorio su offerta (512) (1/3) {"status":512,"count":1}
+[2026-09-29T11:04:21.070Z] [RATE_LIMIT] Errore transitorio su offerta (429) (2/3) {"status":429,"count":2}
+[2026-09-29T11:06:29.947Z] [RATE_LIMIT] Errore transitorio su offerta (521) (1/3) {"status":521,"count":1}
+[2026-09-29T11:07:37.879Z] [RATE_LIMIT] Errore transitorio su offerta (429) (1/3) {"status":429,"count":1}
+[2026-09-29T11:08:52.280Z] [RATE_LIMIT] Errore transitorio su offerta (429) (1/3) {"status":429,"count":1}
+[2026-09-29T11:10:21.725Z] [RATE_LIMIT] Errore transitorio su offerta (429) (1/3) {"status":429,"count":1}
+[2026-09-29T11:10:33.063Z] [RATE_LIMIT] Errore transitorio su offerta (512) (2/3) {"status":512,"count":2}
+[2026-09-29T11:10:44.003Z] [SOFT_BAN] Soft-ban 3/3 confermato su offerta (512). Transizione immediata a Vendita. {"status":512}
+[2026-09-29T11:10:45.275Z] [COOLDOWN_START] Pausa rigenerativa soft-ban #1 (63 min) avviata {"sleepMins":63,"consecutiveSoftBans":1,"marketRestricted":true}
+[2026-09-29T11:13:09.560Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":69141,"remainingMinutes":61}
+[2026-09-29T11:15:15.841Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":73701,"remainingMinutes":59}
+[2026-09-29T11:17:21.923Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":73701,"remainingMinutes":57}
+[2026-09-29T11:19:32.682Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":73701,"remainingMinutes":55}
+[2026-09-29T11:21:33.875Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":73701,"remainingMinutes":53}
+[2026-09-29T11:23:35.146Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":73701,"remainingMinutes":51}
+[2026-09-29T11:25:41.980Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76741,"remainingMinutes":49}
+[2026-09-29T11:27:44.926Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76741,"remainingMinutes":47}
+[2026-09-29T11:29:46.194Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76741,"remainingMinutes":45}
+[2026-09-29T11:31:47.441Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76741,"remainingMinutes":43}
+[2026-09-29T11:33:48.714Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76741,"remainingMinutes":41}
+[2026-09-29T11:35:49.933Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76741,"remainingMinutes":39}
+[2026-09-29T11:37:51.140Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76741,"remainingMinutes":37}
+[2026-09-29T11:39:52.367Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76741,"remainingMinutes":35}
+[2026-09-29T11:41:53.841Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76741,"remainingMinutes":33}
+[2026-09-29T11:43:55.194Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76741,"remainingMinutes":31}
+[2026-09-29T11:45:56.510Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":76741,"remainingMinutes":29}
+[2026-09-29T11:48:16.714Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":82821,"remainingMinutes":27}
+[2026-09-29T11:50:25.232Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":82821,"remainingMinutes":25}
+[2026-09-29T11:52:28.122Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":82821,"remainingMinutes":23}
+[2026-09-29T11:54:30.532Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":82821,"remainingMinutes":21}
+[2026-09-29T11:56:32.930Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":82821,"remainingMinutes":19}
+[2026-09-29T11:58:34.219Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":82821,"remainingMinutes":17}
+[2026-09-29T12:00:38.585Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":82821,"remainingMinutes":15}
+[2026-09-29T12:02:41.482Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":82821,"remainingMinutes":13}
+[2026-09-29T12:04:44.124Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":82821,"remainingMinutes":11}
+[2026-09-29T12:06:52.838Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":82821,"remainingMinutes":9}
+[2026-09-29T12:08:55.693Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":86051,"remainingMinutes":7}
+[2026-09-29T12:10:56.924Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":86051,"remainingMinutes":5}
+[2026-09-29T12:13:09.870Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":86051,"remainingMinutes":3}
+[2026-09-29T12:15:20.970Z] [HEARTBEAT] Heartbeat completato: vendite incassate e carte rilistate {"crediti":86051,"remainingMinutes":1}
+[2026-09-29T12:16:21.351Z] [CYCLE_START] Avvio Ciclo #8 {"cycle":8,"crediti":86051}
+[2026-09-29T12:17:43.533Z] [RATE_LIMIT] Errore transitorio su offerta (512) (1/3) {"status":512,"count":1}
+[2026-09-29T12:18:46.252Z] [RATE_LIMIT] Errore transitorio su offerta (429) (2/3) {"status":429,"count":2}

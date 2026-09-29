@@ -21,7 +21,7 @@ function injectBridgeScript() {
 
 injectBridgeScript();
 
-// Riceve e rilancia i log da pin-bridge.js per renderli visibili in qualsiasi contesto di console
+// Riceve e rilancia i log e i token da pin-bridge.js
 window.addEventListener("message", (event) => {
   if (event.data && event.data.origin === "PIN_BRIDGE_LOG") {
     if (event.data.extra) {
@@ -30,11 +30,19 @@ window.addEventListener("message", (event) => {
       console.log(event.data.text);
     }
   }
+  if (event.data && event.data.origin === "PIN_BRIDGE_TOKEN" && event.data.token) {
+    console.log("[FC Sniper ContentScript] Token X-UT-SID intercettato da Web App:", event.data.token.substring(0, 10) + "...");
+    chrome.runtime.sendMessage({
+      tipo: "TOKEN_SYNC",
+      valore: event.data.token
+    });
+  }
 });
 
 // Ascolto messaggi dal Service Worker (fc26.js) e inoltro alla pagina (pin-bridge.js)
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message && message.scope === "PIN_BRIDGE") {
+    console.log("[FC Sniper ContentScript] Inoltro evento PIN a Web App:", message.type);
     window.postMessage(
       {
         origin: "FC_SNIPER_EXTENSION",
@@ -46,3 +54,34 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     sendResponse({ status: "forwarded" });
   }
 });
+
+// Keep-Alive Connection per prevenire l'arresto del Service Worker Manifest V3 durante pause e sonni prolungati
+let keepAlivePort = null;
+function setupKeepAlive() {
+  try {
+    keepAlivePort = chrome.runtime.connect({ name: "KEEP_ALIVE_PORT" });
+    keepAlivePort.onDisconnect.addListener(() => {
+      const _ = chrome.runtime.lastError;
+      keepAlivePort = null;
+      setTimeout(setupKeepAlive, 1000);
+    });
+    keepAlivePort.onMessage.addListener(() => {});
+  } catch (e) {
+    setTimeout(setupKeepAlive, 1000);
+  }
+}
+setupKeepAlive();
+
+// Ping periodico ogni 20s: azzera il timer di inattività (30s) di Chrome per il Service Worker
+setInterval(() => {
+  try {
+    if (keepAlivePort) {
+      keepAlivePort.postMessage({ type: "KEEP_ALIVE_PING" });
+    } else {
+      setupKeepAlive();
+    }
+  } catch (e) {
+    setupKeepAlive();
+  }
+}, 20000);
+
