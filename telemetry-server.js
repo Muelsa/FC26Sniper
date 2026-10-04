@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 
 const LOG_FILE = path.join(__dirname, 'runtime-telemetry.log');
-const PORT = 3005;
+const PORT = 3000;
 
 // Scrive l'evento sul file di log locale formattato
 function logEvent(event) {

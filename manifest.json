@@ -9,7 +9,7 @@
     "tabs",
     "scripting",
     "alarms",
-    "declarativeNetRequest"
+    "declarativeNetRequest", "offscreen"
   ],
   "host_permissions": [
     "<all_urls>"

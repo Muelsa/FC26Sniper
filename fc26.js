@@ -3,7 +3,7 @@
 // quando vengono inviati messaggi o log di broadcast e la dashboard/scheda ricevente è momentaneamente chiusa
 if (typeof chrome !== "undefined" && chrome.runtime?.sendMessage) {
   const _origSendMessage = chrome.runtime.sendMessage.bind(chrome.runtime);
-  chrome.runtime.sendMessage = function(message, callback) {
+  chrome.runtime.sendMessage = function (message, callback) {
     try {
       if (typeof callback === "function") {
         return _origSendMessage(message, (...args) => {
@@ -15,7 +15,7 @@ if (typeof chrome !== "undefined" && chrome.runtime?.sendMessage) {
         const _ = chrome.runtime.lastError;
       });
       if (res && typeof res.catch === "function") {
-        res.catch(() => {});
+        res.catch(() => { });
       }
       return res;
     } catch (e) {
@@ -46,7 +46,8 @@ let carteVinteCiclo = 0;
 let listaFodder = []
 let ricercaFodder = false;
 let targetMode = "fodder"; // "fodder" | "consumables" | "manual"
-let chemStyle = "268";
+let chemStyle = "all"; // Modified to "all" to accommodate multi-style portfolio
+
 let autoBin = true;
 let manualBin = 0;
 let fodderRating = "84";
@@ -74,12 +75,12 @@ let marketRestricted = false;
 // Telemetria in tempo reale verso server locale (http://127.0.0.1:3005/event)
 function reportTelemetry(type, message, data = null) {
   try {
-    fetch("http://127.0.0.1:3005/event", {
+    fetch("http://127.0.0.1:3000/event", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ type, message, data, timestamp: Date.now() })
-    }).catch(() => {});
-  } catch (_) {}
+    }).catch(() => { });
+  } catch (_) { }
 }
 
 // Mappa per tenere traccia delle carte/aste già tentate (evita di ricomprare carte fantasma già perse o fallite)
@@ -213,7 +214,7 @@ async function handle401Error(context = "") {
             xUtSid = stored.xUtSid;
             console.log(`[FC Sniper] Nuovo token rilevato dallo storage: ${xUtSid.substring(0, 10)}...`);
           }
-        } catch (_) {}
+        } catch (_) { }
 
         // Test di convalida attiva: verifica che il token funzioni realmente contro i server EA
         if (xUtSid) {
@@ -236,7 +237,7 @@ async function handle401Error(context = "") {
               });
               return;
             }
-          } catch (_) {}
+          } catch (_) { }
         }
 
         // Se dopo 15s il token non è ancora valido, invia notifica guidata all'utente
@@ -264,22 +265,27 @@ async function handle401Error(context = "") {
 async function handleSearchRateLimit(status, context = "Ricerca") {
   consecutiveSearchErrors++;
   console.warn(`[FC Sniper ${context}] Rate limit EA (${status}). Errori consecutivi: ${consecutiveSearchErrors}/3`);
-  
+
   if (strategyMode === "lazy") {
     // In modalità Lazy, deleghiamo la gestione al ciclo principale per consentire il passaggio fluido a vendita e relist
     return;
   }
 
+  // Implementazione migliorata con circuit breaker e backoff esponenziale
   if (consecutiveSearchErrors >= 3) {
     console.warn(`[FC Sniper] Rilevati ${consecutiveSearchErrors} errori consecutivi di Rate Limit (${status}) in ${context}. Avvio pausa di sicurezza attiva 10 min...`);
     consecutiveSearchErrors = 0;
     await executeSafetyPause(600, `Soft-Ban Ricerche EA (${status}) in ${context}`);
   } else {
+    // Implementazione migliore con backoff esponenziale basato su errori consecutivi
+    const baseDelay = 25 + (consecutiveSearchErrors * 5); // Delay crescente per ogni errore successivo
+    const jitter = getRandomGaussian(0.8, 0.15, 0.6, 1.0);
+    
     chrome.runtime.sendMessage({
       tipo: 'LOG',
-      valore: `[RATE LIMIT EA ${status}] Rilevato in ${context} (${consecutiveSearchErrors}/3). Raffreddamento preventivo di 25s per proteggere l'account...`
+      valore: `[RATE LIMIT EA ${status}] Rilevato in ${context} (${consecutiveSearchErrors}/3). Raffreddamento preventivo di ${Math.round(baseDelay * jitter)}s per proteggere l'account...`
     });
-    await sleep(getRandomGaussian(25.0, 2.0, 20.0, 30.0) * 1000);
+    await sleep(Math.max(2000, baseDelay * 1000 * jitter));
   }
 }
 
@@ -413,38 +419,26 @@ async function triggerPinEvent(type, payload = {}) {
   });
 }
 
-// Gestione Keep-Alive Port per prevenire l'arresto del Service Worker Manifest V3 da parte di Chrome
-chrome.runtime.onConnect.addListener((port) => {
-  if (port.name === "KEEP_ALIVE_PORT") {
-    port.onMessage.addListener(async (msg) => {
-      if (msg && msg.type === "KEEP_ALIVE_PING") {
-        try {
-          // Esecuzione di una chiamata Chrome API per azzerare il timer di inattività MV3 di 30s
-          await chrome.storage.local.get(['pingCheck']);
-          port.postMessage({ type: "KEEP_ALIVE_PONG" });
-        } catch (e) {}
-      }
+async function ensureOffscreenDocument() {
+  try {
+    if (await chrome.offscreen.hasDocument()) return;
+    await chrome.offscreen.createDocument({
+      url: 'offscreen.html',
+      reasons: ['AUDIO_PLAYBACK'],
+      justification: 'Keep service worker alive'
     });
+    console.log('[FC Sniper] Offscreen document creato per Keep-Alive MV3.');
+  } catch (e) {
+    if (!e.message.includes('Only a single offscreen document may be created')) {
+      console.warn('[FC Sniper] Errore creazione offscreen:', e);
+    }
   }
-});
-
-// Allarme di backup periodico per risvegliare il Service Worker MV3 in background se dormiente
-try {
-  if (chrome.alarms) {
-    chrome.alarms.create("FC_SNIPER_MV3_KEEPALIVE", { periodInMinutes: 1 });
-    chrome.alarms.onAlarm.addListener((alarm) => {
-      if (alarm.name === "FC_SNIPER_MV3_KEEPALIVE") {
-        // Heartbeat timer Chrome Alarms
-      }
-    });
-  }
-} catch (e) {}
-
-// Pausa di sicurezza attiva con countdown minuto per minuto e heartbeat anti-disconnessione sessione EA
+}
+ensureOffscreenDocument();
 async function executeSafetyPause(durationSeconds = 600, reason = "Soft-Ban EA") {
   const totalMinutes = Math.round(durationSeconds / 60);
   console.warn(`[FC Sniper] Avvio Pausa di Sicurezza: ${reason}. Durata: ${totalMinutes} minuti (${durationSeconds}s).`);
-  
+
   chrome.runtime.sendMessage({
     tipo: 'LOG',
     valore: `[PAUSA DI SICUREZZA] ${reason}. Pausa di ${totalMinutes} min per sbloccare l'account. Manutenzione vendite e rilist attiva in background!`
@@ -472,7 +466,7 @@ async function executeSafetyPause(durationSeconds = 600, reason = "Soft-Ban EA")
 
     // Keep-alive Chrome Service Worker ogni 15s per evitare standby
     if (remaining % 15 === 0) {
-      try { await chrome.storage.local.get(['keepAliveCheck']); } catch (_) {}
+      try { await chrome.storage.local.get(['keepAliveCheck']); } catch (_) { }
     }
 
     // Countdown nei log ogni 60 secondi
@@ -946,7 +940,7 @@ async function getCrediti() {
       crediti = currentCredits;
       try {
         chrome.storage.local.set({ crediti: currentCredits });
-      } catch (_) {}
+      } catch (_) { }
       chrome.runtime.sendMessage({ tipo: 'CREDITI', valore: currentCredits });
     }
     return currentCredits;
@@ -1041,7 +1035,7 @@ async function getTradepileInfo() {
     chrome.runtime.sendMessage({ tipo: 'TRADEPILE_COUNT', valore: tradepileDisplay, active, total: auctions.length });
     try {
       chrome.storage.local.set({ tradepileCount: tradepileDisplay, tradepileActive: active, tradepileTotal: auctions.length });
-    } catch (_) {}
+    } catch (_) { }
     return {
       total: auctions.length,
       active: active,
@@ -1587,12 +1581,12 @@ async function sendResearchRequest() {
       const data = await response.json();
       if (data.auctionInfo && data.auctionInfo.length > 0) {
         idCarteAcquistate = [];
-        
+
         // Ordina per freschezza decrescente escludendo carte già tentate (carte fantasma)
         const auctions = [...data.auctionInfo]
           .filter(a => !isTradeAttempted(a.tradeId))
           .sort((a, b) => (b.expires || 0) - (a.expires || 0));
-        
+
         // Acquisto immediato sulla carta più recente
         for (const auction of auctions) {
           if (start !== true) break;
@@ -1677,7 +1671,7 @@ async function sendBuyNowRequest(tradeId, buyNowPrice, itemId) {
         const errJson = await response.json();
         errorDetails = errJson.reason || errJson.message || JSON.stringify(errJson);
       } catch {
-        try { errorDetails = await response.text(); } catch {}
+        try { errorDetails = await response.text(); } catch { }
       }
 
       if (response.status === 401) {
@@ -2160,7 +2154,7 @@ async function sendBidRequest(tradeId, bidAmount, itemId) {
         const errJson = await response.json();
         errorDetails = errJson.reason || errJson.message || JSON.stringify(errJson);
       } catch {
-        try { errorDetails = await response.text(); } catch {}
+        try { errorDetails = await response.text(); } catch { }
       }
 
       if (response.status === 401) {
@@ -2225,7 +2219,7 @@ async function moveSingleItemToTrade(itemId) {
       const errJson = await res.json();
       errorDetails = errJson.reason || errJson.message || JSON.stringify(errJson);
     } catch {
-      try { errorDetails = await res.text(); } catch {}
+      try { errorDetails = await res.text(); } catch { }
     }
     console.warn(`[FC Sniper MoveToTrade Fallito ${res.status}] Item ${itemId}. Dettagli EA: ${errorDetails}`);
     if (res.status === 401) {
@@ -2297,7 +2291,7 @@ async function sellSingleItem(itemId, price, startingBid = null) {
         const errJson = await resp.json();
         errorDetails = errJson.reason || errJson.message || JSON.stringify(errJson);
       } catch {
-        try { errorDetails = await resp.text(); } catch {}
+        try { errorDetails = await resp.text(); } catch { }
       }
 
       console.warn(`[FC Sniper Listing Fallito ${resp.status}] Item ${itemId}, prezzo ${validPrice} (Tentativo ${attempt}/2). Dettagli EA: ${errorDetails}`);
@@ -2578,9 +2572,18 @@ async function resolveWatchlist() {
       chrome.runtime.sendMessage({ tipo: 'CREDITI', valore: crediti });
     }
     const auctions = data.auctionInfo || [];
-    const storedBids = await getStoredPendingBids();
+      const storedBids = await getStoredPendingBids();
 
-    for (const item of auctions) {
+      const now = Date.now();
+      for (const [tradeId, bid] of activeBids.entries()) {
+        if (bid && bid.expiresAt && (now - bid.expiresAt > 15000)) {
+           console.log(`[FC Sniper Watchlist] Rimozione forzata asta fantasma (Trade: ${tradeId}) scaduta da oltre 15s e bloccata dai server EA.`);
+           activeBids.delete(tradeId);
+           await removeStoredPendingBid(tradeId);
+        }
+      }
+
+      for (const item of auctions) {
       const tradeId = item.tradeId;
       const tradeIdStr = String(tradeId);
       const tradeIdNum = Number(tradeId);
@@ -3810,7 +3813,9 @@ async function sendConsumableLazyRequest() {
               targetAuctions.sort((a, b) => (a.expires || 0) - (b.expires || 0));
 
               let bidsInThisSearch = 0;
+              let consecutiveFailedBidsInSearch = 0;
               for (const auction of targetAuctions) {
+                if (consecutiveFailedBidsInSearch >= 2) break;
                 if (start !== true || wonInThisCycle >= cycleTarget || (wonInThisCycle + activeBids.size) >= (cycleTarget + 2) || activeBids.size >= MAX_ACTIVE_WATCHLIST) break;
                 if (bidsInThisSearch >= 2) break; // Distribuisce le offerte su più ricerche evitando picchi
 
@@ -3829,6 +3834,7 @@ async function sendConsumableLazyRequest() {
                   if (bidSuccess) {
                     totalBidsPlaced++;
                     bidsInThisSearch++;
+                    consecutiveFailedBidsInSearch = 0;
                     if (typeof crediti === 'number') crediti = Math.max(0, crediti - nextBid);
                     const bidData = {
                       playStyleId: currentStyleId,
@@ -3856,6 +3862,7 @@ async function sendConsumableLazyRequest() {
                     // Pacing umano tra offerte: 2.0s - 3.0s
                     await sleep(getRandomGaussian(2.2, 0.3, 1.8, 3.0) * 1000);
                   } else {
+                    consecutiveFailedBidsInSearch++;
                     if (lastBidErrorStatus === 429 || lastBidErrorStatus === 426 || lastBidErrorStatus === 512 || lastBidErrorStatus === 521) {
                       consecutive512InCycle++;
                       console.warn(`[LAZY BIDDING] Errore rate-limit EA (${lastBidErrorStatus}) su offerta (${consecutive512InCycle}/2)`);
@@ -3970,6 +3977,9 @@ async function sendConsumableLazyRequest() {
 
             let topUpBought = 0;
             let topUpSearches = 0;
+
+              let consecutive461InTopUp = 0;
+            let minPriceOffset = 0;
             const maxTopUpSearches = Math.max(50, topUpTarget * 6);
             let topUpStyleIdx = 0;
             const styleEmptySearches = {};
@@ -4003,7 +4013,7 @@ async function sendConsumableLazyRequest() {
               url.searchParams.set("cat", "playStyle");
               url.searchParams.set("playStyle", String(currentStyleId));
               url.searchParams.set("maxb", String(priceInfo.floorBin));
-              url.searchParams.set("micr", String(minBidBumps[topUpSearches % minBidBumps.length]));
+              url.searchParams.set("micr", String(minBidBumps[(topUpSearches + minPriceOffset) % minBidBumps.length]));
 
               await triggerPinEvent("TRIGGER_PIN_SEARCH");
 
@@ -4050,6 +4060,8 @@ async function sendConsumableLazyRequest() {
                     const buySuccess = await sendBuyNowRequest(candidate.tradeId, candidate.buyNowPrice, candidate.itemData?.id);
                     if (buySuccess) {
                       topUpBought++;
+
+                        consecutive461InTopUp = 0;
                       wonInThisCycle++;
                       carteVinteCiclo++;
                       consecutive512InCycle = 0;
@@ -4098,7 +4110,29 @@ async function sendConsumableLazyRequest() {
                           await sleep(getRandomGaussian(15.0, 1.5, 12.0, 18.0) * 1000);
                         }
                       } else {
-                        await sleep(getRandomGaussian(2.5, 0.3, 2.0, 3.2) * 1000);
+                        if (lastBuyNowErrorStatus === 461 || lastBuyNowErrorStatus === 478) {
+                            consecutive461InTopUp++;
+                            minPriceOffset++;
+                            styleEmptySearches[currentStyleId] = (styleEmptySearches[currentStyleId] || 0) + 1;
+                            const nextMinBump = minBidBumps[(topUpSearches + minPriceOffset) % minBidBumps.length];
+
+                            chrome.runtime.sendMessage({
+                              tipo: 'LOG',
+                              valore: `[LAZY TOP-UP] Carta anticipata (461). Attendo 10s e alterno prezzo minimo (${nextMinBump} cr) per refreshare i risultati EA... (${consecutive461InTopUp}/8)`
+                            });
+
+                            if (consecutive461InTopUp >= 8) {
+                              chrome.runtime.sendMessage({
+                                tipo: 'LOG',
+                                valore: `[LAZY TOP-UP] Rilevati ${consecutive461InTopUp} tentativi anticipati su Floor BIN. Concludo lo Step 2 per sicurezza.`
+                              });
+                              break;
+                            }
+
+                            await sleep(getRandomGaussian(10.0, 0.8, 9.0, 11.5) * 1000);
+                          } else {
+                            await sleep(getRandomGaussian(2.5, 0.3, 2.0, 3.2) * 1000);
+                          }
                       }
                     }
                   } else {
@@ -4240,7 +4274,7 @@ async function sendConsumableLazyRequest() {
       if (elapsed % 15 === 0) {
         try {
           await chrome.storage.local.get(['keepAliveCheck']);
-        } catch (_) {}
+        } catch (_) { }
       }
 
       if (elapsed % heartbeatInterval === 0 && start === true) {
@@ -4286,3 +4320,14 @@ async function sendConsumableLazyRequest() {
   });
   await clearSoldItem();
 }
+
+
+
+
+
+
+
+
+
+
+
