@@ -133,7 +133,7 @@
 <body>
     <div class="px-3 pt-2 pb-1 border-bottom d-flex justify-content-between align-items-center bg-white">
         <h5 class="m-0 fw-bold text-primary">FC27 Sniper & Trader</h5>
-        <span id="versione" class="badge bg-light text-secondary border">v2.4.4</span>
+        <span id="versione" class="badge bg-light text-secondary border">v2.5.5</span>
     </div>
 
     <div class="container-fluid px-3 pt-2">
@@ -251,7 +251,7 @@
                             <label for="chemStyleSelect" class="form-label form-label-sm d-block mb-1 text-muted"
                                 style="font-size: 0.8rem;">Stile Intesa:</label>
                             <select class="form-select form-select-sm mb-2" id="chemStyleSelect" style="width: 200px;">
-                                <option value="all">Tutti (Ombra + Cacciatore)</option>
+                                <option value="all">Tutti (Ombra + Cacciatore + Ancora)</option>
                                 <option value="268" selected>Ombra (Shadow)</option>
                                 <option value="266">Cacciatore (Hunter)</option>
                                 <option value="265">Ancora (Anchor)</option>
@@ -333,6 +333,8 @@
                     </div>
                     <div class="d-flex align-items-center gap-2">
                         <span id="logCount" class="text-muted font-monospace" style="font-size: 0.7rem;">0 eventi</span>
+                        <button type="button" class="btn btn-outline-info py-0 px-2 text-white" id="downloadLogBtn"
+                            style="font-size: 0.72rem;" title="Scarica tutti i log in formato testo (.txt)">Scarica Log</button>
                         <button type="button" class="btn btn-outline-secondary py-0 px-2 text-white" id="clearLogBtn"
                             style="font-size: 0.72rem;" title="Pulisci console">Pulisci</button>
                     </div>

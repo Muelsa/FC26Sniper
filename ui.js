@@ -77,21 +77,15 @@ document.addEventListener('DOMContentLoaded', () => {
       consumablesConfigContainer.classList.add('d-none');
       if (switchFodder) switchFodder.checked = true;
 
-      // Nascondi pulsante Lazy sui Fodder
-      if (modeLazy) modeLazy.classList.add('d-none');
-      if (labelModeLazy) labelModeLazy.classList.add('d-none');
-      if (modeLazy && modeLazy.checked) {
-        const snipingRadio = document.getElementById('modeSniping');
-        if (snipingRadio) snipingRadio.checked = true;
-        toggleStrategyContainers();
-        chrome.storage.local.set({ strategyMode: 'sniping' });
-      }
+      // Mostra pulsante Lazy sia per Fodder che per Consumabili
+      if (modeLazy) modeLazy.classList.remove('d-none');
+      if (labelModeLazy) labelModeLazy.classList.remove('d-none');
     } else if (target === 'consumables') {
       fodderRatingContainer.classList.add('d-none');
       consumablesConfigContainer.classList.remove('d-none');
       if (switchFodder) switchFodder.checked = false;
 
-      // Mostra pulsante Lazy SOLO per Consumabili
+      // Mostra pulsante Lazy per Consumabili
       if (modeLazy) modeLazy.classList.remove('d-none');
       if (labelModeLazy) labelModeLazy.classList.remove('d-none');
     } else {
@@ -131,13 +125,6 @@ document.addEventListener('DOMContentLoaded', () => {
       if (biddingConfigContainer) biddingConfigContainer.classList.add('d-none');
       if (lazyConfigContainer) lazyConfigContainer.classList.remove('d-none');
       if (snipeSpecificContainer) snipeSpecificContainer.classList.add('d-none');
-      // Per il Lazy Trading, impostiamo automaticamente obiettivo su Consumabili
-      const consRadio = document.querySelector('input[name="targetMode"][value="consumables"]');
-      if (consRadio && !consRadio.checked) {
-        consRadio.checked = true;
-        toggleTargetContainers();
-        chrome.storage.local.set({ targetMode: 'consumables', fodderMode: false });
-      }
     } else {
       // Sniping
       if (biddingConfigContainer) biddingConfigContainer.classList.add('d-none');
@@ -299,7 +286,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (result.strategyMode) {
-      if (result.strategyMode === 'lazy' && savedTarget !== 'consumables') {
+      if (result.strategyMode === 'lazy' && savedTarget !== 'consumables' && savedTarget !== 'fodder') {
         savedTarget = 'consumables';
         const targetRadio = document.querySelector('input[name="targetMode"][value="consumables"]');
         if (targetRadio) targetRadio.checked = true;
@@ -322,11 +309,6 @@ document.addEventListener('DOMContentLoaded', () => {
     let selectedTarget = getSelectedTargetMode();
     const selectedRating = getSelectedRating();
     const selectedStrategy = getSelectedStrategy();
-
-    // Se la strategia è Lazy, l'obiettivo deve essere SOLO consumabili
-    if (selectedStrategy === 'lazy') {
-      selectedTarget = 'consumables';
-    }
 
     const selectedChemStyle = getSelectedChemStyle();
     const autoBin = isAutoBinEnabled();
@@ -428,9 +410,63 @@ document.addEventListener('DOMContentLoaded', () => {
       if (logConsole) logConsole.innerHTML = '';
       const logViewer = document.getElementById('logViewer');
       if (logViewer) logViewer.value = '';
+      allLogRecords.length = 0;
       totalLogEvents = 0;
       const logCount = document.getElementById('logCount');
       if (logCount) logCount.textContent = '0 eventi';
+    });
+  }
+
+  // Pulsante esportazione / download log completo (.txt)
+  const downloadBtn = document.getElementById('downloadLogBtn');
+  if (downloadBtn) {
+    downloadBtn.addEventListener('click', () => {
+      const now = new Date();
+      const pad = (n) => String(n).padStart(2, '0');
+      const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+      const timeStr = `${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
+
+      const verText = document.getElementById('versione')?.textContent?.trim() || 'v2.5.4';
+      const targetMode = typeof getSelectedTargetMode === 'function' ? getSelectedTargetMode() : 'N/D';
+      const strategyMode = typeof getSelectedStrategy === 'function' ? getSelectedStrategy() : 'N/D';
+      const creditiVal = document.getElementById('crediti')?.textContent?.trim() || 'N/D';
+      const carteVal = document.getElementById('carteAcquistate')?.textContent?.trim() || '0';
+      const tentativiVal = document.getElementById('tentativi')?.value || 'N/D';
+
+      let content = `=================================================================\n`;
+      content += `  FC Sniper & Trader - Report Log Sessione\n`;
+      content += `  Versione: ${verText} | Data Export: ${now.toLocaleString()}\n`;
+      content += `  Modalità: ${String(targetMode).toUpperCase()} | Strategia: ${String(strategyMode).toUpperCase()}\n`;
+      content += `  Crediti: ${creditiVal} | Carte Acquistate: ${carteVal} | Tentativi: ${tentativiVal}\n`;
+      content += `  Totale Eventi Registrati: ${allLogRecords.length}\n`;
+      content += `=================================================================\n\n`;
+
+      if (allLogRecords.length > 0) {
+        allLogRecords.forEach((r) => {
+          content += `[${r.timestamp}] [${r.tag}] ${r.raw}\n`;
+        });
+      } else {
+        const logViewer = document.getElementById('logViewer');
+        if (logViewer && logViewer.value.trim()) {
+          content += logViewer.value;
+        } else {
+          content += `Nessun evento registrato nella sessione corrente.\n`;
+        }
+      }
+
+      content += `\n=================================================================\n`;
+      content += `  Fine Log Sessione\n`;
+      content += `=================================================================\n`;
+
+      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `fcsniper_logs_${dateStr}_${timeStr}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
     });
   }
 
@@ -481,6 +517,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
 let currentFilter = 'all';
 let totalLogEvents = 0;
+const allLogRecords = [];
 
 function applyLogFilter() {
   const rows = document.querySelectorAll('#logConsole .log-row');
@@ -600,6 +637,14 @@ function logToScreen(message) {
   const now = new Date();
   const timeStr = now.toTimeString().split(' ')[0]; // HH:MM:SS
   const { category, tag, text } = classifyLogMessage(message);
+
+  allLogRecords.push({
+    timestamp: timeStr,
+    iso: now.toISOString(),
+    category,
+    tag,
+    raw: String(message || '').trim()
+  });
 
   updateBotStatusBar(category, tag, text);
 
