@@ -4387,7 +4387,6 @@ async function sendConsumableLazyRequest() {
 
                             // Pausa breve e passa subito a una nuova ricerca fresca con prezzo minimo variato
                             await sleep(getRandomGaussian(2.5, 0.3, 2.0, 3.2) * 1000);
-                            break;
                           } else {
                             await sleep(getRandomGaussian(2.5, 0.3, 2.0, 3.2) * 1000);
                           }
