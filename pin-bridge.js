@@ -67,6 +67,8 @@
           token = s.Network.client.defaultHeaders['X-UT-SID'];
         } else if (typeof s.Authentication?.getAuthToken === "function") {
           token = s.Authentication.getAuthToken();
+        } else if (s.User?.auth?.token) {
+          token = s.User.auth.token;
         }
       }
       if (token) {
@@ -91,6 +93,7 @@
       if (window.services && window.services.PIN) {
         eaPinService = window.services.PIN;
         eaAppServices = window.services;
+        extractAndSendToken();
         logBridge("[FC Sniper PinBridge] Agganciato window.services.PIN con successo!");
         return true;
       }
@@ -99,6 +102,7 @@
         const appServices = window.getAppServices();
         if (appServices) {
           eaAppServices = appServices;
+          extractAndSendToken();
           if (typeof appServices.getPinService === "function") {
             eaPinService = appServices.getPinService();
             logBridge("[FC Sniper PinBridge] Agganciato via getAppServices().getPinService()!");
@@ -110,6 +114,7 @@
       // Ricerca tra proprietà di window
       if (window.PIN || window.PinService) {
         eaPinService = window.PIN || window.PinService;
+        extractAndSendToken();
         logBridge("[FC Sniper PinBridge] Agganciato window.PIN / window.PinService!");
         return true;
       }
@@ -122,6 +127,7 @@
           const pin = injector.get("PIN") || injector.get("PinService");
           if (pin) {
             eaPinService = pin;
+            extractAndSendToken();
             logBridge("[FC Sniper PinBridge] Agganciato PinService via Angular injector!");
             return true;
           }
@@ -138,11 +144,13 @@
   const maxAttempts = 30; // 30 tentativi a intervalli di 1.5s (~45 secondi max)
   const timer = setInterval(() => {
     attempts++;
+    extractAndSendToken();
     if (attempts === 1 || attempts === 5) {
       inspectWindowGlobals();
     }
     if (findEaServices() || attempts >= maxAttempts) {
       clearInterval(timer);
+      extractAndSendToken();
       if (!eaPinService && attempts >= maxAttempts) {
         logBridge("[FC Sniper PinBridge] Servizio PIN non ancora rilevato dopo tentativi massimi, rimarrà in ascolto degli eventi.");
       }
@@ -210,6 +218,49 @@
     }
   }
 
+  let lastNativeKeepAlive = 0;
+
+  // Mantiene viva la sessione OAuth/UTAS nativa della Web App di EA (previene il 401 allo scoccare delle 3 ore)
+  function performNativeWebAppKeepAlive() {
+    const now = Date.now();
+    // Esegue il refresh nativo al massimo 1 volta ogni 15 minuti (zero spam: max 4 volte in un'ora)
+    if (now - lastNativeKeepAlive < 15 * 60 * 1000) {
+      return;
+    }
+    lastNativeKeepAlive = now;
+
+    try {
+      // 1. Simula micro-attività utente locale nel DOM (non invia alcuna richiesta di rete a EA!)
+      const evt = new MouseEvent("mousemove", {
+        view: window,
+        bubbles: true,
+        cancelable: true,
+        clientX: Math.floor(100 + Math.random() * 400),
+        clientY: Math.floor(100 + Math.random() * 300)
+      });
+      document.dispatchEvent(evt);
+    } catch (_) {}
+
+    try {
+      // 2. Invoca il servizio nativo della Web App (window.services) così il client interno di EA
+      // controlla e rinnova automaticamente il token OAuth2 / X-UT-SID prima della scadenza delle 3 ore
+      const s = window.services || eaAppServices || (typeof window.getAppServices === "function" ? window.getAppServices() : null);
+      if (s) {
+        if (s.User && typeof s.User.requestCurrencies === "function") {
+          s.User.requestCurrencies();
+          logBridge("[FC Sniper PinBridge] Keep-Alive nativo Web App eseguito (1 volta ogni 15 min)");
+        } else if (s.User && typeof s.User.getUser === "function" && typeof s.User.getUser()?.requestCurrencies === "function") {
+          s.User.getUser().requestCurrencies();
+          logBridge("[FC Sniper PinBridge] Keep-Alive nativo Web App eseguito (1 volta ogni 15 min)");
+        }
+      }
+      // 3. Estrae e sincronizza eventuale nuovo token X-UT-SID appena rinnovato dalla Web App
+      setTimeout(extractAndSendToken, 1500);
+    } catch (e) {
+      logBridge("[FC Sniper PinBridge] Errore in performNativeWebAppKeepAlive:", String(e));
+    }
+  }
+
   function handlePinWatchlist() {
     const pin = getPinService();
     if (pin) {
@@ -222,6 +273,8 @@
     } else {
       logBridge("[FC Sniper PinBridge] Segnale PIN Watchlist inviato (in attesa del servizio PIN nativo)");
     }
+    // Controlla se sono passati almeno 15 minuti dall'ultimo keep-alive nativo
+    performNativeWebAppKeepAlive();
   }
 
   function handlePinSell(itemInfo) {
@@ -256,6 +309,7 @@
     } else if (type === "TRIGGER_PIN_SELL") {
       handlePinSell(payload);
     } else if (type === "REQUEST_TOKEN_REFRESH") {
+      performNativeWebAppKeepAlive();
       extractAndSendToken();
     }
   });
