@@ -4058,7 +4058,11 @@ async function sendConsumableLazyRequest() {
                 if (consecutiveFailedBidsInSearch >= 2) break;
                 if (start !== true || wonInThisCycle >= cycleTarget || (wonInThisCycle + activeBids.size) >= (cycleTarget + 2) || activeBids.size >= MAX_ACTIVE_WATCHLIST) break;
 
-                const nextBid = calculateNextBid(auction.startingBid, auction.currentBid);
+                const minNextBid = calculateNextBid(auction.startingBid, auction.currentBid);
+                // Strong Bid: offre subito circa il 70% del Floor BIN (se superiore a minNextBid) per eliminare la concorrenza casuale
+                const strongBidTarget = roundUpToStep(priceInfo.floorBin * 0.70);
+                const nextBid = Math.min(priceInfo.maxBidAllowed, Math.max(minNextBid, strongBidTarget));
+
                 if (nextBid <= priceInfo.maxBidAllowed) {
                   // Controllo preventivo crediti per non inviare richieste a vuoto
                   if (typeof crediti === 'number' && crediti < nextBid) {
@@ -4421,6 +4425,23 @@ async function sendConsumableLazyRequest() {
               }
 
               topUpSearches++;
+
+              // Monitoraggio attivo Watchlist durante lo Step 2:
+              // Ogni 3 ricerche Compra Ora (circa 12-15s), controlla la Watchlist per difendere le aste con controrilanci tempestivi!
+              if (activeBids.size > 0 && topUpSearches % 3 === 0 && start === true) {
+                const prevWon = carteAcquistate;
+                await resolveWatchlist();
+                if (carteAcquistate > prevWon) {
+                  const newlyWon = (carteAcquistate - prevWon);
+                  wonInThisCycle += newlyWon;
+                  topUpBought += newlyWon; // Le carte vinte all'asta riducono direttamente gli slot da comprare a BIN!
+                  chrome.runtime.sendMessage({
+                    tipo: 'LOG',
+                    valore: `[LAZY WATCHLIST] Asta vinta durante Compra Ora! Progresso rifornimento: [${topUpBought}/${topUpTarget}]`
+                  });
+                  if (topUpBought >= topUpTarget) break;
+                }
+              }
             }
           }
         }
@@ -4509,10 +4530,11 @@ async function sendConsumableLazyRequest() {
     } else if (finalPile.active < targetSize) {
       consecutiveSoftBansInSession = 0; // Reset contatore soft-ban se il ciclo è andato a buon fine!
       // Pacing Dinamico tra i cicli in base al riempimento attuale della Tradepile
-      if (finalPile.active < 45) {
-        sleepMins = Math.round(getRandomGaussian(18.0, 1.0, 16.0, 20.0));
+      if (finalPile.active < 40) {
+        // Quando la lista è sotto 40 carte, pausa snella (10-13 min) per accumulare carte e riempire la Tradepile
+        sleepMins = Math.round(getRandomGaussian(11.5, 0.8, 10.0, 13.0));
       } else if (finalPile.active < 75) {
-        sleepMins = Math.round(getRandomGaussian(20.0, 1.2, 18.0, 24.0));
+        sleepMins = Math.round(getRandomGaussian(18.0, 1.2, 16.0, 22.0));
       } else {
         // A regime (75-100 carte): pausa ottimale di 28 min per massimizzare le vendite mantenendo la lista piena
         sleepMins = Math.round(getRandomGaussian(28.0, 1.5, 25.0, 32.0));
@@ -5296,6 +5318,21 @@ async function sendFodderLazyRequest() {
           }
 
           topUpSearches++;
+
+          if (activeBids.size > 0 && topUpSearches % 3 === 0 && start === true) {
+            const prevWon = carteAcquistate;
+            await resolveWatchlist();
+            if (carteAcquistate > prevWon) {
+              const newlyWon = (carteAcquistate - prevWon);
+              wonInThisCycle += newlyWon;
+              topUpBought += newlyWon;
+              chrome.runtime.sendMessage({
+                tipo: 'LOG',
+                valore: `[LAZY FODDER WATCHLIST] Asta vinta durante Compra Ora! Progresso rifornimento: [${topUpBought}/${topUpTarget}]`
+              });
+              if (topUpBought >= topUpTarget) break;
+            }
+          }
         }
       }
     }
@@ -5338,10 +5375,10 @@ async function sendFodderLazyRequest() {
       consecutiveSoftBansInSession = 0;
       // Se la lista non � ancora piena, pause brevi (5-8 min) per rifornire subito la Tradepile!
       // Pacing Dinamico tra i cicli in base al riempimento attuale della Tradepile
-      if (finalPile.active < 45) {
-        sleepMins = Math.round(getRandomGaussian(18.0, 1.0, 16.0, 20.0));
+      if (finalPile.active < 40) {
+        sleepMins = Math.round(getRandomGaussian(11.5, 0.8, 10.0, 13.0));
       } else if (finalPile.active < 75) {
-        sleepMins = Math.round(getRandomGaussian(20.0, 1.2, 18.0, 24.0));
+        sleepMins = Math.round(getRandomGaussian(18.0, 1.2, 16.0, 22.0));
       } else {
         // A regime (75-100 carte): pausa ottimale di 28 min per massimizzare le vendite mantenendo la lista piena
         sleepMins = Math.round(getRandomGaussian(28.0, 1.5, 25.0, 32.0));
