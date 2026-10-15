@@ -3908,9 +3908,16 @@ async function sendConsumableLazyRequest() {
       });
       cycleTarget = 0;
     } else {
-      // Punto A: Se la Tradepile è sotto 75 carte, carichiamo a lotti protetti di max 14 carte
-      // A regime (>= 75 carte), rimpiazziamo esattamente le carte vendute mancanti (max 15 carte)
-      const maxBatch = currentTotalCount < 75 ? 14 : 15;
+      // Calcolo dinamico del lotto di riempimento:
+      // Se la lista è molto vuota (< 50 carte), rifornisce lotti da 25 carte per riempire rapidamente la Tradepile.
+      // Man mano che si riempie (50-80 carte), passa a lotti da 20 carte.
+      // A regime (>= 80 carte), effettua rabbocchi da 15 carte.
+      let maxBatch = 15;
+      if (currentTotalCount < 50) {
+        maxBatch = 25;
+      } else if (currentTotalCount < 80) {
+        maxBatch = 20;
+      }
       cycleTarget = Math.min(rawMissing, maxBatch);
       console.log(`[LAZY TRADING] Tradepile: ${currentActiveCount} attive, ${currentTotalCount}/${MAX_TRADEPILE_LIMIT} totali (Mancanti: ${rawMissing}, Target ciclo: ${cycleTarget})`);
       chrome.runtime.sendMessage({
@@ -4125,27 +4132,24 @@ async function sendConsumableLazyRequest() {
                     consecutiveFailedBidsInSearch++;
                     if (lastBidErrorStatus === 461) {
                       consecutive461InBidding++;
-                      bidPriceOffset++; // Forza subito il cambio di micr per invalidare la cache EA sulla prossima ricerca
+                      bidPriceOffset++; // Varia micr per bypassare la cache EA sulla prossima ricerca
                       if (consecutive461InBidding === 3) {
-                        console.log("[LAZY BIDDING] 3 errori 461 consecutivi. Sincronizzazione e pulizia Watchlist per liberare slot...");
+                        console.log("[LAZY BIDDING] 3 aste contese o Watchlist piena (461). Eseguo pulizia Watchlist...");
                         chrome.runtime.sendMessage({
                           tipo: 'LOG',
-                          valore: `[LAZY BIDDING] Aste non disponibili o Watchlist satura (461). Eseguo pulizia Watchlist per liberare slot...`
+                          valore: `[LAZY BIDDING] Aste contese o Watchlist satura (461). Eseguo pulizia Watchlist per liberare slot...`
                         });
                         await resolveWatchlist();
-                      } else if (consecutive461InBidding >= 4) {
-                        marketRestricted = true;
-                        earlyExitRateLimit = true;
-                        requiresSoftBanProbe = true;
-                        console.warn(`[LAZY BIDDING] Bidding Soft-Ban EA confermato (461 sistematico su ${consecutive461InBidding} ricerche diverse).`);
-                        reportTelemetry('BID_SOFT_BAN', `Bidding Soft-Ban EA confermato (461 sistematico). Attivazione pausa rigenerativa.`, { status: 461, consecutive461: consecutive461InBidding });
+                      } else if (consecutive461InBidding >= 6) {
+                        // Se ci sono 6 aste contese consecutive, passiamo direttamente allo Step 2 (Compra Ora) SENZA dichiarare soft-ban!
+                        console.log(`[LAZY BIDDING] Rilevate ${consecutive461InBidding} aste già chiuse/contese (461). Concludo Step 1 e passo a Compra Ora per rifornire la Tradepile.`);
                         chrome.runtime.sendMessage({
                           tipo: 'LOG',
-                          valore: `[SOFT-BAN BIDDING EA] Rilevato blocco temporaneo offerte (461 Permission Denied). Per non prolungare il blocco, interrompo le offerte e avvio la fase di riposo/vendita.`
+                          valore: `[LAZY BIDDING] Mercato aste molto conteso (461). Concludo le offerte all'asta e passo direttamente a Compra Ora.`
                         });
                         break;
                       }
-                      // Interrompe subito i tentativi sulla stessa pagina di ricerca (ormai datata) e passa a una ricerca fresca
+                      // Interrompe i tentativi su questa singola pagina e passa alla prossima ricerca
                       break;
                     }
                     if (lastBidErrorStatus === 429 || lastBidErrorStatus === 426 || lastBidErrorStatus === 512 || lastBidErrorStatus === 521) {
@@ -4775,9 +4779,12 @@ async function sendFodderLazyRequest() {
       });
       cycleTarget = 0;
     } else {
-      // Punto A: Se la Tradepile è sotto 75 carte, carichiamo a lotti protetti di max 14 carte
-      // A regime (>= 75 carte), rimpiazziamo esattamente le carte vendute mancanti (max 15 carte)
-      const maxBatch = currentTotalCount < 75 ? 14 : 15;
+      let maxBatch = 15;
+      if (currentTotalCount < 50) {
+        maxBatch = 25;
+      } else if (currentTotalCount < 80) {
+        maxBatch = 20;
+      }
       cycleTarget = Math.min(rawMissing, maxBatch);
       console.log(`[LAZY FODDER] Tradepile: ${currentActiveCount} attive, ${currentTotalCount}/${MAX_TRADEPILE_LIMIT} totali (Mancanti: ${rawMissing}, Target ciclo: ${cycleTarget})`);
       chrome.runtime.sendMessage({
@@ -4994,25 +5001,21 @@ async function sendFodderLazyRequest() {
                     consecutive461InBidding++;
                     bidPriceOffset++;
                     if (consecutive461InBidding === 3) {
-                      console.log("[LAZY FODDER BID] 3 errori 461 consecutivi. Sincronizzazione e pulizia Watchlist per liberare slot...");
+                      console.log("[LAZY FODDER BID] 3 aste contese o Watchlist piena (461). Eseguo pulizia Watchlist...");
                       chrome.runtime.sendMessage({
                         tipo: 'LOG',
-                        valore: `[LAZY FODDER BID] Aste non disponibili o Watchlist satura (461). Eseguo pulizia Watchlist per liberare slot...`
+                        valore: `[LAZY FODDER BID] Aste contese o Watchlist satura (461). Eseguo pulizia Watchlist per liberare slot...`
                       });
                       await resolveWatchlist();
-                    } else if (consecutive461InBidding >= 4) {
-                      marketRestricted = true;
-                      earlyExitRateLimit = true;
-                      requiresSoftBanProbe = true;
-                      console.warn(`[LAZY FODDER BID] Bidding Soft-Ban EA confermato (461 sistematico su ${consecutive461InBidding} ricerche diverse).`);
-                      reportTelemetry('BID_SOFT_BAN', `Bidding Soft-Ban EA confermato (461 sistematico). Attivazione pausa rigenerativa.`, { status: 461, consecutive461: consecutive461InBidding });
+                    } else if (consecutive461InBidding >= 6) {
+                      console.log(`[LAZY FODDER BID] Rilevate ${consecutive461InBidding} aste già chiuse/contese (461). Concludo Step 1 e passo a Compra Ora.`);
                       chrome.runtime.sendMessage({
                         tipo: 'LOG',
-                        valore: `[SOFT-BAN BIDDING EA] Rilevato blocco temporaneo offerte (461 Permission Denied). Per non prolungare il blocco, interrompo le offerte e avvio la fase di riposo/vendita.`
+                        valore: `[LAZY FODDER BID] Mercato aste molto conteso (461). Concludo le offerte e passo a Compra Ora per completare la Tradepile.`
                       });
                       break;
                     }
-                    // Interrompe subito i tentativi sulla stessa pagina di ricerca (ormai datata) e passa a una ricerca fresca
+                    // Interrompe subito i tentativi sulla stessa pagina di ricerca e passa a una ricerca fresca
                     break;
                   }
                   if (lastBidErrorStatus === 429 || lastBidErrorStatus === 426 || lastBidErrorStatus === 512 || lastBidErrorStatus === 521) {
