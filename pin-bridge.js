@@ -170,6 +170,7 @@
   }
 
   let lastSearchPin = 0;
+  let currentView = "";
 
   // Metodi dedicati ai PIN per le azioni critiche
   function handlePinSearch() {
@@ -180,7 +181,12 @@
     const pin = getPinService();
     if (pin) {
       try {
+        // Se arriviamo da un'altra sezione (es. Watchlist o Item Detail), transitiamo dall'Hub prima di entrare nei risultati
+        if (currentView && currentView !== "Transfer Market Results - List View") {
+          pin.sendData("page_view", { type: "menu", pgid: "Hub - Transfers" });
+        }
         pin.sendData("page_view", { type: "menu", pgid: "Transfer Market Results - List View" });
+        currentView = "Transfer Market Results - List View";
         logBridge(`[FC Sniper PinBridge] Emulato PIN: Transfer Market Results - List View (stepCounter: ${pin.stepCounter})`);
       } catch (e) {
         logBridge("[FC Sniper PinBridge] Errore sendData search:", e);
@@ -195,6 +201,7 @@
     if (pin) {
       try {
         pin.sendData("page_view", { type: "menu", pgid: "Item - Detail View" });
+        currentView = "Item - Detail View";
         logBridge(`[FC Sniper PinBridge] Emulato PIN: Item - Detail View (Buy Now) (stepCounter: ${pin.stepCounter})`);
       } catch (e) {
         logBridge("[FC Sniper PinBridge] Errore sendData buy now:", e);
@@ -209,6 +216,7 @@
     if (pin) {
       try {
         pin.sendData("page_view", { type: "menu", pgid: "Item - Detail View" });
+        currentView = "Item - Detail View";
         logBridge(`[FC Sniper PinBridge] Emulato PIN: Item - Detail View (Bid) (stepCounter: ${pin.stepCounter})`);
       } catch (e) {
         logBridge("[FC Sniper PinBridge] Errore sendData bid:", e);
@@ -221,10 +229,10 @@
   let lastNativeKeepAlive = 0;
 
   // Mantiene viva la sessione OAuth/UTAS nativa della Web App di EA (previene il 401 allo scoccare delle 3 ore)
-  function performNativeWebAppKeepAlive() {
+  function performNativeWebAppKeepAlive(force = false) {
     const now = Date.now();
-    // Esegue il refresh nativo al massimo 1 volta ogni 15 minuti (zero spam: max 4 volte in un'ora)
-    if (now - lastNativeKeepAlive < 15 * 60 * 1000) {
+    // Esegue il refresh nativo al massimo 1 volta ogni 8 minuti (oppure sempre se forzato da refresh/401)
+    if (!force && (now - lastNativeKeepAlive < 8 * 60 * 1000)) {
       return;
     }
     lastNativeKeepAlive = now;
@@ -248,14 +256,18 @@
       if (s) {
         if (s.User && typeof s.User.requestCurrencies === "function") {
           s.User.requestCurrencies();
-          logBridge("[FC Sniper PinBridge] Keep-Alive nativo Web App eseguito (1 volta ogni 15 min)");
+          logBridge("[FC Sniper PinBridge] Keep-Alive nativo Web App eseguito (User.requestCurrencies)");
         } else if (s.User && typeof s.User.getUser === "function" && typeof s.User.getUser()?.requestCurrencies === "function") {
           s.User.getUser().requestCurrencies();
-          logBridge("[FC Sniper PinBridge] Keep-Alive nativo Web App eseguito (1 volta ogni 15 min)");
+          logBridge("[FC Sniper PinBridge] Keep-Alive nativo Web App eseguito (getUser.requestCurrencies)");
+        }
+        if (s.Authentication && typeof s.Authentication.refreshToken === "function") {
+          s.Authentication.refreshToken();
+          logBridge("[FC Sniper PinBridge] Keep-Alive nativo Web App eseguito (Authentication.refreshToken)");
         }
       }
       // 3. Estrae e sincronizza eventuale nuovo token X-UT-SID appena rinnovato dalla Web App
-      setTimeout(extractAndSendToken, 1500);
+      setTimeout(extractAndSendToken, 1200);
     } catch (e) {
       logBridge("[FC Sniper PinBridge] Errore in performNativeWebAppKeepAlive:", String(e));
     }
@@ -265,8 +277,11 @@
     const pin = getPinService();
     if (pin) {
       try {
+        // Navigazione coerente verso la Watchlist: dall'Hub agli Obiettivi di mercato
         pin.sendData("page_view", { type: "menu", pgid: "Hub - Transfers" });
-        logBridge(`[FC Sniper PinBridge] Emulato PIN: Hub - Transfers (stepCounter: ${pin.stepCounter})`);
+        pin.sendData("page_view", { type: "menu", pgid: "Transfer Targets - List View" });
+        currentView = "Transfer Targets - List View";
+        logBridge(`[FC Sniper PinBridge] Emulato PIN: Hub - Transfers -> Transfer Targets - List View (stepCounter: ${pin.stepCounter})`);
       } catch (e) {
         logBridge("[FC Sniper PinBridge] Errore sendData watchlist:", e);
       }
@@ -282,6 +297,7 @@
     if (pin) {
       try {
         pin.sendData("page_view", { type: "menu", pgid: "Item - Detail View" });
+        currentView = "Item - Detail View";
         logBridge(`[FC Sniper PinBridge] Emulato PIN: Item - Detail View (Sell) (stepCounter: ${pin.stepCounter})`);
       } catch (e) {
         logBridge("[FC Sniper PinBridge] Errore sendData sell:", e);
@@ -309,7 +325,7 @@
     } else if (type === "TRIGGER_PIN_SELL") {
       handlePinSell(payload);
     } else if (type === "REQUEST_TOKEN_REFRESH") {
-      performNativeWebAppKeepAlive();
+      performNativeWebAppKeepAlive(true);
       extractAndSendToken();
     }
   });

@@ -426,7 +426,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
       const timeStr = `${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
 
-      const verText = document.getElementById('versione')?.textContent?.trim() || 'v2.5.4';
+      const verText = document.getElementById('versione')?.textContent?.trim() || 'v2.6.1';
       const targetMode = typeof getSelectedTargetMode === 'function' ? getSelectedTargetMode() : 'N/D';
       const strategyMode = typeof getSelectedStrategy === 'function' ? getSelectedStrategy() : 'N/D';
       const creditiVal = document.getElementById('crediti')?.textContent?.trim() || 'N/D';
@@ -525,11 +525,11 @@ function applyLogFilter() {
     const cat = r.dataset.category;
     if (currentFilter === 'all') {
       r.style.display = '';
-    } else if (currentFilter === 'trade' && (cat === 'trade' || cat === 'bid')) {
+    } else if (currentFilter === 'trade' && (cat === 'trade' || cat === 'bid' || cat === 'outbid')) {
       r.style.display = '';
     } else if (currentFilter === 'sleep' && (cat === 'sleep' || cat === 'status')) {
       r.style.display = '';
-    } else if (currentFilter === 'warn' && cat === 'warn') {
+    } else if (currentFilter === 'warn' && (cat === 'warn' || cat === 'outbid')) {
       r.style.display = '';
     } else {
       r.style.display = 'none';
@@ -542,8 +542,17 @@ function applyLogFilter() {
 function classifyLogMessage(raw) {
   const text = String(raw || '').trim();
 
-  // 1. Trades: Acquisti e Vendite
-  if (/acquisto|acquistata|acquistate|vinta|vendita|listata|listato/i.test(text) && !/errore/i.test(text)) {
+  // 1. Aste Superate, Perse o Abbandonate (Priorità alta con colore dedicato Arancione: intercetta prima che "non vinta" o "rilancio" vengano confusi con acquisti/offerte)
+  if (!/^\[CONTRORILANCIO\]/i.test(text) && (/superata|superato|asta persa|non vinta|abbandon/i.test(text) || /^\[ASTA SUPERATA\]/i.test(text))) {
+    let clean = text.replace(/^\[(ASTA SUPERATA|ASTA PERSA|ASTA NON VINTA)\]\s*/i, '');
+    let tag = 'SUPERATA';
+    if (/persa|non vinta/i.test(text)) tag = 'ASTA PERSA';
+    if (/abbandon/i.test(text) && !/superat/i.test(text)) tag = 'ABBANDONO';
+    return { category: 'outbid', tag, text: clean };
+  }
+
+  // 2. Trades: Acquisti e Vendite (Verde)
+  if (/acquisto|acquistata|acquistate|vinta|vendita|listata|listato/i.test(text) && !/errore|persa|non vinta/i.test(text)) {
     let clean = text.replace(/^\[(ACQUISTO RIUSCITO|LAZY BUY NOW|ASTA VINTA|Reconciliation)\]\s*/i, '');
     let tag = 'ACQUISTO';
     if (/vendita|listat/i.test(text) && !/acquist/i.test(text)) tag = 'VENDITA';
@@ -551,19 +560,21 @@ function classifyLogMessage(raw) {
     return { category: 'trade', tag, text: clean };
   }
 
-  // 2. Offerte / Bidding
-  if (/offerta|bid|bidding|rilancio/i.test(text) && !/errore|terminat/i.test(text)) {
-    let clean = text.replace(/^\[(LAZY BID|MASS BID|FC Sniper)\]\s*/i, '');
-    return { category: 'bid', tag: 'OFFERTA', text: clean };
+  // 3. Offerte / Bidding & Controrilanci (Viola)
+  if (/offerta|bid|bidding|controrilancio|rilancio/i.test(text) && !/errore|terminat|abbandon/i.test(text)) {
+    let clean = text.replace(/^\[(LAZY BID|MASS BID|FC Sniper|CONTRORILANCIO)\]\s*/i, '');
+    let tag = 'OFFERTA';
+    if (/controrilancio|rilancio/i.test(text)) tag = 'RILANCIO';
+    return { category: 'bid', tag, text: clean };
   }
 
-  // 3. Pause / Sleep / Heartbeat
+  // 4. Pause / Sleep / Heartbeat (Giallo/Oro)
   if (/pausa|dormiente|heartbeat|cool\s*down|attesa|attendo/i.test(text)) {
     let clean = text.replace(/^\[(LAZY HEARTBEAT|PAUSA DI SICUREZZA[^\]]*|PAUSA)\]\s*/i, '');
     return { category: 'sleep', tag: 'PAUSA', text: clean };
   }
 
-  // 4. Avvisi ed Errori / 461 / Captcha / Limiti
+  // 5. Avvisi ed Errori / 461 / Captcha / Limiti (Rosso)
   if (/errore|461|401|429|458|captcha|soft-ban|fallit|attenzione/i.test(text)) {
     let clean = text.replace(/^\[(ATTENZIONE[^\]]*|SNIPE 461|SOFT-BAN[^\]]*)\]\s*/i, '');
     let tag = 'AVVISO';
@@ -574,19 +585,19 @@ function classifyLogMessage(raw) {
     return { category: 'warn', tag, text: clean };
   }
 
-  // 5. Telemetria PIN
+  // 6. Telemetria PIN (Blu)
   if (/pin\s*telemetry|telemetr/i.test(text)) {
     let clean = text.replace(/^\[(PIN TELEMETRY)\]\s*/i, '');
     return { category: 'status', tag: 'PIN EVENT', text: clean };
   }
 
-  // 6. Stato, Target, Configurazione e Cicli
+  // 7. Stato, Target, Configurazione e Cicli (Blu)
   if (/avvio|ciclo|fase|target|completat|pronto|inizializz|terminat|filtro|riconciliazione|tradepile/i.test(text)) {
     let clean = text.replace(/^\[(SNIPING TARGET|LAZY TRADING|LAZY BIDDING|TENTATIVI COMPLETATI)\]\s*/i, '');
     return { category: 'status', tag: 'STATO', text: clean };
   }
 
-  // 7. Generico Info
+  // 8. Generico Info (Grigio)
   return { category: 'info', tag: 'INFO', text: text.replace(/^\[[^\]]+\]\s*/, '') };
 }
 
@@ -596,6 +607,8 @@ function updateBotStatusBar(category, tag, text) {
   const statusSubtext = document.getElementById('statusSubtext');
   if (!statusText || !statusDot || !statusSubtext) return;
 
+  statusDot.style.color = '';
+
   if (category === 'trade') {
     statusDot.className = 'text-success';
     statusText.textContent = tag === 'VENDITA' ? 'Carta in vendita' : 'Acquisto riuscito!';
@@ -603,6 +616,11 @@ function updateBotStatusBar(category, tag, text) {
   } else if (category === 'bid') {
     statusDot.className = 'text-primary';
     statusText.textContent = 'Offerta piazzata';
+    statusSubtext.textContent = text.length > 38 ? text.substring(0, 35) + '...' : text;
+  } else if (category === 'outbid') {
+    statusDot.className = '';
+    statusDot.style.color = '#ff922b';
+    statusText.textContent = tag === 'ASTA PERSA' ? 'Asta non vinta' : 'Asta superata';
     statusSubtext.textContent = text.length > 38 ? text.substring(0, 35) + '...' : text;
   } else if (category === 'sleep') {
     statusDot.className = 'text-warning';
@@ -653,11 +671,11 @@ function logToScreen(message) {
   row.dataset.category = category;
 
   if (currentFilter !== 'all') {
-    if (currentFilter === 'trade' && category !== 'trade' && category !== 'bid') {
+    if (currentFilter === 'trade' && category !== 'trade' && category !== 'bid' && category !== 'outbid') {
       row.style.display = 'none';
     } else if (currentFilter === 'sleep' && category !== 'sleep' && category !== 'status') {
       row.style.display = 'none';
-    } else if (currentFilter === 'warn' && category !== 'warn') {
+    } else if (currentFilter === 'warn' && category !== 'warn' && category !== 'outbid') {
       row.style.display = 'none';
     }
   }

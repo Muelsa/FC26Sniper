@@ -195,7 +195,7 @@ async function handle401Error(context = "") {
     valore: `[AVVISO 401${ctxStr}] Rilevato token non valido o scaduto. Richiedo sincronizzazione token fresco alla Web App...`
   });
 
-  // Chiede alla Web App aperta di estrarre e inviare il token aggiornato
+  // 1. Chiede alla Web App aperta di estrarre e inviare il token aggiornato a caldo
   await triggerPinEvent("REQUEST_TOKEN_REFRESH");
   await sleep(2500);
 
@@ -209,6 +209,38 @@ async function handle401Error(context = "") {
       valore: `[RECUPERO 401 RIUSCITO] Nuovo token EA sincronizzato (${xUtSid.substring(0, 10)}...). Operazioni ripristinate senza interruzione!`
     });
     return true;
+  }
+
+  // 2. Se a caldo non si rinnova (sessione JWT Web App scaduta oltre 2.5-3 ore),
+  // tentiamo il reload automatico della scheda Web App: grazie ai cookie di sessione EA (SSO/remid),
+  // la Web App si riavvia autenticata e genera immediatamente un nuovo X-UT-SID valido!
+  try {
+    const tabs = await chrome.tabs.query({});
+    const eaTabs = (tabs || []).filter(t => t.url && t.url.includes("ea.com"));
+    if (eaTabs.length > 0) {
+      chrome.runtime.sendMessage({
+        tipo: 'LOG',
+        valore: `[AVVISO 401] Token non rinnovabile a caldo. Ricarico la scheda Web App per rigenerare la sessione via SSO EA...`
+      });
+      for (const tab of eaTabs) {
+        chrome.tabs.reload(tab.id);
+      }
+      // Attesa fino a 20 secondi per l'avvio della Web App e l'intercettazione del nuovo token
+      for (let i = 0; i < 20; i++) {
+        await sleep(1000);
+        if (xUtSid && xUtSid !== currentToken) {
+          isRecovering401 = false;
+          consecutive401Errors = 0;
+          chrome.runtime.sendMessage({
+            tipo: 'LOG',
+            valore: `[RECUPERO 401 RIUSCITO] Web App ricaricata e nuova sessione catturata (${xUtSid.substring(0, 10)}...). Bot ripristinato!`
+          });
+          return true;
+        }
+      }
+    }
+  } catch (reloadErr) {
+    console.warn("[FC Sniper 401] Errore durante reload Web App:", reloadErr);
   }
 
   // Se il token è ancora lo stesso o la sessione EA è definitivamente chiusa:
@@ -561,7 +593,7 @@ chrome.runtime.onMessage.addListener(async (message) => {
         } else {
           targetMode = "consumables";
           ricercaFodder = false;
-          const styleName = chemStyle === "all" ? "Rotazione (Ombra, Cacciatore, Ancora)" : (CHEM_STYLES[chemStyle]?.name || `Stile ${chemStyle}`);
+          const styleName = chemStyle === "all" ? "Rotazione (Ombra, Cacciatore, Ancora, Motore)" : (CHEM_STYLES[chemStyle]?.name || `Stile ${chemStyle}`);
           chrome.runtime.sendMessage({ tipo: 'LOG', valore: `Avvio LAZY TRADING Consumabili (${styleName}, Target: ${targetTradepileSize}, Ricarico: +${lazyMarkupPercent}%, Pausa: ${lazySleepMinutes}m)` });
           await sendConsumableLazyRequest();
         }
@@ -578,7 +610,7 @@ chrome.runtime.onMessage.addListener(async (message) => {
         }
 
         if (targetMode === "consumables") {
-          const styleName = chemStyle === "all" ? "Rotazione (Ombra, Cacciatore, Ancora)" : (CHEM_STYLES[chemStyle]?.name || `Stile ${chemStyle}`);
+          const styleName = chemStyle === "all" ? "Rotazione (Ombra, Cacciatore, Ancora, Motore)" : (CHEM_STYLES[chemStyle]?.name || `Stile ${chemStyle}`);
           if (strategyMode === "bidding") {
             chrome.runtime.sendMessage({ tipo: 'LOG', valore: `Avvio MASS BIDDING Consumabili (${styleName}, Margine min ${minMargin})` });
             await sendConsumableBiddingRequest();
@@ -881,15 +913,11 @@ function getUrgentAuctionTimeRemaining() {
   for (const [tradeId, bid] of activeBids.entries()) {
     if (bid?.expiresAt) {
       const diff = bid.expiresAt - now;
-      if (diff < -15000) {
-        // Asta scaduta da oltre 15 secondi ma ancora in activeBids: pulizia
-        activeBids.delete(tradeId);
-        continue;
-      }
-      // Un'offerta attiva richiede monitoraggio prioritario quando è in chiusura (<= 15s)
-      const isActionable = (diff > 0 && diff <= 15000);
-      if (isActionable && diff < minRemainingMs) {
+      if (diff > 0 && diff < minRemainingMs) {
         minRemainingMs = diff;
+      } else if (diff <= 0 && diff > -30000) {
+        // Asta appena scaduta o in chiusura: richiede risoluzione immediata
+        minRemainingMs = Math.min(minRemainingMs, 0);
       }
     }
   }
@@ -2578,6 +2606,12 @@ async function reconcileWatchlistOnStartup() {
     const data = await response.json();
     const auctions = data.auctionInfo || [];
     const storedBids = await getStoredPendingBids();
+    const nowInit = Date.now();
+    for (const [tid, bData] of Object.entries(storedBids)) {
+      if (bData && bData.expiresAt && bData.expiresAt > nowInit) {
+        activeBids.set(String(tid), bData);
+      }
+    }
 
     let recoveredWon = 0;
     let cleanedLost = 0;
@@ -2592,6 +2626,22 @@ async function reconcileWatchlistOnStartup() {
       const tradeIdStr = String(tradeId);
       const tradeIdNum = Number(tradeId);
       const tracked = storedBids[tradeIdStr] || activeBids.get(tradeIdStr) || activeBids.get(tradeIdNum);
+
+      if (tradeState === "active") {
+        if (tracked) {
+          if (item.expires !== undefined) {
+            tracked.expiresAt = Date.now() + (item.expires * 1000);
+          }
+          activeBids.set(tradeIdStr, tracked);
+        } else {
+          activeBids.set(tradeIdStr, {
+            itemId: itemId,
+            bidAmount: item.currentBid,
+            expiresAt: Date.now() + ((item.expires || 0) * 1000),
+            rebidCount: 0
+          });
+        }
+      }
 
       if (tradeState === "closed" || tradeState === "expired" || item.expires === -1 || item.expires === 0) {
         if (bidState === "highest") {
@@ -2714,11 +2764,14 @@ async function resolveWatchlist() {
       const storedBids = await getStoredPendingBids();
 
       const now = Date.now();
+      const liveTradeIds = new Set(auctions.map(a => String(a.tradeId)));
       for (const [tradeId, bid] of activeBids.entries()) {
-        if (bid && bid.expiresAt && (now - bid.expiresAt > 15000)) {
-           console.log(`[FC Sniper Watchlist] Rimozione forzata asta fantasma (Trade: ${tradeId}) scaduta da oltre 15s e bloccata dai server EA.`);
-           activeBids.delete(tradeId);
-           await removeStoredPendingBid(tradeId);
+        const tradeIdKey = String(tradeId);
+        if (!liveTradeIds.has(tradeIdKey) && bid && bid.expiresAt && (now - bid.expiresAt > 45000)) {
+           console.log(`[FC Sniper Watchlist] Rimozione asta non più presente nei server EA (Trade: ${tradeIdKey}).`);
+           activeBids.delete(tradeIdKey);
+           activeBids.delete(Number(tradeIdKey));
+           await removeStoredPendingBid(tradeIdKey);
         }
       }
 
@@ -2733,10 +2786,19 @@ async function resolveWatchlist() {
 
       if (tradeState === "active") {
         // Aggiorna la scadenza precisa fornita da EA per calcolare i secondi rimanenti
-        if (tracked && item.expires !== undefined) {
-          tracked.expiresAt = Date.now() + (item.expires * 1000);
+        if (tracked) {
+          if (item.expires !== undefined) {
+            tracked.expiresAt = Date.now() + (item.expires * 1000);
+          }
           activeBids.set(tradeIdStr, tracked);
-          activeBids.set(tradeIdNum, tracked);
+          activeBids.delete(tradeIdNum);
+        } else if (item.bidState === "highest" || item.bidState === "outbid") {
+          activeBids.set(tradeIdStr, {
+            itemId: itemId,
+            bidAmount: item.currentBid,
+            expiresAt: Date.now() + ((item.expires || 0) * 1000),
+            rebidCount: 0
+          });
         }
       }
 
@@ -2813,6 +2875,10 @@ async function resolveWatchlist() {
           activeBids.delete(String(tradeId));
           activeBids.delete(Number(tradeId));
           console.log(`[FC Sniper Watchlist] Asta conclusa non vinta (Trade: ${tradeId}). Rimossa dagli osservati.`);
+          chrome.runtime.sendMessage({
+            tipo: 'LOG',
+            valore: `[ASTA PERSA] Asta su ${tracked?.name || 'Trade ' + tradeId} conclusa non vinta (prezzo finale: ${item.currentBid || 'N/D'} cr). Rimossa dagli osservati.`
+          });
         }
       }
     }
@@ -2832,6 +2898,10 @@ async function resolveWatchlist() {
           if (item.bidState === "outbid") {
             if (nextBid > tracked.maxBidAllowed) {
               console.log(`[FC Sniper Watchlist] Asta Trade ${tradeId} (${tracked.name || 'Trade ' + tradeId}) superata da altro utente a ${item.currentBid}. Il prossimo rilancio (${nextBid}) supererebbe il limite (${tracked.maxBidAllowed}). Abbandono.`);
+              chrome.runtime.sendMessage({
+                tipo: 'LOG',
+                valore: `[ASTA SUPERATA] Asta su ${tracked.name || 'Trade ' + tradeId} superata a ${item.currentBid} cr. Rilancio (${nextBid} cr) oltre il limite max (${tracked.maxBidAllowed} cr): abbandono.`
+              });
               await removeStoredPendingBid(tradeId);
               activeBids.delete(String(tradeId));
               activeBids.delete(Number(tradeId));
@@ -2877,6 +2947,10 @@ async function resolveWatchlist() {
         if (nextBid <= tracked.maxBidAllowed) {
           if (typeof crediti === 'number' && crediti < nextBid) {
             console.log(`[FC Sniper Watchlist] Controrilancio annullato su Trade ${tradeId}: crediti insufficienti (${crediti} cr < ${nextBid} cr).`);
+            chrome.runtime.sendMessage({
+              tipo: 'LOG',
+              valore: `[CONTRORILANCIO] Annullato su ${tracked.name || 'Trade ' + tradeId}: crediti insufficienti (${crediti} cr < ${nextBid} cr richiesti).`
+            });
             continue;
           }
 
@@ -2890,6 +2964,12 @@ async function resolveWatchlist() {
             tracked.expiresAt = Date.now() + (item.expires * 1000);
             await storePendingBid(tradeId, tracked);
             activeBids.set(String(tradeId), tracked);
+
+            chrome.runtime.sendMessage({
+              tipo: 'LOG',
+              valore: `[CONTRORILANCIO] Rilancio #${nextRebidNumber} di ${nextBid} crediti su ${tracked.name || 'Trade ' + tradeId} (Superato a ${item.currentBid} cr | Max: ${tracked.maxBidAllowed} cr | Scade in ${Math.round(item.expires)}s)`
+            });
+
             // Ritardo rapido tra offerte consecutive
             await sleep(getRandomGaussian(2.0, 0.25, 1.6, 2.5) * 1000);
           } else {
@@ -2911,6 +2991,10 @@ async function resolveWatchlist() {
           }
         } else if (nextBid > tracked.maxBidAllowed) {
           console.log(`[FC Sniper] Asta Trade ${tradeId} superata a ${item.currentBid}. Il prossimo rilancio (${nextBid}) supererebbe il limite (${tracked.maxBidAllowed}). Abbandono.`);
+          chrome.runtime.sendMessage({
+            tipo: 'LOG',
+            valore: `[ASTA SUPERATA] Asta su ${tracked.name || 'Trade ' + tradeId} superata a ${item.currentBid} cr. Rilancio (${nextBid} cr) oltre il limite max (${tracked.maxBidAllowed} cr): abbandono.`
+          });
           await removeStoredPendingBid(tradeId);
           activeBids.delete(String(tradeId));
           activeBids.delete(Number(tradeId));
@@ -3048,7 +3132,6 @@ async function sendFodderBiddingRequest() {
                   rebidCount: 0
                 };
                 activeBids.set(tradeIdStr, bidData);
-                activeBids.set(Number(auction.tradeId), bidData);
                 await storePendingBid(auction.tradeId, bidData);
               } else if (lastBidErrorStatus === 429 || lastBidErrorStatus === 426 || lastBidErrorStatus === 512 || lastBidErrorStatus === 521) {
                 console.warn(`[FC Sniper Queue] Rate limit EA durante offerta su ${next.name || next.pid}. Interrompo ulteriori offerte su questo calciatore.`);
@@ -3409,7 +3492,7 @@ async function discoverConsumableLowestBin(playStyleId, manualBinOverride = 0, f
 // Motore principale di MASS BIDDING Consumabili (Stili Intesa)
 async function sendConsumableBiddingRequest() {
   let i = 0;
-  const targetStyles = (chemStyle === "all") ? ["268", "266", "265"] : [chemStyle];
+  const targetStyles = (chemStyle === "all") ? ["268", "266", "265", "260"] : [chemStyle];
   let styleIndex = 0;
 
   while (start === true && i < numeroTentativi) {
@@ -3532,7 +3615,6 @@ async function sendConsumableBiddingRequest() {
                   isConsumable: true
                 };
                 activeBids.set(tradeIdStr, bidData);
-                activeBids.set(Number(auction.tradeId), bidData);
                 await storePendingBid(auction.tradeId, bidData);
               } else if (lastBidErrorStatus === 429 || lastBidErrorStatus === 426 || lastBidErrorStatus === 512 || lastBidErrorStatus === 521) {
                 console.warn(`[FC Sniper Queue] Rate limit EA durante offerta su ${styleMeta.name}. Interrompo offerte su questo stile.`);
@@ -3642,7 +3724,7 @@ async function sendConsumableBiddingRequest() {
 // Motore di SNIPING Consumabili (Stili Intesa) - Ottimizzato per massima velocità e zero ritardi
 async function sendConsumableResearchRequest() {
   let i = 0;
-  const targetStyles = (chemStyle === "all") ? ["268", "266", "265"] : [chemStyle];
+  const targetStyles = (chemStyle === "all") ? ["268", "266", "265", "260"] : [chemStyle];
   let styleIndex = 0;
 
   // Pre-calcolo e fissaggio dei prezzi per tutti gli stili target PRIMA di entrare nel loop di snipe
@@ -3793,7 +3875,7 @@ async function sendConsumableLazyRequest() {
       let consecutive512InCycle = 0;
       let earlyExitRateLimit = false;
       marketRestricted = false;
-      const targetStyles = (chemStyle === "all") ? ["268", "266", "265"] : [String(chemStyle)];
+      const targetStyles = (chemStyle === "all") ? ["268", "266", "265", "260"] : [String(chemStyle)];
 
     chrome.runtime.sendMessage({
       tipo: 'LOG',
@@ -3892,6 +3974,36 @@ async function sendConsumableLazyRequest() {
     const MAX_TRADEPILE_LIMIT = 100;
     const targetSize = targetTradepileSize && targetTradepileSize > 0 ? Math.min(targetTradepileSize, MAX_TRADEPILE_LIMIT) : 50;
 
+    // Calcolo presenze attuali di ciascuno stile nella Tradepile
+    const currentStyleCounts = {};
+    for (const sId of targetStyles) {
+      currentStyleCounts[sId] = 0;
+    }
+    for (const a of (pileInfo.auctions || [])) {
+      const detected = String(detectChemistryStyle(a));
+      if (currentStyleCounts[detected] !== undefined) {
+        currentStyleCounts[detected]++;
+      }
+    }
+
+    // Quota target per ciascun stile per garantire ESATTAMENTE la stessa percentuale di presenza (es. 25% ciascuno su 100 carte = 25 per stile)
+    const baseQuota = Math.floor(targetSize / targetStyles.length);
+    const remainder = targetSize % targetStyles.length;
+    const styleTradepileTarget = {};
+    targetStyles.forEach((sId, idx) => {
+      styleTradepileTarget[sId] = baseQuota + (idx < remainder ? 1 : 0);
+    });
+
+    const presenceLog = targetStyles.map(sId => {
+      const name = (CHEM_STYLES[sId]?.name || sId).split(" ")[0];
+      return `${name}: ${currentStyleCounts[sId]}/${styleTradepileTarget[sId]}`;
+    }).join(" | ");
+
+    chrome.runtime.sendMessage({
+      tipo: 'LOG',
+      valore: `[BILANCIAMENTO TRADEPILE] Presenze attuali: ${presenceLog} (Quota paritaria: ${Math.round(100 / targetStyles.length)}% per stile)`
+    });
+
     // Spazio fisicamente libero nella Tradepile EA (max 100 totali)
     const physicalFreeSlots = Math.max(0, MAX_TRADEPILE_LIMIT - currentTotalCount);
     // Quante carte mancano per raggiungere l'obiettivo totale desiderato
@@ -3909,14 +4021,14 @@ async function sendConsumableLazyRequest() {
       cycleTarget = 0;
     } else {
       // Calcolo dinamico del lotto di riempimento:
-      // Se la lista è molto vuota (< 50 carte), rifornisce lotti da 25 carte per riempire rapidamente la Tradepile.
-      // Man mano che si riempie (50-80 carte), passa a lotti da 20 carte.
-      // A regime (>= 80 carte), effettua rabbocchi da 15 carte.
-      let maxBatch = 15;
+      // Se la lista è vuota (< 50 carte), impostiamo il target di ciclo fino a 50 carte per riempirla velocemente.
+      // Man mano che si riempie (50-80 carte), passa a 40 carte.
+      // A regime (>= 80 carte), effettua rabbocchi da 25 carte.
+      let maxBatch = 25;
       if (currentTotalCount < 50) {
-        maxBatch = 25;
+        maxBatch = 50;
       } else if (currentTotalCount < 80) {
-        maxBatch = 20;
+        maxBatch = 40;
       }
       cycleTarget = Math.min(rawMissing, maxBatch);
       console.log(`[LAZY TRADING] Tradepile: ${currentActiveCount} attive, ${currentTotalCount}/${MAX_TRADEPILE_LIMIT} totali (Mancanti: ${rawMissing}, Target ciclo: ${cycleTarget})`);
@@ -3941,20 +4053,47 @@ async function sendConsumableLazyRequest() {
         let consecutiveErrorsCount = 0;
         let bidPriceOffset = 0;
         const styleSearchCounts = {};
+        const bidsPerStyle = {};
+        // Quota 50 offerte a ciclo (sfrutta al massimo i 50 slot della Watchlist EA)
+        // Se i posti liberi in lista trasferimenti sono pochi (< 25), scala proporzionalmente per evitare esuberi
+        const MAX_BIDS_PER_CYCLE = rawMissing >= 25 ? 50 : Math.min(50, Math.max(cycleTarget, rawMissing * 2));
+        // Quota paritaria esatta di offerte per ciascuno stile (es. 50 / 4 = 12-13 offerte per stile = ~25% ciascuna)
+        const bidsBaseQuota = Math.max(1, Math.floor(MAX_BIDS_PER_CYCLE / targetStyles.length));
+        const bidsRemainder = MAX_BIDS_PER_CYCLE % targetStyles.length;
+        const bidsTargetPerStyle = {};
+        targetStyles.forEach((sId, idx) => {
+          bidsTargetPerStyle[sId] = bidsBaseQuota + (idx < bidsRemainder ? 1 : 0);
+        });
         consecutive461InBidding = 0;
         consecutive512InCycle = 0;
         marketRestricted = false;
-        const maxBiddingSearches = Math.max(30, cycleTarget * 2);
-        const MAX_ACTIVE_WATCHLIST = 35; // Mantiene 15 slot liberi sui 50 max consentiti da EA
+        const maxBiddingSearches = Math.max(80, Math.round(MAX_BIDS_PER_CYCLE * 2.5));
+        const MAX_ACTIVE_WATCHLIST = 45; // Mantiene 5 slot liberi sui 50 max consentiti da EA come cuscinetto di sicurezza
+
+        const bidsQuotaLog = targetStyles.map(sId => {
+          const name = (CHEM_STYLES[sId]?.name || sId).split(" ")[0];
+          return `${name}: ${bidsTargetPerStyle[sId]}`;
+        }).join(" | ");
 
         chrome.runtime.sendMessage({
           tipo: 'LOG',
-          valore: `[LAZY BIDDING] Step 1: Offerte all'asta a sconto (Target: ${cycleTarget} carte). Finestra 1-10 min, controrilanci attivi...`
+          valore: `[LAZY BIDDING] Step 1: Offerte all'asta paritarie (Quota offerte per stile: ${bidsQuotaLog} | Totale: ${MAX_BIDS_PER_CYCLE}). Finestra 1-10 min, controrilanci attivi...`
         });
 
         // Loop Offerte all'asta (Step 1)
         while (wonInThisCycle < cycleTarget && searchCount < maxBiddingSearches && start === true) {
           if (marketRestricted || earlyExitRateLimit) break;
+
+          // Se tutti gli stili hanno già raggiunto la propria quota paritaria di offerte
+          const allBidsFilled = targetStyles.every(sId => (bidsPerStyle[sId] || 0) >= (bidsTargetPerStyle[sId] || 1));
+          if (allBidsFilled || totalBidsPlaced >= MAX_BIDS_PER_CYCLE) {
+            chrome.runtime.sendMessage({
+              tipo: 'LOG',
+              valore: `[LAZY BIDDING] Quota paritaria offerte completata su tutti gli stili (${totalBidsPlaced}/${MAX_BIDS_PER_CYCLE}). Monitoraggio e risoluzione aste in corso...`
+            });
+            break;
+          }
+
           // Verifica rapida crediti (usa il saldo in memoria aggiornato, senza chiamare /watchlist a ogni ricerca!)
           const minBidRequired = Math.min(...targetStyles.map(s => (cyclePrices[s] ? cyclePrices[s].maxBidAllowed : Infinity)));
           if (typeof crediti === 'number' && crediti < minBidRequired && activeBids.size === 0) {
@@ -3965,13 +4104,13 @@ async function sendConsumableLazyRequest() {
             break;
           }
 
-          // Controllo capienza offerte: se abbiamo già offerte pendenti + vinte sufficienti a coprire il target di ciclo (+ 2 di margine) o watchlist satura
-          if ((wonInThisCycle + activeBids.size) >= (cycleTarget + 2) || activeBids.size >= MAX_ACTIVE_WATCHLIST) {
+          // Controllo capienza offerte: se la Watchlist è quasi satura (>= 45/50) o abbiamo offerte pendenti pari ai posti liberi totali
+          if (activeBids.size >= MAX_ACTIVE_WATCHLIST || (wonInThisCycle + activeBids.size) >= physicalFreeSlots) {
             chrome.runtime.sendMessage({
               tipo: 'LOG',
               valore: `[LAZY BIDDING] Quota offerte in volo raggiunta (${activeBids.size} attive, ${wonInThisCycle}/${cycleTarget} vinte). Monitoraggio risoluzione aste...`
             });
-            while ((wonInThisCycle + activeBids.size) >= (cycleTarget + 2) && activeBids.size > 0 && start === true) {
+            while ((activeBids.size >= MAX_ACTIVE_WATCHLIST || (wonInThisCycle + activeBids.size) >= physicalFreeSlots) && activeBids.size > 0 && start === true) {
               await sleep(getRandomGaussian(2.0, 0.3, 1.5, 2.5) * 1000);
               const prevWon = carteAcquistate;
               await resolveWatchlist();
@@ -3993,6 +4132,12 @@ async function sendConsumableLazyRequest() {
           const priceInfo = cyclePrices[currentStyleId];
 
           if (!priceInfo) {
+            searchCount++;
+            continue;
+          }
+
+          // Se lo stile ha già raggiunto la sua quota paritaria esatta di offerte per questo ciclo, passiamo al prossimo per diversificare
+          if ((bidsPerStyle[currentStyleId] || 0) >= (bidsTargetPerStyle[currentStyleId] || 1)) {
             searchCount++;
             continue;
           }
@@ -4055,8 +4200,10 @@ async function sendConsumableLazyRequest() {
               let bidsInThisSearch = 0;
               let consecutiveFailedBidsInSearch = 0;
               for (const auction of targetAuctions) {
+                if (bidsInThisSearch >= 2) break; // Max 2 offerte per ricerca: previene burst EA e diversifica le ricerche
                 if (consecutiveFailedBidsInSearch >= 2) break;
-                if (start !== true || wonInThisCycle >= cycleTarget || (wonInThisCycle + activeBids.size) >= (cycleTarget + 2) || activeBids.size >= MAX_ACTIVE_WATCHLIST) break;
+                if ((bidsPerStyle[currentStyleId] || 0) >= (bidsTargetPerStyle[currentStyleId] || 1) || totalBidsPlaced >= MAX_BIDS_PER_CYCLE) break;
+                if (start !== true || wonInThisCycle >= cycleTarget || (wonInThisCycle + activeBids.size) >= physicalFreeSlots || activeBids.size >= MAX_ACTIVE_WATCHLIST) break;
 
                 const minNextBid = calculateNextBid(auction.startingBid, auction.currentBid);
                 // Strong Bid: offre subito circa il 70% del Floor BIN (se superiore a minNextBid) per eliminare la concorrenza casuale
@@ -4104,6 +4251,7 @@ async function sendConsumableLazyRequest() {
                   if (bidSuccess) {
                     totalBidsPlaced++;
                     bidsInThisSearch++;
+                    bidsPerStyle[currentStyleId] = (bidsPerStyle[currentStyleId] || 0) + 1;
                     consecutiveFailedBidsInSearch = 0;
                     consecutive461InBidding = 0;
                     if (typeof crediti === 'number') crediti = Math.max(0, crediti - nextBid);
@@ -4130,8 +4278,17 @@ async function sendConsumableLazyRequest() {
                     consecutive512InCycle = 0;
                     consecutiveErrorsCount = 0;
 
-                    // Punto B: Pacing umano naturale tra offerte (3.5s - 5.0s) per azzerare i picchi antispam EA
-                    await sleep(getRandomGaussian(4.0, 0.4, 3.5, 5.0) * 1000);
+                    // Punto B: Pacing umano naturale tra offerte (5.0s - 7.0s) per azzerare i picchi antispam EA
+                    await sleep(getRandomGaussian(5.5, 0.5, 4.8, 7.0) * 1000);
+
+                    // Pausa distensiva ogni 5 offerte piazzate (10s - 14s) per far defluire il leaky bucket rate-limit di EA
+                    if (totalBidsPlaced > 0 && totalBidsPlaced % 5 === 0) {
+                      chrome.runtime.sendMessage({
+                        tipo: 'LOG',
+                        valore: `[LAZY BIDDING] Pausa distensiva anti-spam (${totalBidsPlaced} offerte piazzate)... Lascio defluire i contatori EA prima delle prossime offerte.`
+                      });
+                      await sleep(getRandomGaussian(12.0, 1.0, 10.0, 15.0) * 1000);
+                    }
                   } else {
                     consecutiveFailedBidsInSearch++;
                     if (lastBidErrorStatus === 461) {
@@ -4162,9 +4319,8 @@ async function sendConsumableLazyRequest() {
                       reportTelemetry('EARLY_EXIT_RATE_LIMIT', `Avviso rate-limit EA (${lastBidErrorStatus}) su offerta. Uscita preventiva dagli acquisti.`, { status: lastBidErrorStatus });
                       chrome.runtime.sendMessage({
                         tipo: 'LOG',
-                        valore: `[PREVENZIONE ANTI-BAN] Segnale di rate-limit EA (${lastBidErrorStatus}) rilevato. Per prevenire soft-ban, interrompo gli acquisti per questo ciclo e avvio pausa preventiva di 3 minuti...`
+                        valore: `[PREVENZIONE ANTI-BAN] Segnale di rate-limit EA (${lastBidErrorStatus}) rilevato. Per prevenire soft-ban, concludo anticipatamente gli acquisti e passo alla pausa di riposo.`
                       });
-                      await sleep(getRandomGaussian(180.0, 10.0, 160.0, 210.0) * 1000);
                       break;
                     }
                   }
@@ -4180,9 +4336,8 @@ async function sendConsumableLazyRequest() {
               reportTelemetry('EARLY_EXIT_RATE_LIMIT', `Avviso rate-limit EA (${res.status}) su ricerca. Uscita preventiva dagli acquisti.`, { status: res.status });
               chrome.runtime.sendMessage({
                 tipo: 'LOG',
-                valore: `[PREVENZIONE ANTI-BAN] Segnale di rate-limit EA (${res.status}) rilevato su ricerca. Interrompo gli acquisti per questo ciclo e avvio pausa preventiva di 3 minuti...`
+                valore: `[PREVENZIONE ANTI-BAN] Segnale di rate-limit EA (${res.status}) rilevato su ricerca. Concludo anticipatamente gli acquisti e passo alla pausa di riposo.`
               });
-              await sleep(getRandomGaussian(180.0, 10.0, 160.0, 210.0) * 1000);
               break;
             }
           } catch (e) {
@@ -4191,8 +4346,10 @@ async function sendConsumableLazyRequest() {
             if (consecutiveErrorsCount >= 3) break;
           }
 
-          // Risoluzione Watchlist periodica e controrilanci
-          if (activeBids.size > 0) {
+          searchCount++;
+
+          // Risoluzione Watchlist periodica e controrilanci ogni 3 ricerche (se ci sono aste attive da monitorare)
+          if (activeBids.size > 0 && searchCount % 3 === 0) {
             const prevWon = carteAcquistate;
             await resolveWatchlist();
             if (carteAcquistate > prevWon) {
@@ -4205,21 +4362,22 @@ async function sendConsumableLazyRequest() {
             }
           }
 
-          searchCount++;
           // Pacing umano tra ricerche per evitare soft-ban 512 / 426 (10-12 ricerche/minuto)
-          if ((searchCount + 1) % 6 === 0) {
+          if (searchCount % 6 === 0) {
             await sleep(getRandomGaussian(6.0, 0.6, 5.0, 7.5) * 1000);
           } else {
             await sleep(getRandomGaussian(3.6, 0.4, 3.0, 4.5) * 1000);
           }
         }
 
-        // Risoluzione delle aste attive in chiusura (fino a 90 secondi) prima di procedere a Compra Ora
-        if (activeBids.size > 0 && start === true && !marketRestricted) {
-          while (activeBids.size > 0 && getUrgentAuctionTimeRemaining() <= 90000 && start === true && !marketRestricted) {
+        // Risoluzione delle aste attive in chiusura prima di procedere a Compra Ora
+        // SALTO COMPLETO se è scattato un rate limit per evitare ulteriori chiamate verso i server EA
+        if (activeBids.size > 0 && start === true && !marketRestricted && !earlyExitRateLimit) {
+          const maxUrgentWait = Date.now() + 60000;
+          while (activeBids.size > 0 && getUrgentAuctionTimeRemaining() <= 45000 && Date.now() < maxUrgentWait && start === true && !marketRestricted && !earlyExitRateLimit) {
             const secLeft = Math.max(0, Math.round(getUrgentAuctionTimeRemaining() / 1000));
             console.log(`[LAZY BIDDING] Asta in chiusura entro ${secLeft}s. Attendo esito e controrilanci...`);
-            await sleep(getRandomGaussian(2.0, 0.2, 1.5, 2.5) * 1000);
+            await sleep(getRandomGaussian(4.0, 0.3, 3.5, 5.0) * 1000);
             const prevWon = carteAcquistate;
             await resolveWatchlist();
             if (carteAcquistate > prevWon) {
@@ -4239,13 +4397,14 @@ async function sendConsumableLazyRequest() {
         if (start === true && !marketRestricted && !earlyExitRateLimit && consecutive512InCycle < 2 && consecutiveErrorsCount < 3) {
           const midPile = await getTradepileInfo();
           const missingActive = Math.max(0, targetSize - midPile.active);
-          // Completiamo tutti i mancanti fino alla capienza target del ciclo (max 20 a ciclo per sicurezza anti-ban)
-          const topUpTarget = Math.min(cycleTarget - wonInThisCycle, missingActive);
+          const physicalFreeNow = Math.max(0, MAX_TRADEPILE_LIMIT - midPile.total);
+          // Completiamo tutti i mancanti fino alla capienza target del ciclo
+          const topUpTarget = Math.min(cycleTarget - wonInThisCycle, Math.min(missingActive, physicalFreeNow));
 
           if (topUpTarget > 0) {
             chrome.runtime.sendMessage({
               tipo: 'LOG',
-              valore: `[LAZY TOP-UP] Step 2: Completamento di ${topUpTarget} slot mancanti in Compra Ora al Floor BIN (Pacing umano protetto)...`
+              valore: `[LAZY TOP-UP] Step 2: Rifornimento Compra Ora di ${topUpTarget} carte al Floor BIN per completare gli slot mancanti...`
             });
 
             let topUpBought = 0;
@@ -4333,8 +4492,8 @@ async function sendConsumableLazyRequest() {
                     const buySuccess = await sendBuyNowRequest(candidate.tradeId, candidate.buyNowPrice, candidate.itemData?.id);
                     if (buySuccess) {
                       topUpBought++;
-
-                        consecutive461InTopUp = 0;
+                      boughtInTopUpPerStyle[currentStyleId] = (boughtInTopUpPerStyle[currentStyleId] || 0) + 1;
+                      consecutive461InTopUp = 0;
                       wonInThisCycle++;
                       carteVinteCiclo++;
                       consecutive512InCycle = 0;
@@ -4351,12 +4510,12 @@ async function sendConsumableLazyRequest() {
                         const netEst = Math.floor(tiered.price * 0.95) - candidate.buyNowPrice;
                         chrome.runtime.sendMessage({
                           tipo: 'LOG',
-                          valore: `[LAZY TOP-UP] Acquistata carta (${priceInfo.meta.name}) a ${candidate.buyNowPrice} e listata a ${tiered.price} (Tier ${tiered.tier}: +${tiered.markup}%, Profitto netto stimato: +${netEst} cr) [${topUpBought}/${topUpTarget}]`
+                          valore: `[LAZY TOP-UP] Acquistata carta (${priceInfo.meta.name}) a ${candidate.buyNowPrice} e listata a ${tiered.price} (Tier ${tiered.tier}: +${tiered.markup}%, Profitto: +${netEst} cr) [Progresso rabbocco: ${topUpBought}/${topUpTarget}]`
                         });
                       } else {
                         chrome.runtime.sendMessage({
                           tipo: 'LOG',
-                          valore: `[LAZY TOP-UP] Acquistata carta (${priceInfo.meta.name}) a ${candidate.buyNowPrice}. Spostata in lista trasferimenti (sarà messa in vendita dal recupero Tradepile).`
+                          valore: `[LAZY TOP-UP] Acquistata carta (${priceInfo.meta.name}) a ${candidate.buyNowPrice}. Spostata in lista trasferimenti [Progresso rabbocco: ${topUpBought}/${topUpTarget}].`
                         });
                       }
 
@@ -4370,9 +4529,8 @@ async function sendConsumableLazyRequest() {
                         reportTelemetry('EARLY_EXIT_RATE_LIMIT', `Avviso rate-limit EA (${lastBuyNowErrorStatus}) su Compra Ora. Uscita preventiva dagli acquisti.`, { status: lastBuyNowErrorStatus });
                         chrome.runtime.sendMessage({
                           tipo: 'LOG',
-                          valore: `[PREVENZIONE ANTI-BAN] Segnale di rate-limit EA (${lastBuyNowErrorStatus}) rilevato su Compra Ora. Interrompo gli acquisti per questo ciclo e avvio pausa preventiva di 3 minuti...`
+                          valore: `[PREVENZIONE ANTI-BAN] Segnale di rate-limit EA (${lastBuyNowErrorStatus}) rilevato su Compra Ora. Concludo anticipatamente gli acquisti e passo alla pausa di riposo.`
                         });
-                        await sleep(getRandomGaussian(180.0, 10.0, 160.0, 210.0) * 1000);
                         break;
                       } else {
                         if (lastBuyNowErrorStatus === 461 || lastBuyNowErrorStatus === 478) {
@@ -4388,9 +4546,10 @@ async function sendConsumableLazyRequest() {
                             if (consecutive461InTopUp >= 3) {
                               chrome.runtime.sendMessage({
                                 tipo: 'LOG',
-                                valore: `[LAZY TOP-UP] Rilevati 3 tentativi consecutivi anticipati su Floor BIN su ricerche diverse. Concludo lo Step 2 e passo alla vendita.`
+                                valore: `[LAZY TOP-UP] Stile ${priceInfo.meta.name} molto conteso sul Floor BIN (3 tentativi anticipati). Ruoto al prossimo stile per diversificare il rifornimento...`
                               });
-                              break;
+                              topUpStyleIdx = (topUpStyleIdx + 1) % targetStyles.length;
+                              consecutive461InTopUp = 0;
                             }
 
                             // Pausa breve e passa subito a una nuova ricerca fresca con prezzo minimo variato
@@ -4414,9 +4573,8 @@ async function sendConsumableLazyRequest() {
                   reportTelemetry('EARLY_EXIT_RATE_LIMIT', `Avviso rate-limit EA (${res.status}) su ricerca Compra Ora.`, { status: res.status });
                   chrome.runtime.sendMessage({
                     tipo: 'LOG',
-                    valore: `[PREVENZIONE ANTI-BAN] Segnale di rate-limit EA (${res.status}) rilevato su ricerca Compra Ora. Interrompo gli acquisti per questo ciclo e avvio pausa preventiva di 3 minuti...`
+                    valore: `[PREVENZIONE ANTI-BAN] Segnale di rate-limit EA (${res.status}) rilevato su ricerca Compra Ora. Concludo anticipatamente gli acquisti e passo alla pausa di riposo.`
                   });
-                  await sleep(getRandomGaussian(180.0, 10.0, 160.0, 210.0) * 1000);
                   break;
                 }
               } catch (err) {
@@ -4514,11 +4672,11 @@ async function sendConsumableLazyRequest() {
       });
     } else if (earlyExitRateLimit) {
       consecutiveSoftBansInSession = 0;
-      sleepMins = Math.round(getRandomGaussian(15.0, 1.2, 14.0, 18.0));
+      sleepMins = Math.round(getRandomGaussian(5.5, 0.4, 5.0, 6.5));
       reportTelemetry('PREVENTIVE_COOLING_PAUSE', `Pausa preventiva anti-ban post early-exit (${sleepMins} min)`, { sleepMins });
       chrome.runtime.sendMessage({
         tipo: 'LOG',
-        valore: `[LAZY TRADING] Raffreddamento preventivo attivo: pausa precauzionale di ${sleepMins} min per garantire il completo azzeramento dei contatori EA (Keep-alive attivo ogni 2 min)...`
+        valore: `[LAZY TRADING] Raffreddamento preventivo attivo: pausa di riposo di ${sleepMins} min per azzerare i contatori EA (Ripresa automatica al termine)...`
       });
     } else if (Date.now() < listingRestrictedUntil && (finalPile.total - finalPile.active) >= 6) {
       consecutiveSoftBansInSession = 0;
@@ -4573,9 +4731,8 @@ async function sendConsumableLazyRequest() {
         try {
           const remainingMinutes = Math.round((totalSleepSeconds - elapsed) / 60);
           if (marketRestricted) {
-            // Ogni 16 minuti (960s) eseguiamo un singolo ping leggerissimo + refresh nativo Web App per non far scadere il token X-UT-SID (Idle Timeout & 3h OAuth TTL)
-            if (elapsed % 960 === 0 && remainingMinutes >= 4) {
-              await triggerPinEvent("TRIGGER_PIN_WATCHLIST");
+            // Ogni 8 minuti (480s) eseguiamo un singolo ping leggerissimo + refresh nativo Web App per non far scadere il token X-UT-SID (Idle Timeout & 3h OAuth TTL)
+            if (elapsed % 480 === 0 && remainingMinutes >= 2) {
               await triggerPinEvent("REQUEST_TOKEN_REFRESH");
               await sleep(1600);
               crediti = await getCrediti();
@@ -4592,6 +4749,12 @@ async function sendConsumableLazyRequest() {
                 valore: `[COOLDOWN SILENZIATO] Sblocco soft-ban in corso (silenzio totale verso il mercato)... Mancano ${remainingMinutes} min alla ripresa.`
               });
             }
+          } else if (earlyExitRateLimit) {
+            // Silenzio verso il mercato per ripristinare il rate limit delle offerte
+            chrome.runtime.sendMessage({
+              tipo: 'LOG',
+              valore: `[COOLDOWN PREVENTIVO] Riposo anti-ban in corso (azzeramento contatori EA)... Mancano ${remainingMinutes} min alla ripresa.`
+            });
           } else {
             await triggerPinEvent("TRIGGER_PIN_WATCHLIST");
             // 1. Incassa le carte vendute e rimette in vendita quelle scadute con ricalcolo prezzi
@@ -4825,18 +4988,27 @@ async function sendFodderLazyRequest() {
       consecutive461InBidding = 0;
       consecutive512InCycle = 0;
       marketRestricted = false;
-      const maxBiddingSearches = Math.max(30, cycleTarget * 3);
+      const maxBiddingSearches = Math.max(25, cycleTarget * 3);
       const MAX_ACTIVE_WATCHLIST = 35;
+      const MAX_BIDS_PER_CYCLE = Math.min(20, cycleTarget);
 
       chrome.runtime.sendMessage({
         tipo: 'LOG',
-        valore: `[LAZY FODDER BIDDING] Step 1: Offerte all'asta a sconto (Target: ${cycleTarget} carte, Prezzi Max: ${minMaxBuy}-${maxMaxBuy} cr). Rotazione sui giocatori Rating ${fodderRating}...`
+        valore: `[LAZY FODDER BIDDING] Step 1: Offerte all'asta a sconto (Target: ${cycleTarget} carte, Max offerte: ${MAX_BIDS_PER_CYCLE}, Prezzi Max: ${minMaxBuy}-${maxMaxBuy} cr). Rotazione sui giocatori Rating ${fodderRating}...`
       });
 
       // Loop Offerte all'asta (Step 1)
       // Loop Offerte all'asta (Step 1) - Esattamente identico al pattern vincente dei consumabili
       while (wonInThisCycle < cycleTarget && searchCount < maxBiddingSearches && start === true) {
         if (marketRestricted || earlyExitRateLimit) break;
+
+        if (totalBidsPlaced >= MAX_BIDS_PER_CYCLE) {
+          chrome.runtime.sendMessage({
+            tipo: 'LOG',
+            valore: `[LAZY FODDER BIDDING] Quota offerte ciclo raggiunta (${totalBidsPlaced}/${MAX_BIDS_PER_CYCLE}). Monitoraggio e risoluzione aste in corso...`
+          });
+          break;
+        }
 
         if (typeof crediti === 'number' && crediti < minMaxBuy && activeBids.size === 0) {
           chrome.runtime.sendMessage({
@@ -4937,6 +5109,7 @@ async function sendFodderLazyRequest() {
             let bidsInThisSearch = 0;
             let consecutiveFailedBidsInSearch = 0;
             for (const auction of targetAuctions) {
+              if (bidsInThisSearch >= 2) break; // Max 2 offerte per ricerca: previene burst EA e diversifica le ricerche
               if (consecutiveFailedBidsInSearch >= 2) break;
               if (start !== true || wonInThisCycle >= cycleTarget || (wonInThisCycle + activeBids.size) >= (cycleTarget + 2) || activeBids.size >= MAX_ACTIVE_WATCHLIST) break;
 
@@ -5003,7 +5176,6 @@ async function sendFodderLazyRequest() {
                     isConsumable: false
                   };
                   activeBids.set(String(auction.tradeId), bidData);
-                  activeBids.set(Number(auction.tradeId), bidData);
                   await storePendingBid(auction.tradeId, bidData);
 
                   chrome.runtime.sendMessage({
@@ -5015,8 +5187,17 @@ async function sendFodderLazyRequest() {
                   consecutive512InCycle = 0;
                   consecutiveErrorsCount = 0;
 
-                  // Punto B: Pacing umano naturale tra offerte (3.5s - 5.0s) per azzerare i picchi antispam EA
-                  await sleep(getRandomGaussian(4.0, 0.4, 3.5, 5.0) * 1000);
+                  // Punto B: Pacing umano naturale tra offerte (5.0s - 7.0s) per azzerare i picchi antispam EA
+                  await sleep(getRandomGaussian(5.5, 0.5, 4.8, 7.0) * 1000);
+
+                  // Pausa distensiva ogni 5 offerte piazzate (10s - 14s) per far defluire il leaky bucket rate-limit di EA
+                  if (totalBidsPlaced > 0 && totalBidsPlaced % 5 === 0) {
+                    chrome.runtime.sendMessage({
+                      tipo: 'LOG',
+                      valore: `[LAZY FODDER BID] Pausa distensiva anti-spam (${totalBidsPlaced} offerte piazzate)... Lascio defluire i contatori EA prima delle prossime offerte.`
+                    });
+                    await sleep(getRandomGaussian(12.0, 1.0, 10.0, 15.0) * 1000);
+                  }
                 } else {
                   consecutiveFailedBidsInSearch++;
                   if (lastBidErrorStatus === 461) {
@@ -5046,9 +5227,8 @@ async function sendFodderLazyRequest() {
                     reportTelemetry('EARLY_EXIT_RATE_LIMIT', `Avviso rate-limit EA (${lastBidErrorStatus}) su Bidding.`, { status: lastBidErrorStatus });
                     chrome.runtime.sendMessage({
                       tipo: 'LOG',
-                      valore: `[PREVENZIONE ANTI-BAN] Segnale di rate-limit EA (${lastBidErrorStatus}) rilevato su offerta asta. Interrompo gli acquisti per questo ciclo e avvio pausa preventiva di 3 minuti...`
+                      valore: `[PREVENZIONE ANTI-BAN] Segnale di rate-limit EA (${lastBidErrorStatus}) rilevato su offerta asta. Concludo anticipatamente gli acquisti e passo alla pausa di riposo.`
                     });
-                    await sleep(getRandomGaussian(180.0, 10.0, 160.0, 210.0) * 1000);
                     break;
                   }
                 }
@@ -5064,9 +5244,8 @@ async function sendFodderLazyRequest() {
             reportTelemetry('EARLY_EXIT_RATE_LIMIT', `Avviso rate-limit EA (${res.status}) su ricerca transfermarket.`, { status: res.status });
             chrome.runtime.sendMessage({
               tipo: 'LOG',
-              valore: `[PREVENZIONE ANTI-BAN] Segnale di rate-limit EA (${res.status}) rilevato su ricerca transfermarket. Interrompo gli acquisti per questo ciclo e avvio pausa preventiva di 3 minuti...`
+              valore: `[PREVENZIONE ANTI-BAN] Segnale di rate-limit EA (${res.status}) rilevato su ricerca transfermarket. Concludo anticipatamente gli acquisti e passo alla pausa di riposo.`
             });
-            await sleep(getRandomGaussian(180.0, 10.0, 160.0, 210.0) * 1000);
             break;
           }
         } catch (err) {
@@ -5081,8 +5260,10 @@ async function sendFodderLazyRequest() {
           }
         }
 
-        // Risoluzione Watchlist periodica e controrilanci (identico ai consumabili)
-        if (activeBids.size > 0) {
+        searchCount++;
+
+        // Risoluzione Watchlist periodica e controrilanci ogni 3 ricerche (se ci sono aste attive da monitorare)
+        if (activeBids.size > 0 && searchCount % 3 === 0) {
           const prevWon = carteAcquistate;
           await resolveWatchlist();
           if (carteAcquistate > prevWon) {
@@ -5094,21 +5275,22 @@ async function sendFodderLazyRequest() {
           }
         }
 
-        searchCount++;
         // Pacing umano tra ricerche per evitare rate limit: 3.0s - 4.5s con micro-pausa ogni 6 ricerche (identico ai consumabili)
-        if ((searchCount + 1) % 6 === 0) {
+        if (searchCount % 6 === 0) {
           await sleep(getRandomGaussian(6.0, 0.6, 5.0, 7.5) * 1000);
         } else {
           await sleep(getRandomGaussian(3.6, 0.4, 3.0, 4.5) * 1000);
         }
       }
 
-      // Risoluzione delle aste attive in chiusura (fino a 90 secondi) prima di procedere a Compra Ora (identico ai consumabili)
-      if (activeBids.size > 0 && start === true && !marketRestricted) {
-        while (activeBids.size > 0 && getUrgentAuctionTimeRemaining() <= 90000 && start === true && !marketRestricted) {
+      // Risoluzione delle aste attive in chiusura prima di procedere a Compra Ora
+      // SALTO COMPLETO se è scattato un rate limit per evitare ulteriori chiamate verso i server EA
+      if (activeBids.size > 0 && start === true && !marketRestricted && !earlyExitRateLimit) {
+        const maxUrgentWait = Date.now() + 60000;
+        while (activeBids.size > 0 && getUrgentAuctionTimeRemaining() <= 45000 && Date.now() < maxUrgentWait && start === true && !marketRestricted && !earlyExitRateLimit) {
           const secLeft = Math.max(0, Math.round(getUrgentAuctionTimeRemaining() / 1000));
           console.log(`[LAZY FODDER BID] Asta in chiusura entro ${secLeft}s. Attendo esito e controrilanci...`);
-          await sleep(getRandomGaussian(2.0, 0.2, 1.5, 2.5) * 1000);
+          await sleep(getRandomGaussian(4.0, 0.3, 3.5, 5.0) * 1000);
           const prevWon = carteAcquistate;
           await resolveWatchlist();
           if (carteAcquistate > prevWon) {
@@ -5279,9 +5461,10 @@ async function sendFodderLazyRequest() {
                       if (consecutive461InTopUp >= 3) {
                         chrome.runtime.sendMessage({
                           tipo: 'LOG',
-                          valore: `[LAZY FODDER TOP-UP] Rilevati 3 tentativi consecutivi anticipati su Floor BIN su ricerche diverse. Concludo lo Step 2 e passo alla vendita.`
+                          valore: `[LAZY FODDER TOP-UP] Rating ${nextPlayer.name || 'Fodder'} molto conteso su Floor BIN (3 tentativi anticipati). Cambio rating per diversificare il rifornimento...`
                         });
-                        break;
+                        topUpRatingIdx = (topUpRatingIdx + 1) % targetRatings.length;
+                        consecutive461InTopUp = 0;
                       }
 
                       // Pausa breve e passa subito a una nuova ricerca fresca con prezzo minimo variato
@@ -5293,7 +5476,7 @@ async function sendFodderLazyRequest() {
                 }
               }
 
-              if (consecutive461InTopUp >= 3 || earlyExitRateLimit) break;
+              if (earlyExitRateLimit) break;
 
               if (validAuctions.length === 0) {
                 await sleep(getRandomGaussian(3.0, 0.4, 2.4, 4.0) * 1000);
@@ -5319,6 +5502,8 @@ async function sendFodderLazyRequest() {
 
           topUpSearches++;
 
+          // Monitoraggio attivo Watchlist durante lo Step 2:
+          // Ogni 3 ricerche Compra Ora, controlla la Watchlist per difendere le aste con controrilanci tempestivi!
           if (activeBids.size > 0 && topUpSearches % 3 === 0 && start === true) {
             const prevWon = carteAcquistate;
             await resolveWatchlist();
@@ -5364,6 +5549,14 @@ async function sendFodderLazyRequest() {
         tipo: 'LOG',
         valore: `[MACRO-PAUSA RIGENERATIVA] Concluso ciclo dopo ${hoursActive}h di attività! Avvio macro-pausa di ${sleepMins} min per azzerare i contatori EA e favorire le vendite delle aste da 1 Ora...`
       });
+    } else if (earlyExitRateLimit) {
+      consecutiveSoftBansInSession = 0;
+      sleepMins = Math.round(getRandomGaussian(5.5, 0.4, 5.0, 6.5));
+      reportTelemetry('PREVENTIVE_COOLING_PAUSE', `Pausa preventiva anti-ban post early-exit (${sleepMins} min) [Fodder]`, { sleepMins });
+      chrome.runtime.sendMessage({
+        tipo: 'LOG',
+        valore: `[LAZY FODDER] Raffreddamento preventivo attivo: pausa di riposo di ${sleepMins} min per azzerare i contatori EA (Ripresa automatica al termine)...`
+      });
     } else if (Date.now() < listingRestrictedUntil && (finalPile.total - finalPile.active) >= 6) {
       consecutiveSoftBansInSession = 0;
       sleepMins = Math.max(10, Math.ceil((listingRestrictedUntil - Date.now()) / 60000));
@@ -5373,7 +5566,7 @@ async function sendFodderLazyRequest() {
       });
     } else if (finalPile.active < targetSize) {
       consecutiveSoftBansInSession = 0;
-      // Se la lista non � ancora piena, pause brevi (5-8 min) per rifornire subito la Tradepile!
+      // Se la lista non è ancora piena, pause brevi (5-8 min) per rifornire subito la Tradepile!
       // Pacing Dinamico tra i cicli in base al riempimento attuale della Tradepile
       if (finalPile.active < 40) {
         sleepMins = Math.round(getRandomGaussian(11.5, 0.8, 10.0, 13.0));
@@ -5387,13 +5580,6 @@ async function sendFodderLazyRequest() {
       chrome.runtime.sendMessage({
         tipo: 'LOG',
         valore: `[LAZY FODDER] Tradepile a quota ${finalPile.active}/${targetSize}. Pausa dinamica anti-spam di ${sleepMins} min per favorire le vendite prima del prossimo lotto...`
-      });
-    } else if (earlyExitRateLimit) {
-      consecutiveSoftBansInSession = 0;
-      sleepMins = Math.round(getRandomGaussian(10.0, 1.0, 9.0, 12.0));
-      chrome.runtime.sendMessage({
-        tipo: 'LOG',
-        valore: `[LAZY FODDER] Raffreddamento preventivo attivo: pausa di ${sleepMins} min per azzeramento contatori EA (Keep-alive attivo ogni 2 min)...`
       });
     } else {
       consecutiveSoftBansInSession = 0;
@@ -5422,8 +5608,7 @@ async function sendFodderLazyRequest() {
         try {
           const remainingMinutes = Math.round((totalSleepSeconds - elapsed) / 60);
           if (marketRestricted) {
-            if (elapsed % 960 === 0 && remainingMinutes >= 4) {
-              await triggerPinEvent("TRIGGER_PIN_WATCHLIST");
+            if (elapsed % 480 === 0 && remainingMinutes >= 2) {
               await triggerPinEvent("REQUEST_TOKEN_REFRESH");
               await sleep(1600);
               crediti = await getCrediti();
@@ -5439,6 +5624,11 @@ async function sendFodderLazyRequest() {
                 valore: `[COOLDOWN SILENZIATO] Sblocco soft-ban in corso... Mancano ${remainingMinutes} min alla ripresa.`
               });
             }
+          } else if (earlyExitRateLimit) {
+            chrome.runtime.sendMessage({
+              tipo: 'LOG',
+              valore: `[COOLDOWN PREVENTIVO] Riposo anti-ban in corso (azzeramento contatori EA)... Mancano ${remainingMinutes} min alla ripresa.`
+            });
           } else {
             await triggerPinEvent("TRIGGER_PIN_WATCHLIST");
             await clearSoldItem(cyclePrices);
