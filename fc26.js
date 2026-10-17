@@ -53,6 +53,7 @@ chrome.storage.local.get(['xUtSid'], (result) => {
 //variabili per sniping
 let numeroTentativi;
 let start = false;
+let crediti = 0;
 let carteAcquistate = 0;
 let carteVinteCiclo = 0;
 let listaFodder = []
