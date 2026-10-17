@@ -2,7 +2,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const numeroTentativi = document.getElementById('tentativi');
   const startBtn = document.getElementById('startBtn');
   const stopBtn = document.getElementById('stopBtn');
-  const tentativiInput = document.getElementById('tentativi');
   const tentativiRimasti = document.getElementById('tentativiRimasti');
   const carteAcquistate = document.getElementById('carteAcquistate');
   const crediti = document.getElementById('crediti');
@@ -70,6 +69,29 @@ document.addEventListener('DOMContentLoaded', () => {
     return lazySleepMinutesInput ? (parseInt(lazySleepMinutesInput.value) || 63) : 63;
   };
 
+  const setStatusBar = (dotClass, text, subtext) => {
+    const statusDot = document.getElementById('statusDot');
+    const statusText = document.getElementById('statusText');
+    const statusSubtext = document.getElementById('statusSubtext');
+    if (statusDot) statusDot.className = dotClass;
+    if (statusText) statusText.textContent = text;
+    if (statusSubtext) statusSubtext.textContent = subtext;
+  };
+
+  const setRunningUiState = (running) => {
+    if (running) {
+      startBtn.setAttribute('disabled', 'true');
+      numeroTentativi.setAttribute('disabled', 'true');
+      setControlsDisabled(true);
+      stopBtn.removeAttribute('disabled');
+    } else {
+      startBtn.removeAttribute('disabled');
+      numeroTentativi.removeAttribute('disabled');
+      setControlsDisabled(false);
+      stopBtn.setAttribute('disabled', 'true');
+    }
+  };
+
   const toggleTargetContainers = () => {
     const target = getSelectedTargetMode();
     if (target === 'fodder') {
@@ -100,7 +122,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const snipingRadio = document.getElementById('modeSniping');
         if (snipingRadio) snipingRadio.checked = true;
         toggleStrategyContainers();
-        chrome.storage.local.set({ strategyMode: 'sniping' });
+        queueSettingsSave({ strategyMode: 'sniping' });
       }
     }
   };
@@ -147,10 +169,25 @@ document.addEventListener('DOMContentLoaded', () => {
     if (lazySleepMinutesInput) disabled ? lazySleepMinutesInput.setAttribute('disabled', 'true') : lazySleepMinutesInput.removeAttribute('disabled');
   };
 
+  // Salvataggio impostazioni accumulato con debounce breve:
+  // evita una chiamata storage.local.set separata per ogni change handler
+  let pendingSettings = {};
+  let settingsSaveTimer = null;
+  const queueSettingsSave = (partial) => {
+    pendingSettings = Object.assign(pendingSettings, partial);
+    if (settingsSaveTimer) clearTimeout(settingsSaveTimer);
+    settingsSaveTimer = setTimeout(() => {
+      const toSave = pendingSettings;
+      pendingSettings = {};
+      settingsSaveTimer = null;
+      chrome.storage.local.set(toSave);
+    }, 250);
+  };
+
   targetModeRadios.forEach(radio => {
     radio.addEventListener('change', () => {
       toggleTargetContainers();
-      chrome.storage.local.set({
+      queueSettingsSave({
         targetMode: radio.value,
         fodderMode: radio.value === 'fodder'
       });
@@ -160,62 +197,62 @@ document.addEventListener('DOMContentLoaded', () => {
   if (autoBinCheck) {
     autoBinCheck.addEventListener('change', () => {
       toggleManualBinVisibility();
-      chrome.storage.local.set({ autoBin: autoBinCheck.checked });
+      queueSettingsSave({ autoBin: autoBinCheck.checked });
     });
   }
 
   if (manualBinInput) {
     manualBinInput.addEventListener('change', () => {
-      chrome.storage.local.set({ manualBin: parseInt(manualBinInput.value) || 0 });
+      queueSettingsSave({ manualBin: parseInt(manualBinInput.value) || 0 });
     });
   }
 
   if (maxSnipePriceInput) {
     maxSnipePriceInput.addEventListener('change', () => {
-      chrome.storage.local.set({ maxSnipePrice: parseInt(maxSnipePriceInput.value) || 0 });
+      queueSettingsSave({ maxSnipePrice: parseInt(maxSnipePriceInput.value) || 0 });
     });
   }
 
   if (chemStyleSelect) {
     chemStyleSelect.addEventListener('change', () => {
-      chrome.storage.local.set({ chemStyle: chemStyleSelect.value });
+      queueSettingsSave({ chemStyle: chemStyleSelect.value });
     });
   }
 
   fodderRatingRadios.forEach(radio => {
     radio.addEventListener('change', () => {
-      chrome.storage.local.set({ fodderRating: radio.value });
+      queueSettingsSave({ fodderRating: radio.value });
     });
   });
 
   strategyModeRadios.forEach(radio => {
     radio.addEventListener('change', () => {
       toggleStrategyContainers();
-      chrome.storage.local.set({ strategyMode: radio.value });
+      queueSettingsSave({ strategyMode: radio.value });
     });
   });
 
   if (minMarginInput) {
     minMarginInput.addEventListener('change', () => {
-      chrome.storage.local.set({ minMargin: parseInt(minMarginInput.value) || 200 });
+      queueSettingsSave({ minMargin: parseInt(minMarginInput.value) || 200 });
     });
   }
 
   if (targetTradepileSizeInput) {
     targetTradepileSizeInput.addEventListener('change', () => {
-      chrome.storage.local.set({ targetTradepileSize: parseInt(targetTradepileSizeInput.value) || 50 });
+      queueSettingsSave({ targetTradepileSize: parseInt(targetTradepileSizeInput.value) || 50 });
     });
   }
 
   if (lazyMarkupPercentInput) {
     lazyMarkupPercentInput.addEventListener('change', () => {
-      chrome.storage.local.set({ lazyMarkupPercent: parseInt(lazyMarkupPercentInput.value) || 10 });
+      queueSettingsSave({ lazyMarkupPercent: parseInt(lazyMarkupPercentInput.value) || 10 });
     });
   }
 
   if (lazySleepMinutesInput) {
     lazySleepMinutesInput.addEventListener('change', () => {
-      chrome.storage.local.set({ lazySleepMinutes: parseInt(lazySleepMinutesInput.value) || 63 });
+      queueSettingsSave({ lazySleepMinutes: parseInt(lazySleepMinutesInput.value) || 63 });
     });
   }
 
@@ -224,7 +261,7 @@ document.addEventListener('DOMContentLoaded', () => {
     'numeroTentativi', 'targetMode', 'fodderMode', 'fodderRating',
     'chemStyle', 'autoBin', 'manualBin', 'strategyMode', 'minMargin', 'maxSnipePrice',
     'targetTradepileSize', 'lazyMarkupPercent', 'lazySleepMinutes',
-    'tradepileCount', 'crediti', 'carteAcquistate'
+    'tradepileCount', 'crediti', 'carteAcquistate', 'start', 'botStatus'
   ], (result) => {
     if (result.tradepileCount) {
       const tpEl = document.getElementById('tradepileCount');
@@ -300,9 +337,21 @@ document.addEventListener('DOMContentLoaded', () => {
     if (result.minMargin && minMarginInput) {
       minMarginInput.value = result.minMargin;
     }
+
+    // Ripristina lo stato di esecuzione: se il bot era attivo, Stop deve rifletterlo
+    if (result.start === true) {
+      setRunningUiState(true);
+      setStatusBar('text-success', 'In esecuzione', 'Sessione ripristinata');
+    }
+    if (result.botStatus && typeof result.botStatus === 'object') {
+      const bs = result.botStatus;
+      if (bs.text || bs.subtext || bs.dotClass) {
+        setStatusBar(bs.dotClass || 'text-secondary', bs.text || 'Pronto', bs.subtext || '');
+      }
+    }
   });
 
-  // Disabilito il tasto stop all'inizio
+  // Disabilito il tasto stop all'inizio (verrà riabilitato dal ripristino se start=true)
   stopBtn.setAttribute('disabled', 'true');
 
   startBtn.addEventListener('click', () => {
@@ -319,7 +368,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const lazyMarkupPercent = getLazyMarkupPercent();
     const lazySleepMinutes = getLazySleepMinutes();
 
-    chrome.storage.local.set({
+    const settings = {
       numeroTentativi: numeroTentativi.value,
       targetMode: selectedTarget,
       fodderMode: selectedTarget === 'fodder',
@@ -332,8 +381,9 @@ document.addEventListener('DOMContentLoaded', () => {
       minMargin: minMargin,
       targetTradepileSize: targetTradepileSize,
       lazyMarkupPercent: lazyMarkupPercent,
-      lazySleepMinutes: lazySleepMinutes
-    });
+      lazySleepMinutes: lazySleepMinutes,
+      start: true
+    };
 
     const startPayload = {
       tipo: 'START',
@@ -351,44 +401,51 @@ document.addEventListener('DOMContentLoaded', () => {
       lazySleepMinutes: lazySleepMinutes
     };
 
-    chrome.runtime.sendMessage(startPayload);
+    // Svuota eventuali salvataggi debounced pendenti prima dello START
+    if (settingsSaveTimer) {
+      clearTimeout(settingsSaveTimer);
+      Object.assign(settings, pendingSettings);
+      pendingSettings = {};
+      settingsSaveTimer = null;
+    }
 
-    chrome.runtime.sendMessage({
-      tipo: 'FODDER_MODE',
-      valore: selectedTarget === 'fodder',
-      targetMode: selectedTarget,
-      rating: selectedRating,
-      chemStyle: selectedChemStyle,
-      autoBin: autoBin,
-      manualBin: manualBin,
-      strategyMode: selectedStrategy,
-      minMargin: minMargin,
-      targetTradepileSize: targetTradepileSize,
-      lazyMarkupPercent: lazyMarkupPercent,
-      lazySleepMinutes: lazySleepMinutes
+    // Attende il salvataggio dello storage prima di inviare START al background
+    chrome.storage.local.set(settings, () => {
+      chrome.runtime.sendMessage(startPayload, () => {
+        // Compatibilità: il background può non rispondere (nessun sendResponse)
+        if (chrome.runtime.lastError) {
+          console.warn('[FC Sniper UI] Nessun acknowledgement dal background:', chrome.runtime.lastError.message);
+        }
+      });
+
+      // Disabilito i controlli e abilito il tasto stop
+      setRunningUiState(true);
     });
-
-    // Disabilito i controlli e abilito il tasto stop
-    startBtn.setAttribute('disabled', 'true');
-    tentativiInput.setAttribute('disabled', 'true');
-    setControlsDisabled(true);
-    stopBtn.removeAttribute('disabled');
   });
 
   stopBtn.addEventListener('click', () => {
-    chrome.runtime.sendMessage({ tipo: 'START', valore: false });
+    chrome.runtime.sendMessage({ tipo: 'START', valore: false }, () => {
+      if (chrome.runtime.lastError) {
+        console.warn('[FC Sniper UI] Nessun acknowledgement dal background:', chrome.runtime.lastError.message);
+      }
+    });
+    chrome.storage.local.set({ start: false });
 
     // Abilito i controlli e disabilito il tasto stop
-    startBtn.removeAttribute('disabled');
-    tentativiInput.removeAttribute('disabled');
-    setControlsDisabled(false);
-    stopBtn.setAttribute('disabled', 'true');
-    const statusDot = document.getElementById('statusDot');
-    const statusText = document.getElementById('statusText');
-    const statusSubtext = document.getElementById('statusSubtext');
-    if (statusDot) statusDot.className = 'text-secondary';
-    if (statusText) statusText.textContent = 'Arrestato';
-    if (statusSubtext) statusSubtext.textContent = 'Operazione interrotta dall\'utente';
+    setRunningUiState(false);
+    setStatusBar('text-secondary', 'Arrestato', 'Operazione interrotta dall\'utente');
+  });
+
+  // Toggle collapse minimale (sostituisce bootstrap.bundle.min.js)
+  document.querySelectorAll('[data-bs-toggle="collapse"]').forEach(toggle => {
+    toggle.addEventListener('click', (e) => {
+      e.preventDefault();
+      const selector = toggle.getAttribute('href') || toggle.getAttribute('data-bs-target');
+      const target = selector ? document.querySelector(selector) : null;
+      if (!target) return;
+      const isOpen = target.classList.toggle('show');
+      toggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+    });
   });
 
   // Gestione pulsanti di filtro del log
@@ -408,8 +465,6 @@ document.addEventListener('DOMContentLoaded', () => {
     clearBtn.addEventListener('click', () => {
       const logConsole = document.getElementById('logConsole');
       if (logConsole) logConsole.innerHTML = '';
-      const logViewer = document.getElementById('logViewer');
-      if (logViewer) logViewer.value = '';
       allLogRecords.length = 0;
       totalLogEvents = 0;
       const logCount = document.getElementById('logCount');
@@ -432,13 +487,18 @@ document.addEventListener('DOMContentLoaded', () => {
       const creditiVal = document.getElementById('crediti')?.textContent?.trim() || 'N/D';
       const carteVal = document.getElementById('carteAcquistate')?.textContent?.trim() || '0';
       const tentativiVal = document.getElementById('tentativi')?.value || 'N/D';
+      const truncated = totalLogEvents > allLogRecords.length;
 
       let content = `=================================================================\n`;
       content += `  FC Sniper & Trader - Report Log Sessione\n`;
       content += `  Versione: ${verText} | Data Export: ${now.toLocaleString()}\n`;
       content += `  Modalità: ${String(targetMode).toUpperCase()} | Strategia: ${String(strategyMode).toUpperCase()}\n`;
       content += `  Crediti: ${creditiVal} | Carte Acquistate: ${carteVal} | Tentativi: ${tentativiVal}\n`;
-      content += `  Totale Eventi Registrati: ${allLogRecords.length}\n`;
+      content += `  Totale Eventi Registrati: ${totalLogEvents}\n`;
+      content += `  Eventi Inclusi nel Report: ${allLogRecords.length} (buffer max ${MAX_LOG_RECORDS})\n`;
+      if (truncated) {
+        content += `  NOTA: Report troncato — i ${totalLogEvents - allLogRecords.length} eventi più vecchi non sono inclusi.\n`;
+      }
       content += `=================================================================\n\n`;
 
       if (allLogRecords.length > 0) {
@@ -446,12 +506,7 @@ document.addEventListener('DOMContentLoaded', () => {
           content += `[${r.timestamp}] [${r.tag}] ${r.raw}\n`;
         });
       } else {
-        const logViewer = document.getElementById('logViewer');
-        if (logViewer && logViewer.value.trim()) {
-          content += logViewer.value;
-        } else {
-          content += `Nessun evento registrato nella sessione corrente.\n`;
-        }
+        content += `Nessun evento registrato nella sessione corrente.\n`;
       }
 
       content += `\n=================================================================\n`;
@@ -470,54 +525,61 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Ascolto i messaggi di log dalla background script
-  chrome.runtime.onMessage.addListener(async (message) => {
-    if (message.tipo === 'LOG') {
-      logToScreen(message.valore);
-    }
-  });
+  // Unico listener runtime.onMessage con dispatch per tipo di messaggio
+  chrome.runtime.onMessage.addListener((message) => {
+    if (!message || !message.tipo) return;
 
-  // Ascolto i messaggi di START/STOP dalla background script
-  chrome.runtime.onMessage.addListener(async (message) => {
-    if (message.tipo === 'START') {
-      startBtn.removeAttribute('disabled');
-      tentativiInput.removeAttribute('disabled');
-      setControlsDisabled(false);
-      stopBtn.setAttribute('disabled', 'true');
-      const statusDot = document.getElementById('statusDot');
-      const statusText = document.getElementById('statusText');
-      const statusSubtext = document.getElementById('statusSubtext');
-      if (statusDot) statusDot.className = 'text-secondary';
-      if (statusText) statusText.textContent = 'Completato / Pronto';
-      if (statusSubtext) statusSubtext.textContent = 'Sessione terminata';
-    }
-    else if (message.tipo == 'TENTATIVI_RIMASTI') {
-      tentativiRimasti.textContent = message.valore !== "" ? String(message.valore) : "-";
-    }
-    else if (message.tipo == 'CARTA_ACQUISTATA') {
-      carteAcquistate.textContent = message.valore !== "" ? String(message.valore) : "0";
-    }
-    else if (message.tipo == 'TRADEPILE_COUNT') {
-      const tradepileCount = document.getElementById('tradepileCount');
-      if (tradepileCount) {
-        tradepileCount.textContent = message.valore !== "" ? String(message.valore) : "-";
+    switch (message.tipo) {
+      case 'LOG':
+        logToScreen(message.valore);
+        break;
+
+      case 'START':
+        // Il bot si è fermato da solo (fine ricerche, errore, ecc.)
+        setRunningUiState(false);
+        chrome.storage.local.set({ start: false });
+        setStatusBar('text-secondary', 'Completato / Pronto', 'Sessione terminata');
+        break;
+
+      case 'TENTATIVI_RIMASTI':
+        if (tentativiRimasti) {
+          tentativiRimasti.textContent = message.valore !== "" ? String(message.valore) : "-";
+        }
+        break;
+
+      case 'CARTA_ACQUISTATA':
+        if (carteAcquistate) {
+          carteAcquistate.textContent = message.valore !== "" ? String(message.valore) : "0";
+        }
+        break;
+
+      case 'TRADEPILE_COUNT': {
+        const tradepileCount = document.getElementById('tradepileCount');
+        if (tradepileCount) {
+          tradepileCount.textContent = message.valore !== "" ? String(message.valore) : "-";
+        }
+        break;
       }
-    }
-  });
 
-  // Ascolto i messaggi per l'aggiornamento dei crediti
-  chrome.runtime.onMessage.addListener(async (message) => {
-    if (message.tipo === 'CREDITI') {
-      crediti.textContent = typeof message.valore === 'number'
-        ? message.valore.toLocaleString('it-IT')
-        : (message.valore ? String(message.valore) : 'N/D');
+      case 'CREDITI':
+        if (crediti) {
+          crediti.textContent = typeof message.valore === 'number'
+            ? message.valore.toLocaleString('it-IT')
+            : (message.valore ? String(message.valore) : 'N/D');
+        }
+        break;
     }
   });
 });
 
 let currentFilter = 'all';
 let totalLogEvents = 0;
+const MAX_LOG_RECORDS = 1000;
 const allLogRecords = [];
+
+function isScrolledToBottom(el) {
+  return el.scrollHeight - el.scrollTop - el.clientHeight < 30;
+}
 
 function applyLogFilter() {
   const rows = document.querySelectorAll('#logConsole .log-row');
@@ -536,7 +598,9 @@ function applyLogFilter() {
     }
   });
   const logConsole = document.getElementById('logConsole');
-  if (logConsole) logConsole.scrollTop = logConsole.scrollHeight;
+  if (logConsole && isScrolledToBottom(logConsole)) {
+    logConsole.scrollTop = logConsole.scrollHeight;
+  }
 }
 
 function classifyLogMessage(raw) {
@@ -641,21 +705,14 @@ function updateBotStatusBar(category, tag, text) {
 function logToScreen(message) {
   if (!message) return;
   const logConsole = document.getElementById('logConsole');
-  const logViewer = document.getElementById('logViewer');
   const logCount = document.getElementById('logCount');
-
-  // Fallback per logViewer grezzo (mantiene compatibilità)
-  if (logViewer) {
-    const timestamp = new Date().toLocaleTimeString();
-    logViewer.value += `[${timestamp}] ${message}\n`;
-  }
-
   if (!logConsole) return;
 
   const now = new Date();
   const timeStr = now.toTimeString().split(' ')[0]; // HH:MM:SS
   const { category, tag, text } = classifyLogMessage(message);
 
+  // Buffer bounded: mantiene al massimo MAX_LOG_RECORDS record per l'export
   allLogRecords.push({
     timestamp: timeStr,
     iso: now.toISOString(),
@@ -663,8 +720,13 @@ function logToScreen(message) {
     tag,
     raw: String(message || '').trim()
   });
+  if (allLogRecords.length > MAX_LOG_RECORDS) {
+    allLogRecords.splice(0, allLogRecords.length - MAX_LOG_RECORDS);
+  }
 
   updateBotStatusBar(category, tag, text);
+
+  const wasAtBottom = isScrolledToBottom(logConsole);
 
   const row = document.createElement('div');
   row.className = `log-row filter-${category}`;
@@ -708,36 +770,8 @@ function logToScreen(message) {
     logConsole.removeChild(logConsole.firstElementChild);
   }
 
-  logConsole.scrollTop = logConsole.scrollHeight;
-}
-
-// Keep-Alive Connection dalla UI per prevenire la chiusura del Service Worker in Manifest V3
-let uiKeepAlivePort = null;
-function setupUiKeepAlive() {
-  try {
-    uiKeepAlivePort = chrome.runtime.connect({ name: "KEEP_ALIVE_PORT" });
-    uiKeepAlivePort.onDisconnect.addListener(() => {
-      const _ = chrome.runtime.lastError;
-      uiKeepAlivePort = null;
-      setTimeout(setupUiKeepAlive, 1000);
-    });
-    uiKeepAlivePort.onMessage.addListener(() => {});
-  } catch (e) {
-    setTimeout(setupUiKeepAlive, 1000);
+  // Scroll automatico solo se l'utente era già in fondo alla console
+  if (wasAtBottom) {
+    logConsole.scrollTop = logConsole.scrollHeight;
   }
 }
-setupUiKeepAlive();
-
-// Ping ogni 20 secondi: azzera il timer di inattività del Service Worker finché la UI è aperta
-setInterval(() => {
-  try {
-    if (uiKeepAlivePort) {
-      uiKeepAlivePort.postMessage({ type: "KEEP_ALIVE_PING" });
-    } else {
-      setupUiKeepAlive();
-    }
-  } catch (e) {
-    setupUiKeepAlive();
-  }
-}, 20000);
-

@@ -7,12 +7,17 @@
     "webRequest",
     "storage",
     "tabs",
-    "scripting",
     "alarms",
-    "declarativeNetRequest", "offscreen"
+    "declarativeNetRequest",
+    "offscreen"
   ],
   "host_permissions": [
-    "<all_urls>"
+    "https://www.ea.com/*",
+    "https://utas.mob.v1.prd.futc-ext.gcp.ea.com/*",
+    "https://*.data.ea.com/*",
+    "http://127.0.0.1:3000/*",
+    "http://localhost:3000/*",
+    "https://www.futwiz.com/*"
   ],
   "declarative_net_request": {
     "rule_resources": [
@@ -24,13 +29,13 @@
     ]
   },
   "background": {
-    "service_worker": "fc26.js"
+    "service_worker": "fc26.js",
+    "type": "module"
   },
   "content_scripts": [
     {
       "matches": [
-        "https://www.ea.com/ea-sports-fc/ultimate-team/web-app/*",
-        "https://www.ea.com/*"
+        "https://www.ea.com/ea-sports-fc/ultimate-team/web-app/*"
       ],
       "js": ["content.js"],
       "run_at": "document_idle"
@@ -45,6 +50,6 @@
     }
   ],
   "action": {
-    "default_title": "FC26"
+    "default_title": "FC27"
   }
 }

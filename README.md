@@ -27,14 +27,28 @@ Estensione browser (Manifest V3) per l'automazione avanzata del trading sulla We
 
 Il bot è strutturato secondo i più moderni standard **Chrome Extensions Manifest V3**:
 
-* **`fc26.js` (Service Worker / Background)**:
-  Contiene l'intero motore decisionale, la gestione dello stato, le chiamate HTTP asincrone verso gli endpoint UTAS di EA, i gestori di rate limiting, il calcolo dei ritardi gaussiani e il ciclo dormiente del Lazy Trading.
+* **`fc26.js` (Service Worker / Background, ES Module)**:
+  Orchestratore del bot: gestione dello stato, cicli di strategia (sniping, bidding, lazy), gestori di rate limiting e errori EA (401, 458, 429, 426, 512). Caricato come modulo ES (`"type": "module"` in `manifest.json`) e importa la logica condivisa da `src/`.
+* **`src/core/`**:
+  * `utils.js`: utilità pure (sleep, ritardi gaussiani Box-Muller, scalini EA `getEaStep`, arrotondamenti, margini dinamici, parsing prezzi `2K`/`1.2M`).
+  * `storage.js`: accesso centralizzato a `chrome.storage.local` (schema chiavi impostazioni e offerte pendenti).
+  * `telemetry.js`: invio telemetria runtime al server locale (`http://127.0.0.1:3000/event`).
+* **`src/ea/`**:
+  * `endpoints.js`: URL base e path degli endpoint UTAS di EA.
+  * `client.js`: helper `buildEaHeaders` / `eaFetch` per le chiamate autenticate.
+  * `constants.js`: metadati ufficiali degli Stili Intesa (PlayStyle).
+* **`src/services/fodder-service.js`**: recupero e normalizzazione della lista fodder dal server locale.
+* **`src/strategies/strategy-utils.js`**: utilità condivise dai motori di strategia (es. calcolo asta in scadenza urgente).
 * **`content.js` (Content Script)**:
-  Inietta `pin-bridge.js` all'interno del mondo di esecuzione principale (`MAIN` world) della pagina web ed instaura un canale bidirezionale tramite `window.postMessage` per la sincronizzazione telemetrica.
+  Inietta `pin-bridge.js` all'interno del mondo di esecuzione principale (`MAIN` world) della pagina web ed instaura un canale bidirezionale tramite `window.postMessage` per la sincronizzazione telemetrica. Mantiene inoltre la porta `KEEP_ALIVE_PORT` che impedisce a Chrome di terminare il Service Worker mentre la Web App è aperta.
 * **`pin-bridge.js` (Native World Bridge)**:
   Si aggancia al servizio nativo `window.services.PIN` o all'injector Angular della Web App di EA. Genera eventi telemetrici nativi conformi (`page_view`, click sui filtri, visualizzazione dettagli carta e navigazione transfer market), garantendo che il counter di telemetria dell'account EA (`stepCounter`) rimanga perfettamente sincronizzato con le richieste di rete.
-* **`ui.js` & `index.html` (Interfaccia Grafica / Popup)**:
-  Fornisce una dashboard intuitiva con selezione in tempo reale della strategia, configurazione dinamica dei parametri, visualizzazione crediti, log di debug scorrevole e salvataggio automatico dello stato su `chrome.storage.local`.
+* **`offscreen.js` + `offscreen.html` (Offscreen Document on-demand)**:
+  Documento offscreen con audio muto usato come keep-alive di riserva: viene creato **solo quando il bot è in esecuzione** (`ensureOffscreenDocument`) e chiuso allo stop. Nessun autostart all'avvio dell'estensione.
+* **`ui.js`, `index.html` & `ui.css` (Interfaccia Grafica / Dashboard)**:
+  Dashboard con selezione della strategia, configurazione dinamica dei parametri, visualizzazione crediti, console log con filtri ed export, salvataggio automatico con debounce su `chrome.storage.local`. Tutti gli asset sono locali (nessun CDN, nessun bundle Bootstrap: il collapse è implementato in poche righe di JS).
+* **`telemetry-server.js` (Server Locale Opzionale)**:
+  Server Node.js standalone (`node telemetry-server.js`) in ascolto su `127.0.0.1:3000`. Espone `POST /event` (telemetria runtime con rotazione log a 1MB), `GET /status` e `GET /fut/fodder` (lista fodder da `fodder-data.json` locale, con parsing prezzi `K`/`M` normalizzato in crediti). CORS limitato all'estensione e a localhost.
 
 ---
 
@@ -145,7 +159,7 @@ Nel Lazy Trading, le carte acquistate al floor di mercato vengono immediatamente
 
 $$\text{prezzoGrezzo} = \text{liveFloorBin} \times \left(1 + \frac{\text{markupPercent}}{100}\right)$$
 
-Poiché EA accetta sul mercato solo prezzi allineati a scalini discreti (step di 50 o 100 crediti), il bot implementa la funzione `roundUpToStep(prezzo)`:
+Poiché EA accetta sul mercato solo prezzi allineati a scalini discreti (step di 50 o 100 crediti), il bot implementa la funzione `roundUpToStep(prezzo)` (in `src/core/utils.js`):
 
 ```javascript
 function getEaStep(price) {
@@ -179,10 +193,10 @@ function roundUpToStep(price) {
 Se un'estensione Manifest V3 rimane inattiva per più di **30 secondi**, Chrome termina forzatamente il Service Worker in background (`fc26.js`). Inoltre, se i server UTAS di EA non ricevono richieste per più di **15-20 minuti**, invalidano il token di autenticazione (`x-ut-sid`), causando la disconnessione della Web App (`Errore 401`).
 
 Il bot adotta una protezione a doppio strato che risolve entrambi i problemi:
-1. **Canale Port Keep-Alive Permanente (Chrome MV3)**:
-   * Sia `content.js` (nella scheda della Web App) sia `ui.js` (nella scheda della dashboard) instaurano una connessione `chrome.runtime.connect({ name: "KEEP_ALIVE_PORT" })`.
-   * Un ping ogni **20 secondi** azzera continuativamente il timer di inattività di Chrome, garantendo che il Service Worker non venga **mai addormentato o terminato dal browser**, anche durante ore di pausa o cicli notturni.
-   * Viene inoltre registrato un allarme di riserva periodico con `chrome.alarms` per la massima ridondanza.
+1. **Keep-Alive Service Worker (Chrome MV3)**:
+   * `content.js` (nella scheda della Web App) instaura una connessione `chrome.runtime.connect({ name: "KEEP_ALIVE_PORT" })` con reconnect single-flight: la porta aperta azzera il timer di inattività di Chrome e impedisce che il Service Worker venga terminato mentre la Web App è aperta.
+   * Quando il bot viene avviato, il Service Worker crea un **offscreen document** con audio muto (`offscreen.js`) come keep-alive di riserva; alla pressione di Stop (o su arresto per CAPTCHA/401/fine ciclo) il documento viene chiuso automaticamente. Nessun offscreen viene creato all'avvio dell'estensione.
+   * I cicli di pausa eseguono inoltre un leggero storage touch periodico come ulteriore ridondanza.
 2. **Heartbeat Attivo EA ogni 2 Minuti (Anti-Disconnessione Web App)**:
    * Sia durante il sonno di **63 minuti** del Lazy Trading sia durante la **pausa di sicurezza di 10 minuti** per soft-ban:
      1. Il ciclo esegue un micro-ping leggero ogni **120 secondi** (`TRIGGER_PIN_WATCHLIST` + `getCrediti()`).
@@ -264,12 +278,17 @@ L'interfaccia include:
 2. Abilita la **"Modalità sviluppatore"** in alto a destra.
 3. Clicca su **"Carica estensione non pacchettizzata"** e seleziona la cartella del progetto:
    `c:\Programmazione\Javascript\fcsniper`
-4. Apri la **Web App di EA SPORTS FC**:
+4. **(Opzionale ma consigliato) Avvia il server telemetry locale** per la lista fodder e i log runtime:
+   ```bash
+   node telemetry-server.js
+   ```
+   Il server ascolta solo su `127.0.0.1:3000`. Per l'endpoint `GET /fut/fodder` serve un file `fodder-data.json` nella stessa cartella (non incluso nel repository); se assente, l'endpoint risponde `503` e la modalità Fodder non riceve liste.
+5. Apri la **Web App di EA SPORTS FC**:
    `https://www.ea.com/ea-sports-fc/ultimate-team/web-app/`
-5. Effettua il login al tuo account Ultimate Team.
-6. Clicca sull'icona dell'estensione **FC Sniper** nella barra degli strumenti di Chrome:
+6. Effettua il login al tuo account Ultimate Team.
+7. Clicca sull'icona dell'estensione **FC Sniper** nella barra degli strumenti di Chrome:
    * Seleziona Strategia: **Lazy**
    * Imposta lo Stile Intesa: **Ombra** oppure **Tutti (Ombra + Cacciatore)**
    * Imposta il Target Carte: **50**
    * Clicca su **Start**.
-7. Lascia la scheda della Web App aperta: il bot gestirà in totale autonomia acquisti, vendite, riscossioni e pause.
+8. Lascia la scheda della Web App aperta: il bot gestirà in totale autonomia acquisti, vendite, riscossioni e pause.
