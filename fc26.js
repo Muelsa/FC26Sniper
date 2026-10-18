@@ -55,6 +55,7 @@ let numeroTentativi;
 let start = false;
 let crediti = 0;
 let carteAcquistate = 0;
+let carteVendute = 0;
 let carteVinteCiclo = 0;
 let listaFodder = []
 let ricercaFodder = false;
@@ -607,6 +608,10 @@ async function handleStartMessage(message) {
       lazyMarkupPercent = message.lazyMarkupPercent || await getLazyMarkupPercent();
       lazySleepMinutes = message.lazySleepMinutes || await getLazySleepMinutes();
       carteAcquistate = 0;
+      carteVendute = 0;
+      chrome.runtime.sendMessage({ tipo: 'CARTA_ACQUISTATA', valore: 0 });
+      chrome.runtime.sendMessage({ tipo: 'CARTA_VENDUTA', valore: 0 });
+      try { chrome.storage.local.set({ carteAcquistate: 0, carteVendute: 0 }); } catch (_) { }
       carteVinteCiclo = 0;
       consecutive401Errors = 0;
       consecutiveBidErrors = 0;
@@ -816,9 +821,12 @@ async function clearSoldItem(cachedPrices = {}) {
 
       if (response.ok) {
         console.log(`[FC Sniper] Lista trasferimenti pulita con successo: rimosse ${soldItems.length} carte vendute.`);
+        carteVendute += soldItems.length;
+        chrome.runtime.sendMessage({ tipo: 'CARTA_VENDUTA', valore: carteVendute });
+        try { chrome.storage.local.set({ carteVendute }); } catch (_) { }
         chrome.runtime.sendMessage({
           tipo: 'LOG',
-          valore: `[TRADEPILE] Incassate e rimosse ${soldItems.length} carte vendute dalla lista trasferimenti!`
+          valore: `[TRADEPILE] Incassate e rimosse ${soldItems.length} carte vendute dalla lista trasferimenti! (Totale sessione: ${carteVendute})`
         });
         reportTelemetry('SOLD_ITEMS_CLEARED', `Pulite ${soldItems.length} carte vendute dalla Tradepile`, { count: soldItems.length });
         await sleep(getRandomGaussian(0.8, 0.1, 0.6, 1.0) * 1000);
@@ -1381,6 +1389,7 @@ async function checkAndProcessWatchlistForLazy(cyclePrices = {}) {
             recoveredWon++;
             carteAcquistate += 1;
             chrome.runtime.sendMessage({ tipo: 'CARTA_ACQUISTATA', valore: carteAcquistate });
+            try { chrome.storage.local.set({ carteAcquistate }); } catch (_) { }
             chrome.runtime.sendMessage({
               tipo: 'LOG',
               valore: `[ASTA VINTA RISCATTATA] Asta vinta a ${buyPrice} crediti! Spostata in Tradepile e messa in vendita a ${sellPrice}${tierTag}.`
@@ -1557,6 +1566,7 @@ async function sendBuyNowRequest(tradeId, buyNowPrice, itemId) {
       idCarteAcquistate.push(itemId);
       chrome.runtime.sendMessage({ tipo: 'LOG', valore: `[ACQUISTO RIUSCITO] Carta acquistata al prezzo di ${buyNowPrice} crediti!` });
       chrome.runtime.sendMessage({ tipo: 'CARTA_ACQUISTATA', valore: carteAcquistate });
+      try { chrome.storage.local.set({ carteAcquistate }); } catch (_) { }
       return true;
     } else {
       lastBuyNowErrorStatus = response.status;
@@ -2535,6 +2545,7 @@ async function resolveWatchlist() {
           carteAcquistate += 1;
           carteVinteCiclo += 1;
           chrome.runtime.sendMessage({ tipo: 'CARTA_ACQUISTATA', valore: carteAcquistate });
+          try { chrome.storage.local.set({ carteAcquistate }); } catch (_) { }
 
           let sellPrice = tracked?.sellPrice;
           let tierTag = "";
@@ -3781,9 +3792,9 @@ async function sendConsumableLazyRequest() {
         let bidPriceOffset = 0;
         const styleSearchCounts = {};
         const bidsPerStyle = {};
-        // Quota 50 offerte a ciclo (sfrutta al massimo i 50 slot della Watchlist EA)
+        // Quota 30 offerte a ciclo (cap ridotto da 50 a 30 per ridurre i soft-ban EA)
         // Se i posti liberi in lista trasferimenti sono pochi (< 25), scala proporzionalmente per evitare esuberi
-        const MAX_BIDS_PER_CYCLE = rawMissing >= 25 ? 50 : Math.min(50, Math.max(cycleTarget, rawMissing * 2));
+        const MAX_BIDS_PER_CYCLE = rawMissing >= 25 ? 30 : Math.min(30, Math.max(cycleTarget, rawMissing * 2));
         // Quota paritaria esatta di offerte per ciascuno stile (es. 50 / 4 = 12-13 offerte per stile = ~25% ciascuna)
         const bidsBaseQuota = Math.max(1, Math.floor(MAX_BIDS_PER_CYCLE / targetStyles.length));
         const bidsRemainder = MAX_BIDS_PER_CYCLE % targetStyles.length;
@@ -4440,7 +4451,9 @@ async function sendConsumableLazyRequest() {
     }
 
     const totalSleepSeconds = sleepMins * 60;
-    const heartbeatInterval = 120; // 2 minuti: heartbeat per mantenere viva la sessione, incassare vendite e rilistare
+    // Heartbeat con jitter gaussiano (~2 min, range 95-150s): incassa vendite e rilista senza pattern temporale fisso rilevabile
+    let nextHeartbeatAt = Math.round(getRandomGaussian(120, 10, 95, 150));
+    let nextPingAt = Math.round(getRandomGaussian(480, 30, 360, 600));
 
     let elapsed = 0;
     while (elapsed < totalSleepSeconds && start === true) {
@@ -4454,12 +4467,14 @@ async function sendConsumableLazyRequest() {
         } catch (_) { }
       }
 
-      if (elapsed % heartbeatInterval === 0 && start === true) {
+      if (elapsed >= nextHeartbeatAt && start === true) {
+        nextHeartbeatAt = elapsed + Math.round(getRandomGaussian(120, 10, 95, 150));
         try {
           const remainingMinutes = Math.round((totalSleepSeconds - elapsed) / 60);
           if (marketRestricted) {
-            // Ogni 8 minuti (480s) eseguiamo un singolo ping leggerissimo + refresh nativo Web App per non far scadere il token X-UT-SID (Idle Timeout & 3h OAuth TTL)
-            if (elapsed % 480 === 0 && remainingMinutes >= 2) {
+            // Ping leggerissimo + refresh nativo Web App con jitter gaussiano (~8 min, range 6-10 min) per non far scadere il token X-UT-SID senza pattern fisso
+            if (elapsed >= nextPingAt && remainingMinutes >= 2) {
+              nextPingAt = elapsed + Math.round(getRandomGaussian(480, 30, 360, 600));
               await triggerPinEvent("REQUEST_TOKEN_REFRESH");
               await sleep(1600);
               crediti = await getCrediti();
@@ -4507,6 +4522,10 @@ async function sendConsumableLazyRequest() {
     if (start === true) {
       if (isMacroPause) {
         sessionActiveStartTime = Date.now();
+      }
+      if (marketRestricted) {
+        // Ripresa da soft-ban: la prossima offerta sarà una sonda di verifica (1 sola offerta test)
+        requiresSoftBanProbe = true;
       }
       marketRestricted = false;
       reportTelemetry('CYCLE_START', `Avvio Ciclo #${cycle + 1}`, { cycle: cycle + 1, crediti });
@@ -4717,7 +4736,7 @@ async function sendFodderLazyRequest() {
       marketRestricted = false;
       const maxBiddingSearches = Math.max(25, cycleTarget * 3);
       const MAX_ACTIVE_WATCHLIST = 35;
-      const MAX_BIDS_PER_CYCLE = Math.min(20, cycleTarget);
+      const MAX_BIDS_PER_CYCLE = Math.min(15, cycleTarget);
 
       chrome.runtime.sendMessage({
         tipo: 'LOG',
@@ -4840,9 +4859,10 @@ async function sendFodderLazyRequest() {
               if (consecutiveFailedBidsInSearch >= 2) break;
               if (start !== true || wonInThisCycle >= cycleTarget || (wonInThisCycle + activeBids.size) >= (cycleTarget + 2) || activeBids.size >= MAX_ACTIVE_WATCHLIST) break;
 
-              const currentBidPrice = auction.currentBid || auction.startingBid || 0;
-              const step = getEaStep(currentBidPrice);
-              const nextBid = auction.currentBid > 0 ? (currentBidPrice + step) : (auction.startingBid || step);
+              const minNextBid = calculateNextBid(auction.startingBid, auction.currentBid);
+              // Strong Bid (come nei consumabili): offre subito circa il 70% del prezzo max safe per eliminare la concorrenza, resta comunque <= maxBuy quindi profitto garantito
+              const strongBidTarget = roundUpToStep(playerMaxBuy * 0.70);
+              const nextBid = Math.min(playerMaxBuy, Math.max(minNextBid, strongBidTarget));
 
               if (nextBid <= playerMaxBuy) {
                 if (typeof crediti === 'number' && crediti < nextBid) {
@@ -5188,9 +5208,8 @@ async function sendFodderLazyRequest() {
                       if (consecutive461InTopUp >= 3) {
                         chrome.runtime.sendMessage({
                           tipo: 'LOG',
-                          valore: `[LAZY FODDER TOP-UP] Rating ${nextPlayer.name || 'Fodder'} molto conteso su Floor BIN (3 tentativi anticipati). Cambio rating per diversificare il rifornimento...`
+                          valore: `[LAZY FODDER TOP-UP] ${nextPlayer.name || 'Fodder'} molto conteso su Floor BIN (3 tentativi anticipati). La rotazione automatica passa al prossimo giocatore della lista...`
                         });
-                        topUpRatingIdx = (topUpRatingIdx + 1) % targetRatings.length;
                         consecutive461InTopUp = 0;
                       }
 
@@ -5261,8 +5280,15 @@ async function sendFodderLazyRequest() {
     let sleepMins = 60; // Durata naturale per far scadere e vendere le aste da 1 Ora
     if (marketRestricted) {
       consecutiveSoftBansInSession++;
-      const baseMins = lazySleepMinutes && lazySleepMinutes > 0 ? lazySleepMinutes : 60;
-      sleepMins = consecutiveSoftBansInSession === 1 ? baseMins : Math.round(baseMins * 1.5);
+      // Backoff esponenziale progressivo (allineato ai consumabili): 1° = 60m, 2° = 90m, 3°+ = 120-150m
+      const baseMins = Math.max(45, lazySleepMinutes && lazySleepMinutes > 0 ? lazySleepMinutes : 60);
+      if (consecutiveSoftBansInSession <= 1) {
+        sleepMins = baseMins;
+      } else if (consecutiveSoftBansInSession === 2) {
+        sleepMins = Math.round(baseMins * 1.5);
+      } else {
+        sleepMins = Math.min(180, Math.round(baseMins * 2.0));
+      }
       chrome.runtime.sendMessage({
         tipo: 'LOG',
         valore: `[LAZY FODDER] Rate limit EA attivo (Soft-ban consecutivo #${consecutiveSoftBansInSession}). Pausa rigenerativa di ${sleepMins} min per sblocco completo...`
@@ -5318,7 +5344,9 @@ async function sendFodderLazyRequest() {
     }
 
     const totalSleepSeconds = sleepMins * 60;
-    const heartbeatInterval = 120; // 2 minuti: heartbeat per mantenere viva la sessione, incassare vendite e rilistare
+    // Heartbeat con jitter gaussiano (~2 min, range 95-150s): pattern temporale non fisso
+    let nextHeartbeatAt = Math.round(getRandomGaussian(120, 10, 95, 150));
+    let nextPingAt = Math.round(getRandomGaussian(480, 30, 360, 600));
 
     let elapsed = 0;
     while (elapsed < totalSleepSeconds && start === true) {
@@ -5331,11 +5359,13 @@ async function sendFodderLazyRequest() {
         } catch (_) { }
       }
 
-      if (elapsed % heartbeatInterval === 0 && start === true) {
+      if (elapsed >= nextHeartbeatAt && start === true) {
+        nextHeartbeatAt = elapsed + Math.round(getRandomGaussian(120, 10, 95, 150));
         try {
           const remainingMinutes = Math.round((totalSleepSeconds - elapsed) / 60);
           if (marketRestricted) {
-            if (elapsed % 480 === 0 && remainingMinutes >= 2) {
+            if (elapsed >= nextPingAt && remainingMinutes >= 2) {
+              nextPingAt = elapsed + Math.round(getRandomGaussian(480, 30, 360, 600));
               await triggerPinEvent("REQUEST_TOKEN_REFRESH");
               await sleep(1600);
               crediti = await getCrediti();
@@ -5378,6 +5408,10 @@ async function sendFodderLazyRequest() {
     if (start === true) {
       if (isMacroPause) {
         sessionActiveStartTime = Date.now();
+      }
+      if (marketRestricted) {
+        // Ripresa da soft-ban: la prossima offerta sarà una sonda di verifica (1 sola offerta test)
+        requiresSoftBanProbe = true;
       }
       marketRestricted = false;
       chrome.runtime.sendMessage({

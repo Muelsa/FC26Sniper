@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const stopBtn = document.getElementById('stopBtn');
   const tentativiRimasti = document.getElementById('tentativiRimasti');
   const carteAcquistate = document.getElementById('carteAcquistate');
+  const carteVendute = document.getElementById('carteVendute');
   const crediti = document.getElementById('crediti');
   const switchFodder = document.getElementById('switchFodder');
   const targetModeRadios = document.querySelectorAll('input[name="targetMode"]');
@@ -261,7 +262,7 @@ document.addEventListener('DOMContentLoaded', () => {
     'numeroTentativi', 'targetMode', 'fodderMode', 'fodderRating',
     'chemStyle', 'autoBin', 'manualBin', 'strategyMode', 'minMargin', 'maxSnipePrice',
     'targetTradepileSize', 'lazyMarkupPercent', 'lazySleepMinutes',
-    'tradepileCount', 'crediti', 'carteAcquistate', 'start', 'botStatus'
+    'tradepileCount', 'crediti', 'carteAcquistate', 'carteVendute', 'start', 'botStatus'
   ], (result) => {
     if (result.tradepileCount) {
       const tpEl = document.getElementById('tradepileCount');
@@ -272,6 +273,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (result.carteAcquistate !== undefined && carteAcquistate) {
       carteAcquistate.textContent = String(result.carteAcquistate);
+    }
+    if (result.carteVendute !== undefined && carteVendute) {
+      carteVendute.textContent = String(result.carteVendute);
     }
 
     if (result.numeroTentativi) {
@@ -550,6 +554,12 @@ document.addEventListener('DOMContentLoaded', () => {
       case 'CARTA_ACQUISTATA':
         if (carteAcquistate) {
           carteAcquistate.textContent = message.valore !== "" ? String(message.valore) : "0";
+        }
+        break;
+
+      case 'CARTA_VENDUTA':
+        if (carteVendute) {
+          carteVendute.textContent = message.valore !== "" ? String(message.valore) : "0";
         }
         break;
 
