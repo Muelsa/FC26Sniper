@@ -5390,13 +5390,16 @@ async function sendFodderLazyRequest() {
             await triggerPinEvent("TRIGGER_PIN_WATCHLIST");
             await clearSoldItem(cyclePrices);
             await checkAndProcessWatchlistForLazy(cyclePrices);
+            // Recupera carte vinte ma non ancora listate (anti-accumulo, listing anti-collisione gestito da sellSingleItem)
+            await processUnassignedItems(cyclePrices);
+            await listUnlistedTradepileItems(cyclePrices);
             crediti = await getCrediti();
             if (typeof crediti === 'number') {
               chrome.runtime.sendMessage({ tipo: 'CREDITI', valore: crediti });
             }
             chrome.runtime.sendMessage({
               tipo: 'LOG',
-              valore: `[LAZY FODDER HEARTBEAT] Tradepile sincronizzata: vendite incassate e crediti aggiornati (${crediti} cr). Prossimo ciclo tra ${remainingMinutes} min.`
+              valore: `[LAZY FODDER HEARTBEAT] Tradepile sincronizzata: vendite incassate, carte vinte listate e crediti aggiornati (${crediti} cr). Prossimo ciclo tra ${remainingMinutes} min.`
             });
           }
         } catch (hbErr) {
