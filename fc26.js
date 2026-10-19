@@ -1414,12 +1414,47 @@ async function checkAndProcessWatchlistForLazy(cyclePrices = {}) {
           activeWinningCount++;
           console.log(`[FC Sniper Watchlist] Asta Trade ${tradeId} ancora attiva con nostra offerta vincente (${item.currentBid} cr, scade in ${item.expires}s).`);
         } else if (bidState === "outbid") {
-          // Siamo stati superati su asta attiva: smettiamo di tracciarla.
-          // Non chiamiamo deleteFromWatchlist finché l'asta è attiva perché EA rifiuta con 401.
-          await removeStoredPendingBid(tradeId);
-          activeBids.delete(tradeIdStr);
-          activeBids.delete(Number(tradeId));
-          cleanedLost++;
+          // Siamo stati superati su asta ancora attiva.
+          // Se abbiamo ancora margine rispetto al maxBidAllowed, rilanciamo SEMPRE per vincere l'asta.
+          const maxBid = Number(tracked?.maxBidAllowed) || 0;
+          const currentBid = Number(item.currentBid) || 0;
+          const nextBid = calculateNextBid(Number(item.startingBid) || 0, currentBid);
+
+          if (maxBid > 0 && nextBid <= maxBid && start === true) {
+            // Rimuovi dal filtro anti-fantasma altrimenti isTradeAttempted bloccherebbe il rilancio per 5 min
+            attemptedTradeIds.delete(tradeIdStr);
+
+            // Rilancio deciso (85% del tetto massimo) per non dover inseguire l'avversario a ogni step,
+            // ma senza mai superare il maxBidAllowed calcolato sul margine
+            const strongBid = Math.max(nextBid, roundUpToStep(maxBid * 0.85));
+            const reBidAmount = Math.min(strongBid, maxBid);
+
+            const reBidSuccess = await sendBidRequest(tradeId, reBidAmount, itemId, maxBid);
+            if (reBidSuccess) {
+              const newBidData = { ...(tracked || {}), bidAmount: reBidAmount, maxBidAllowed: maxBid };
+              activeBids.set(tradeIdStr, newBidData);
+              await storePendingBid(tradeId, newBidData);
+              activeWinningCount++;
+              if (typeof crediti === 'number') crediti = Math.max(0, crediti - reBidAmount);
+              chrome.runtime.sendMessage({
+                tipo: 'LOG',
+                valore: `[RE-BID OUTBID] Superati a ${currentBid} cr su Trade ${tradeId}. Rilancio a ${reBidAmount} cr (Max: ${maxBid}). Asta ancora tracciata.`
+              });
+            } else {
+              // Rilancio fallito (rate limit, asta chiusa, crediti insufficienti): smettiamo di tracciarla
+              await removeStoredPendingBid(tradeId);
+              activeBids.delete(tradeIdStr);
+              activeBids.delete(Number(tradeId));
+              cleanedLost++;
+            }
+          } else {
+            // Margine esaurito (nextBid > maxBidAllowed): smettiamo di tracciarla.
+            // Non chiamiamo deleteFromWatchlist finché l'asta è attiva perché EA rifiuta con 401.
+            await removeStoredPendingBid(tradeId);
+            activeBids.delete(tradeIdStr);
+            activeBids.delete(Number(tradeId));
+            cleanedLost++;
+          }
         }
       }
     }
