@@ -1,7 +1,7 @@
 // Servizio di notifica Telegram: invia un report a fine di ogni ciclo di trading
 // (lazy, sniping o bidding) con carte acquistate, carte vendute e crediti posseduti.
 
-import { getTelegramChatId, getUserProfile } from '../core/storage.js';
+import { getTelegramChatId, getUserProfile, getTradepileStatus } from '../core/storage.js';
 
 // Token del bot Telegram (hard-coded)
 const TELEGRAM_BOT_TOKEN = "8874144943:AAFHn9wUkuF5GVmFwdCmWzZOcc6oQA0gLZk"; // <- INSERISCI QUI IL TOKEN DEL BOT
@@ -68,12 +68,11 @@ export async function sendTelegramMessage(text, targetChatId = null) {
 }
 
 /**
- * Report di fine ciclo: carte acquistate, carte vendute (se il conteggio è
- * stato effettuato) e crediti posseduti.
+ * Report di fine ciclo: carte acquistate, carte vendute, carte in vendita e crediti posseduti.
  * @param {string} strategy - "lazy" | "sniping" | "bidding"
- * @param {{acquistate: number, vendute: number|null, crediti: number}} data
+ * @param {{acquistate: number, vendute: number|null, inVendita?: number|null, crediti: number}} data
  */
-export async function sendCycleReport(strategy, { acquistate, vendute, crediti }) {
+export async function sendCycleReport(strategy, { acquistate, vendute, inVendita, crediti }) {
   const label = strategy === 'lazy' ? 'Lazy Trading' : strategy === 'bidding' ? 'Bidding' : 'Sniping';
   let text = `⚡ <b>Fine Ciclo - ${label}</b>\n`;
 
@@ -91,6 +90,23 @@ export async function sendCycleReport(strategy, { acquistate, vendute, crediti }
   if (vendute !== null && vendute !== undefined) {
     text += `💰 Carte vendute: <b>${vendute}</b>\n`;
   }
+
+  // Carte attualmente in vendita (recupera il valore già presente sulla UI / storage se non passato)
+  let inVenditaDisplay = inVendita;
+  if (inVenditaDisplay === null || inVenditaDisplay === undefined) {
+    try {
+      const { tradepileCount, tradepileActive } = await getTradepileStatus();
+      if (tradepileCount && tradepileCount !== '-') {
+        inVenditaDisplay = tradepileCount;
+      } else if (tradepileActive !== null && tradepileActive !== undefined) {
+        inVenditaDisplay = tradepileActive;
+      }
+    } catch (_) {}
+  }
+  if (inVenditaDisplay !== null && inVenditaDisplay !== undefined) {
+    text += `📦 In vendita: <b>${inVenditaDisplay}</b>\n`;
+  }
+
   text += `💳 Crediti posseduti: <b>${typeof crediti === 'number' ? crediti.toLocaleString('it-IT') : crediti}</b>`;
 
   return sendTelegramMessage(text);

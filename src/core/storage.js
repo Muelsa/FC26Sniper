@@ -48,6 +48,19 @@ export const getUserProfile = async () => {
   });
 };
 
+// Conteggio elementi in vendita / Tradepile (come visualizzato nella UI)
+export const getTradepileStatus = async () => {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['tradepileCount', 'tradepileActive', 'tradepileTotal'], (res) => {
+      resolve({
+        tradepileCount: res.tradepileCount || "",
+        tradepileActive: res.tradepileActive !== undefined ? res.tradepileActive : null,
+        tradepileTotal: res.tradepileTotal !== undefined ? res.tradepileTotal : null
+      });
+    });
+  });
+};
+
 // Pulisce offerte pendenti obsolete (> 24 ore) per garantire memoria pulita
 export async function cleanExpiredPendingBids() {
   try {

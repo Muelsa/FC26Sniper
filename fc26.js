@@ -4,7 +4,7 @@ import {
   getNumeroTentativi, getFodderRating, getStrategyMode, getMinMargin, getTargetMode,
   getChemStyle, getAutoBin, getManualBin, getMaxSnipePrice, getTargetTradepileSize,
   getLazyMarkupPercent, getLazySleepMinutes, getStoredPendingBids, cleanExpiredPendingBids,
-  getUserProfile
+  getUserProfile, getTradepileStatus
 } from './src/core/storage.js';
 import { WATCHLIST_URL, DELETE_SOLD_URL } from './src/ea/endpoints.js';
 import { buildEaHeaders } from './src/ea/client.js';
@@ -13,30 +13,24 @@ import { CHEM_STYLES } from './src/ea/constants.js';
 import { fetchFodderList } from './src/services/fodder-service.js';
 import { sendCycleReport, sendTelegramMessage } from './src/services/telegram-service.js';
 import { getUrgentAuctionTimeRemaining } from './src/strategies/strategy-utils.js';
+import { installGlobalRateLimiter } from './src/core/rate-limiter.js';
 
-// Wrapper di sicurezza per silenziare "Could not establish connection. Receiving end does not exist"
-// quando vengono inviati messaggi o log di broadcast e la dashboard/scheda ricevente è momentaneamente chiusa
-if (typeof chrome !== "undefined" && chrome.runtime?.sendMessage) {
-  const _origSendMessage = chrome.runtime.sendMessage.bind(chrome.runtime);
-  chrome.runtime.sendMessage = function (message, callback) {
-    try {
-      if (typeof callback === "function") {
-        return _origSendMessage(message, (...args) => {
-          const _ = chrome.runtime.lastError;
-          callback(...args);
-        });
-      }
-      const res = _origSendMessage(message, () => {
-        const _ = chrome.runtime.lastError;
-      });
-      if (res && typeof res.catch === "function") {
-        res.catch(() => { });
-      }
-      return res;
-    } catch (e) {
-      // Ignora se nessun ricevitore è presente
-    }
-  };
+// Budget globale cross-endpoint su tutte le chiamate UTAS (anti soft-ban, Fase 3.4)
+installGlobalRateLimiter();
+
+// Invio messaggi broadcast sicuro: ignora "Could not establish connection. Receiving end does not exist"
+// quando la dashboard/scheda ricevente è momentaneamente chiusa, senza mascherare altri errori.
+function sendMessageSafe(message, callback) {
+  try {
+    const res = chrome.runtime.sendMessage(message, (...args) => {
+      void chrome.runtime.lastError;
+      if (typeof callback === "function") callback(...args);
+    });
+    if (res && typeof res.catch === "function") res.catch(() => { });
+    return res;
+  } catch (e) {
+    // Nessun ricevitore presente
+  }
 }
 
 let xUtSid = "";
@@ -93,6 +87,31 @@ let listingRestrictedUntil = 0; // Timestamp ms fino a cui il listing (POST /auc
 
 // Mappa per tenere traccia delle carte/aste già tentate (evita di ricomprare carte fantasma già perse o fallite)
 const attemptedTradeIds = new Map(); // tradeId (string) -> timestamp (ms)
+const ATTEMPTED_TTL_MS = 5 * 60 * 1000;
+let attemptedPersistTimer = null;
+
+// Ripristino al boot del SW (sopravvive al recycle MV3)
+chrome.storage.local.get(['attemptedTradeIds'], (result) => {
+  const entries = result.attemptedTradeIds;
+  if (!Array.isArray(entries)) return;
+  const now = Date.now();
+  for (const [id, ts] of entries) {
+    if (typeof ts === 'number' && now - ts < ATTEMPTED_TTL_MS) attemptedTradeIds.set(String(id), ts);
+  }
+});
+
+function persistAttemptedTradeIds() {
+  if (attemptedPersistTimer) return; // throttling: max 1 write schedulata alla volta
+  attemptedPersistTimer = setTimeout(() => {
+    attemptedPersistTimer = null;
+    const now = Date.now();
+    const entries = [];
+    for (const [id, ts] of attemptedTradeIds.entries()) {
+      if (now - ts < ATTEMPTED_TTL_MS) entries.push([id, ts]);
+    }
+    chrome.storage.local.set({ attemptedTradeIds: entries }, () => void chrome.runtime.lastError);
+  }, 5000);
+}
 
 function isTradeAttempted(tradeId) {
   if (!tradeId) return false;
@@ -101,7 +120,7 @@ function isTradeAttempted(tradeId) {
   if (attemptedTradeIds.has(idStr)) {
     const attemptedAt = attemptedTradeIds.get(idStr);
     // Scade dopo 5 minuti (durata ottimale per il refresh della cache del server EA)
-    if (now - attemptedAt < 5 * 60 * 1000) {
+    if (now - attemptedAt < ATTEMPTED_TTL_MS) {
       return true;
     } else {
       attemptedTradeIds.delete(idStr);
@@ -113,15 +132,16 @@ function isTradeAttempted(tradeId) {
 function markTradeAttempted(tradeId) {
   if (!tradeId) return;
   attemptedTradeIds.set(String(tradeId), Date.now());
-  // Pulizia automatica della mappa per record più vecchi di 5 minuti
+  // Pulizia automatica della mappa per record più vecchi del TTL
   if (attemptedTradeIds.size > 200) {
     const now = Date.now();
     for (const [id, ts] of attemptedTradeIds.entries()) {
-      if (now - ts > 5 * 60 * 1000) {
+      if (now - ts > ATTEMPTED_TTL_MS) {
         attemptedTradeIds.delete(id);
       }
     }
   }
+  persistAttemptedTradeIds();
 }
 
 // Metadati Stili Intesa importati da src/ea/constants.js
@@ -193,7 +213,7 @@ async function doRecover401(context = "") {
   const currentToken = xUtSid;
   const ctxStr = context ? ` (${context})` : "";
   console.warn(`[FC Sniper 401] Ricevuto errore 401 in ${ctxStr}. Tentativo di recupero token fresco dalla Web App...`);
-  chrome.runtime.sendMessage({
+  sendMessageSafe({
     tipo: 'LOG',
     valore: `[AVVISO 401${ctxStr}] Rilevato token non valido o scaduto. Richiedo sincronizzazione token fresco alla Web App...`
   });
@@ -206,7 +226,7 @@ async function doRecover401(context = "") {
   if (xUtSid && xUtSid !== currentToken) {
     consecutive401Errors = 0;
     console.log("[FC Sniper 401] Nuovo token EA catturato con successo! Sessione ripristinata.");
-    chrome.runtime.sendMessage({
+    sendMessageSafe({
       tipo: 'LOG',
       valore: `[RECUPERO 401 RIUSCITO] Nuovo token EA sincronizzato (${xUtSid.substring(0, 10)}...). Operazioni ripristinate senza interruzione!`
     });
@@ -221,7 +241,7 @@ async function doRecover401(context = "") {
     // Reload limitato alla sola Web App (non tutte le tab ea.com)
     const eaTabs = (tabs || []).filter(t => t.url && t.url.includes("ea-sports-fc/ultimate-team/web-app"));
     if (eaTabs.length > 0) {
-      chrome.runtime.sendMessage({
+      sendMessageSafe({
         tipo: 'LOG',
         valore: `[AVVISO 401] Token non rinnovabile a caldo. Ricarico la scheda Web App per rigenerare la sessione via SSO EA...`
       });
@@ -233,7 +253,7 @@ async function doRecover401(context = "") {
         await sleep(getRandomGaussian(1.0, 0.15, 0.8, 1.3) * 1000);
         if (xUtSid && xUtSid !== currentToken) {
           consecutive401Errors = 0;
-          chrome.runtime.sendMessage({
+          sendMessageSafe({
             tipo: 'LOG',
             valore: `[RECUPERO 401 RIUSCITO] Web App ricaricata e nuova sessione catturata (${xUtSid.substring(0, 10)}...). Bot ripristinato!`
           });
@@ -253,7 +273,7 @@ async function doRecover401(context = "") {
   console.error(`[FC Sniper ABORT 401] Errore 401 Unauthorized confermato${ctxStr}. Arresto del bot.`);
   reportTelemetry('ABORT_401', `Errore 401 Unauthorized${ctxStr}. Arresto immediato.`, { context });
 
-  chrome.runtime.sendMessage({
+  sendMessageSafe({
     tipo: 'LOG',
     valore: `[ABORT IMMEDIATO - ERRORE 401] Ricevuto errore 401 Unauthorized${ctxStr}. Sessione Web App scaduta o non valida: bot arrestato. Ricarica la Web App (F5) per rinnovare la sessione.`
   });
@@ -280,7 +300,7 @@ async function handleSearchRateLimit(status, context = "Ricerca") {
     const baseDelay = 25 + (consecutiveSearchErrors * 5); // Delay crescente per ogni errore successivo
     const jitter = getRandomGaussian(0.8, 0.15, 0.6, 1.0);
     
-    chrome.runtime.sendMessage({
+    sendMessageSafe({
       tipo: 'LOG',
       valore: `[RATE LIMIT EA ${status}] Rilevato in ${context} (${consecutiveSearchErrors}/3). Raffreddamento preventivo di ${Math.round(baseDelay * jitter)}s per proteggere l'account...`
     });
@@ -292,7 +312,7 @@ async function handleSearchRateLimit(status, context = "Ricerca") {
 async function handleCaptchaDetected(context = "") {
   const ctxStr = context ? ` (${context})` : "";
   console.warn(`[FC Sniper] CAPTCHA 458 rilevato${ctxStr}!`);
-  chrome.runtime.sendMessage({
+  sendMessageSafe({
     tipo: 'LOG',
     valore: '[ATTENZIONE - CAPTCHA RILEVATO] Verifica richiesta nella Web App. Bot arrestato.'
   });
@@ -328,7 +348,7 @@ chrome.webRequest.onBeforeRequest.addListener(
     try {
       if (details.method === "GET" || details.method === "POST") {
         if (start == false) {
-          chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Filtro di ricerca acquisito' });
+          sendMessageSafe({ tipo: 'LOG', valore: 'Filtro di ricerca acquisito' });
         }
         if (details.url.includes("transfermarket?")) {
           searchUrl = details.url;
@@ -388,7 +408,7 @@ chrome.webRequest.onBeforeRequest.addListener(
         console.log("[EA PIN Telemetry Intercettata]", pinData);
         const evCount = pinData.events?.length || 1;
         const types = (pinData.events || []).map(e => e.type || e.pgid || e.core?.en).filter(Boolean).slice(0, 3).join(", ");
-        chrome.runtime.sendMessage({
+        sendMessageSafe({
           tipo: 'LOG',
           valore: `[PIN TELEMETRY] Inviati a EA ${evCount} eventi (${types || 'telemetria'}) | stepCounter: ${pinData.stepCounter || pinData.custom?.step || 'OK'}`
         });
@@ -478,7 +498,7 @@ async function stopOffscreenDocument() {
 async function stopBot(reason = "") {
   start = false;
   try { await chrome.storage.local.set({ start: false }); } catch (_) { }
-  chrome.runtime.sendMessage({ tipo: 'START', valore: false });
+  sendMessageSafe({ tipo: 'START', valore: false });
   await stopOffscreenDocument();
   if (reason) console.log(`[FC Sniper] Bot arrestato: ${reason}`);
 }
@@ -486,7 +506,7 @@ async function executeSafetyPause(durationSeconds = 600, reason = "Soft-Ban EA")
   const totalMinutes = Math.round(durationSeconds / 60);
   console.warn(`[FC Sniper] Avvio Pausa di Sicurezza: ${reason}. Durata: ${totalMinutes} minuti (${durationSeconds}s).`);
 
-  chrome.runtime.sendMessage({
+  sendMessageSafe({
     tipo: 'LOG',
     valore: `[PAUSA DI SICUREZZA] ${reason}. Pausa di ${totalMinutes} min per sbloccare l'account. Silenzio totale verso EA fino allo sblocco.`
   });
@@ -507,7 +527,7 @@ async function executeSafetyPause(durationSeconds = 600, reason = "Soft-Ban EA")
     // Countdown nei log ogni 60 secondi
     if (remaining > 0 && remaining % 60 === 0) {
       const minsLeft = Math.round(remaining / 60);
-      chrome.runtime.sendMessage({
+      sendMessageSafe({
         tipo: 'LOG',
         valore: `[PAUSA DI SICUREZZA] Sblocco soft-ban in corso... Mancano ${minsLeft} min alla ripresa automatica.`
       });
@@ -523,12 +543,12 @@ async function executeSafetyPause(durationSeconds = 600, reason = "Soft-Ban EA")
       const currentCrediti = await getCrediti();
       if (typeof currentCrediti === 'number') {
         crediti = currentCrediti;
-        chrome.runtime.sendMessage({ tipo: 'CREDITI', valore: crediti });
+        sendMessageSafe({ tipo: 'CREDITI', valore: crediti });
       }
     } catch (e) {
       console.warn("[Post-Pausa Maintenance Error]", e);
     }
-    chrome.runtime.sendMessage({
+    sendMessageSafe({
       tipo: 'LOG',
       valore: `[PAUSA DI SICUREZZA TERMINATA] Account raffreddato con successo! Manutenzione eseguita, ripresa delle attività.`
     });
@@ -552,11 +572,25 @@ function handleFodderModeMessage(message) {
   if (message.minMargin) minMargin = message.minMargin;
 }
 
+// Keep-alive MV3: la porta long-lived dal content script tiene sveglio il Service Worker.
+// Il listener onConnect è necessario: senza di esso i ping cadono nel vuoto e il SW può essere reciclato.
+chrome.runtime.onConnect.addListener((port) => {
+  if (port.name !== "KEEP_ALIVE_PORT") return;
+  port.onMessage.addListener((msg) => {
+    if (msg?.type === "KEEP_ALIVE_PING") {
+      // La sola ricezione del messaggio resetta il timer di idle del SW
+    }
+  });
+  port.onDisconnect.addListener(() => {
+    void chrome.runtime.lastError; // silenzia errori di disconnect attesi
+  });
+});
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.tipo === 'TOKEN_SYNC' && message.valore) {
     if (xUtSid !== message.valore) {
       console.log("[FC Sniper] x-ut-sid sincronizzato via DOM bridge:", message.valore.substring(0, 10) + "...");
-      chrome.runtime.sendMessage({
+      sendMessageSafe({
         tipo: 'LOG',
         valore: `[TOKEN SYNC] Nuovo token EA catturato dalla Web App: ${message.valore.substring(0, 10)}...`
       });
@@ -588,8 +622,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (personaName || clubName) {
       console.log(`[FC Sniper User] Sincronizzato profilo EA via pin-bridge: ${personaName} (${clubName})`);
       chrome.storage.local.set({ personaName: personaName || "", clubName: clubName || "" });
-      chrome.runtime.sendMessage({ tipo: 'USER_SYNC', personaName });
-      chrome.runtime.sendMessage({
+      sendMessageSafe({ tipo: 'USER_SYNC', personaName });
+      sendMessageSafe({
         tipo: 'LOG',
         valore: `[PROFILO EA] Sincronizzato account Web App: ${personaName}`
       });
@@ -619,6 +653,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       if (personaName) {
         testText += `👤 Account: <b>${personaName}</b>\n`;
       }
+
+      try {
+        const { tradepileCount, tradepileActive } = await getTradepileStatus();
+        const display = (tradepileCount && tradepileCount !== '-') ? tradepileCount : tradepileActive;
+        if (display !== null && display !== undefined) {
+          testText += `📦 In vendita: <b>${display}</b>\n`;
+        }
+      } catch (_) {}
+
       testText += "Le notifiche di fine ciclo sono configurate correttamente.";
 
       return sendTelegramMessage(testText, message.chatId);
@@ -636,7 +679,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 async function handleStartMessage(message) {
   // Lock anti doppio-start: ignora START se un engine è già attivo
   if (message.valore === true && start === true) {
-    chrome.runtime.sendMessage({ tipo: 'LOG', valore: '[FC Sniper] Bot già avviato: richiesta START ignorata.' });
+    sendMessageSafe({ tipo: 'LOG', valore: '[FC Sniper] Bot già avviato: richiesta START ignorata.' });
     return;
   }
   start = message.valore;
@@ -649,7 +692,7 @@ async function handleStartMessage(message) {
     }
 
     if (!xUtSid) {
-      chrome.runtime.sendMessage({
+      sendMessageSafe({
         tipo: 'LOG',
         valore: '[ATTENZIONE] Sessione Web App non ancora sincronizzata. Clicca su qualsiasi menu nella Web App di EA (es. Trasferimenti o Club) per sincronizzare il token e poi premi Start.'
       });
@@ -674,8 +717,8 @@ async function handleStartMessage(message) {
       lazySleepMinutes = message.lazySleepMinutes || await getLazySleepMinutes();
       carteAcquistate = 0;
       carteVendute = 0;
-      chrome.runtime.sendMessage({ tipo: 'CARTA_ACQUISTATA', valore: 0 });
-      chrome.runtime.sendMessage({ tipo: 'CARTA_VENDUTA', valore: 0 });
+      sendMessageSafe({ tipo: 'CARTA_ACQUISTATA', valore: 0 });
+      sendMessageSafe({ tipo: 'CARTA_VENDUTA', valore: 0 });
       try { chrome.storage.local.set({ carteAcquistate: 0, carteVendute: 0 }); } catch (_) { }
       carteVinteCiclo = 0;
       consecutive401Errors = 0;
@@ -687,9 +730,9 @@ async function handleStartMessage(message) {
       marketRestricted = false;
       reportTelemetry('START', 'Bot avviato', { strategyMode, targetTradepileSize, chemStyle });
 
-      chrome.runtime.sendMessage({ tipo: 'CARTA_ACQUISTATA', valore: "" });
+      sendMessageSafe({ tipo: 'CARTA_ACQUISTATA', valore: "" });
       crediti = await getCrediti();
-      chrome.runtime.sendMessage({ tipo: 'CREDITI', valore: crediti });
+      sendMessageSafe({ tipo: 'CREDITI', valore: crediti });
       await getTradepileInfo();
 
       // Sincronizzazione rigorosa stato modalità
@@ -703,13 +746,13 @@ async function handleStartMessage(message) {
       if (strategyMode === "lazy") {
         if (targetMode === "fodder") {
           ricercaFodder = true;
-          chrome.runtime.sendMessage({ tipo: 'LOG', valore: `Avvio LAZY TRADING Fodder (Rating ${fodderRating}, Target: ${targetTradepileSize}, Ricarico: +${lazyMarkupPercent}%, Pausa: ${lazySleepMinutes}m)` });
+          sendMessageSafe({ tipo: 'LOG', valore: `Avvio LAZY TRADING Fodder (Rating ${fodderRating}, Target: ${targetTradepileSize}, Ricarico: +${lazyMarkupPercent}%, Pausa: ${lazySleepMinutes}m)` });
           await runLazyTradingEngine();
         } else {
           targetMode = "consumables";
           ricercaFodder = false;
           const styleName = chemStyle === "all" ? "Rotazione (Ombra, Cacciatore, Ancora, Motore)" : (CHEM_STYLES[chemStyle]?.name || `Stile ${chemStyle}`);
-          chrome.runtime.sendMessage({ tipo: 'LOG', valore: `Avvio LAZY TRADING Consumabili (${styleName}, Target: ${targetTradepileSize}, Ricarico: +${lazyMarkupPercent}%, Pausa: ${lazySleepMinutes}m)` });
+          sendMessageSafe({ tipo: 'LOG', valore: `Avvio LAZY TRADING Consumabili (${styleName}, Target: ${targetTradepileSize}, Ricarico: +${lazyMarkupPercent}%, Pausa: ${lazySleepMinutes}m)` });
           await runLazyTradingEngine();
         }
       } else {
@@ -721,24 +764,24 @@ async function handleStartMessage(message) {
         if (strategyMode === "bidding") {
           await reconcileWatchlistOnStartup();
           crediti = await getCrediti();
-          chrome.runtime.sendMessage({ tipo: 'CREDITI', valore: crediti });
+          sendMessageSafe({ tipo: 'CREDITI', valore: crediti });
         }
 
         if (targetMode === "consumables") {
           const styleName = chemStyle === "all" ? "Rotazione (Ombra, Cacciatore, Ancora, Motore)" : (CHEM_STYLES[chemStyle]?.name || `Stile ${chemStyle}`);
           if (strategyMode === "bidding") {
-            chrome.runtime.sendMessage({ tipo: 'LOG', valore: `Avvio MASS BIDDING Consumabili (${styleName}, Margine min ${minMargin})` });
+            sendMessageSafe({ tipo: 'LOG', valore: `Avvio MASS BIDDING Consumabili (${styleName}, Margine min ${minMargin})` });
             await runMassBiddingEngine();
           } else {
-            chrome.runtime.sendMessage({ tipo: 'LOG', valore: `Avvio SNIPING Consumabili (${styleName})` });
+            sendMessageSafe({ tipo: 'LOG', valore: `Avvio SNIPING Consumabili (${styleName})` });
             await sendConsumableResearchRequest();
           }
         } else if (targetMode === "fodder") {
           if (strategyMode === "bidding") {
-            chrome.runtime.sendMessage({ tipo: 'LOG', valore: `Avvio MASS BIDDING Fodder (Rating ${fodderRating}, Margine min ${minMargin})` });
+            sendMessageSafe({ tipo: 'LOG', valore: `Avvio MASS BIDDING Fodder (Rating ${fodderRating}, Margine min ${minMargin})` });
             await runMassBiddingEngine();
           } else {
-            chrome.runtime.sendMessage({ tipo: 'LOG', valore: `Avvio SNIPING Fodder (Rating ${fodderRating})` });
+            sendMessageSafe({ tipo: 'LOG', valore: `Avvio SNIPING Fodder (Rating ${fodderRating})` });
             await sendFodderResearchRequest();
           }
         } else {
@@ -748,7 +791,7 @@ async function handleStartMessage(message) {
             if (start !== true) break;
 
             //aggiorno contatore tentativi rimasti
-            chrome.runtime.sendMessage({ tipo: 'TENTATIVI_RIMASTI', valore: numeroTentativi - (i + 1) });
+            sendMessageSafe({ tipo: 'TENTATIVI_RIMASTI', valore: numeroTentativi - (i + 1) });
 
             let randomValue;
             if ((i + 1) % 25 == 0) randomValue = getRandomGaussian(2.5, 0.3, 2.0, 3.2); // micro-pausa anti-limit ogni 25 tentativi
@@ -764,18 +807,22 @@ async function handleStartMessage(message) {
         }
       }
 
-      chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Ricerca terminata\n' });
-      chrome.runtime.sendMessage({ tipo: 'TENTATIVI_RIMASTI', valore: "" });
+      sendMessageSafe({ tipo: 'LOG', valore: 'Ricerca terminata\n' });
+      sendMessageSafe({ tipo: 'TENTATIVI_RIMASTI', valore: "" });
 
       //pulisco la lista trasferimenti dagli elementi venduti
       await clearSoldItem()
 
       //recupero crediti residui
       crediti = await getCrediti()
-      chrome.runtime.sendMessage({ tipo: 'CREDITI', valore: crediti });
+      sendMessageSafe({ tipo: 'CREDITI', valore: crediti });
 
       // report Telegram di fine ciclo (acquistate / vendute / crediti)
-      await sendCycleReport('sniping', { acquistate: carteAcquistate, vendute: carteVendute, crediti });
+      await sendCycleReport('sniping', {
+        acquistate: carteAcquistate,
+        vendute: carteVendute,
+        crediti
+      });
 
       //ho finito le ricerche, quindi termino ed invio messaggio di stop
       await stopBot("Ciclo ricerche terminato");
@@ -848,7 +895,7 @@ async function getCrediti() {
       try {
         chrome.storage.local.set({ crediti: currentCredits });
       } catch (_) { }
-      chrome.runtime.sendMessage({ tipo: 'CREDITI', valore: currentCredits });
+      sendMessageSafe({ tipo: 'CREDITI', valore: currentCredits });
     }
     return currentCredits;
   } catch (error) {
@@ -890,9 +937,9 @@ async function clearSoldItem(cachedPrices = {}) {
       if (response.ok) {
         console.log(`[FC Sniper] Lista trasferimenti pulita con successo: rimosse ${soldItems.length} carte vendute.`);
         carteVendute += soldItems.length;
-        chrome.runtime.sendMessage({ tipo: 'CARTA_VENDUTA', valore: carteVendute });
+        sendMessageSafe({ tipo: 'CARTA_VENDUTA', valore: carteVendute });
         try { chrome.storage.local.set({ carteVendute }); } catch (_) { }
-        chrome.runtime.sendMessage({
+        sendMessageSafe({
           tipo: 'LOG',
           valore: `[TRADEPILE] Incassate e rimosse ${soldItems.length} carte vendute dalla lista trasferimenti! (Totale sessione: ${carteVendute})`
         });
@@ -942,7 +989,7 @@ async function getTradepileInfo() {
     const auctions = data.auctionInfo || [];
     const active = auctions.filter(a => a.tradeState === "active" || a.expires > 0).length;
     const tradepileDisplay = `${active} attive (${auctions.length} tot)`;
-    chrome.runtime.sendMessage({ tipo: 'TRADEPILE_COUNT', valore: tradepileDisplay, active, total: auctions.length });
+    sendMessageSafe({ tipo: 'TRADEPILE_COUNT', valore: tradepileDisplay, active, total: auctions.length });
     try {
       chrome.storage.local.set({ tradepileCount: tradepileDisplay, tradepileActive: active, tradepileTotal: auctions.length });
     } catch (_) { }
@@ -996,7 +1043,7 @@ async function checkAndRelistExpiredItems(cachedPrices = {}, preloadedAuctions =
     }
 
     console.log(`[FC Sniper Tradepile] Rilevate ${expiredUnsold.length} carte scadute/invendute. Ricalcolo Lowest BIN live e relist...`);
-    chrome.runtime.sendMessage({
+    sendMessageSafe({
       tipo: 'LOG',
       valore: `[Tradepile Relist] Rilevate ${expiredUnsold.length} carte invendute. Ricalcolo prezzi live (Lowest BIN + 10%)...`
     });
@@ -1063,7 +1110,7 @@ async function checkAndRelistExpiredItems(cachedPrices = {}, preloadedAuctions =
       if (success) {
         relistedCount++;
         const prevText = a.buyNowPrice ? ` (prec: ${a.buyNowPrice})` : '';
-        chrome.runtime.sendMessage({
+        sendMessageSafe({
           tipo: 'LOG',
           valore: `[RELIST SCAGLIONATO] ${cardName} rimessa in vendita a ${newSellPrice} crediti${tierTag}${prevText}`
         });
@@ -1074,7 +1121,7 @@ async function checkAndRelistExpiredItems(cachedPrices = {}, preloadedAuctions =
     }
 
     if (relistedCount > 0) {
-      chrome.runtime.sendMessage({
+      sendMessageSafe({
         tipo: 'LOG',
         valore: `[Tradepile Relist] Completato: ${relistedCount}/${expiredUnsold.length} carte rimesse in vendita al prezzo di mercato aggiornato (+10%)!`
       });
@@ -1113,7 +1160,7 @@ async function processUnassignedItems(cachedPrices = {}) {
     }
 
     console.log(`[FC Sniper Non Assegnati] Rilevate ${items.length} carte bloccate nei "Non Assegnati". Spostamento in lista trasferimenti e vendita...`);
-    chrome.runtime.sendMessage({
+    sendMessageSafe({
       tipo: 'LOG',
       valore: `[RECUPERO NON ASSEGNATI] Rilevate ${items.length} carte nello slot "Non Assegnati". Le sposto nella lista trasferimenti e le metto in vendita...`
     });
@@ -1176,13 +1223,13 @@ async function processUnassignedItems(cachedPrices = {}) {
           const success = await sellSingleItem(itemId, sellPrice);
           if (success) {
             listedCount++;
-            chrome.runtime.sendMessage({
+            sendMessageSafe({
               tipo: 'LOG',
               valore: `[VENDITA NON ASSEGNATI] ${cardName} recuperata e messa in vendita a ${sellPrice} crediti${tierTag}!`
             });
             await sleep(getRandomGaussian(1.6, 0.15, 1.5, 2.0) * 1000);
           } else {
-            chrome.runtime.sendMessage({
+            sendMessageSafe({
               tipo: 'LOG',
               valore: `[NON ASSEGNATI] ${cardName} spostata in lista trasferimenti (sarà messa in vendita dal recupero Tradepile).`
             });
@@ -1198,7 +1245,7 @@ async function processUnassignedItems(cachedPrices = {}) {
     }
 
     if (movedCount > 0) {
-      chrome.runtime.sendMessage({
+      sendMessageSafe({
         tipo: 'LOG',
         valore: `[RECUPERO NON ASSEGNATI] Completato: spostate ${movedCount}/${items.length} carte in lista trasferimenti (${listedCount} messe in vendita)!`
       });
@@ -1249,7 +1296,7 @@ async function listUnlistedTradepileItems(cachedPrices = {}) {
     }
 
     console.log(`[FC Sniper Recupero] Rilevate ${unlisted.length} carte in Tradepile non messe in vendita. Procedo al listaggio immediato...`);
-    chrome.runtime.sendMessage({
+    sendMessageSafe({
       tipo: 'LOG',
       valore: `[RECUPERO LISTA] Rilevate ${unlisted.length} carte in lista trasferimenti non ancora messe in vendita. Le metto sul mercato...`
     });
@@ -1281,7 +1328,7 @@ async function listUnlistedTradepileItems(cachedPrices = {}) {
             if (Date.now() < listingRestrictedUntil) break;
             if (success) {
               listedCount++;
-              chrome.runtime.sendMessage({
+              sendMessageSafe({
                 tipo: 'LOG',
                 valore: `[VENDITA RECUPERATA] Calciatore (Rating ${item.rating || 'N/D'}) messo in vendita a ${sellPrice} crediti (Tier ${tiered.tier}: +${tiered.markup}%)`
               });
@@ -1311,7 +1358,7 @@ async function listUnlistedTradepileItems(cachedPrices = {}) {
           if (Date.now() < listingRestrictedUntil) break;
           if (success) {
             listedCount++;
-            chrome.runtime.sendMessage({
+            sendMessageSafe({
               tipo: 'LOG',
               valore: `[VENDITA RECUPERATA] ${meta.name} messa in vendita a ${sellPrice} crediti (Tier ${tiered.tier}: +${tiered.markup}%)`
             });
@@ -1324,7 +1371,7 @@ async function listUnlistedTradepileItems(cachedPrices = {}) {
     }
 
     if (listedCount > 0) {
-      chrome.runtime.sendMessage({
+      sendMessageSafe({
         tipo: 'LOG',
         valore: `[RECUPERO LISTA] Completato: messe in vendita con successo ${listedCount}/${unlisted.length} carte non listate!`
       });
@@ -1367,7 +1414,7 @@ async function checkAndProcessWatchlistForLazy(cyclePrices = {}) {
     let data = await response.json();
     if (data.credits !== undefined) {
       crediti = data.credits;
-      chrome.runtime.sendMessage({ tipo: 'CREDITI', valore: crediti });
+      sendMessageSafe({ tipo: 'CREDITI', valore: crediti });
     }
 
     let auctions = data.auctionInfo || [];
@@ -1379,7 +1426,7 @@ async function checkAndProcessWatchlistForLazy(cyclePrices = {}) {
     const imminentAuctions = auctions.filter(a => a.tradeState === "active" && a.bidState === "highest" && a.expires > 0 && a.expires <= 35);
     if (imminentAuctions.length > 0) {
       const maxWait = Math.max(...imminentAuctions.map(a => a.expires || 0));
-      chrome.runtime.sendMessage({
+      sendMessageSafe({
         tipo: 'LOG',
         valore: `[LAZY WATCHLIST] ${imminentAuctions.length} aste vincenti in scadenza tra ${maxWait}s. Attendo la chiusura per riscattarle subito...`
       });
@@ -1456,9 +1503,9 @@ async function checkAndProcessWatchlistForLazy(cyclePrices = {}) {
             await sleep(getRandomGaussian(1.0, 0.2, 0.8, 1.4) * 1000);
             recoveredWon++;
             carteAcquistate += 1;
-            chrome.runtime.sendMessage({ tipo: 'CARTA_ACQUISTATA', valore: carteAcquistate });
+            sendMessageSafe({ tipo: 'CARTA_ACQUISTATA', valore: carteAcquistate });
             try { chrome.storage.local.set({ carteAcquistate }); } catch (_) { }
-            chrome.runtime.sendMessage({
+            sendMessageSafe({
               tipo: 'LOG',
               valore: `[ASTA VINTA RISCATTATA] Asta vinta a ${buyPrice} crediti! Spostata in Tradepile e messa in vendita a ${sellPrice}${tierTag}.`
             });
@@ -1504,7 +1551,7 @@ async function checkAndProcessWatchlistForLazy(cyclePrices = {}) {
               await storePendingBid(tradeId, newBidData);
               activeWinningCount++;
               if (typeof crediti === 'number') crediti = Math.max(0, crediti - reBidAmount);
-              chrome.runtime.sendMessage({
+              sendMessageSafe({
                 tipo: 'LOG',
                 valore: `[RE-BID OUTBID] Superati a ${currentBid} cr su Trade ${tradeId}. Rilancio a ${reBidAmount} cr (Max: ${maxBid}). Asta ancora tracciata.`
               });
@@ -1611,7 +1658,7 @@ async function sendResearchRequest() {
         await handle401Error("Ricerca Sniping");
       } else if (response.status === 458) {
         console.warn("[FC Sniper Ricerca] CAPTCHA 458 rilevato!");
-        chrome.runtime.sendMessage({
+        sendMessageSafe({
           tipo: 'LOG',
           valore: '[ATTENZIONE - CAPTCHA RILEVATO] Verifica richiesta nella Web App. Bot arrestato.'
         });
@@ -1666,8 +1713,8 @@ async function sendBuyNowRequest(tradeId, buyNowPrice, itemId) {
       const data = await response.json();
       carteAcquistate += 1;
       idCarteAcquistate.push(itemId);
-      chrome.runtime.sendMessage({ tipo: 'LOG', valore: `[ACQUISTO RIUSCITO] Carta acquistata al prezzo di ${buyNowPrice} crediti!` });
-      chrome.runtime.sendMessage({ tipo: 'CARTA_ACQUISTATA', valore: carteAcquistate });
+      sendMessageSafe({ tipo: 'LOG', valore: `[ACQUISTO RIUSCITO] Carta acquistata al prezzo di ${buyNowPrice} crediti!` });
+      sendMessageSafe({ tipo: 'CARTA_ACQUISTATA', valore: carteAcquistate });
       try { chrome.storage.local.set({ carteAcquistate }); } catch (_) { }
       return true;
     } else {
@@ -1684,7 +1731,7 @@ async function sendBuyNowRequest(tradeId, buyNowPrice, itemId) {
         await handle401Error("BuyNow");
       } else if (response.status === 458) {
         console.warn(`[FC Sniper] CAPTCHA Rilevato (458) su Buy Now!`);
-        chrome.runtime.sendMessage({
+        sendMessageSafe({
           tipo: 'LOG',
           valore: `[ATTENZIONE - CAPTCHA RILEVATO] EA richiede verifica nella Web App. Bot arrestato.`
         });
@@ -1717,7 +1764,7 @@ async function sendBuyNowRequest(tradeId, buyNowPrice, itemId) {
       } else if (response.status === 478 || response.status === 461) {
         // Carta già acquistata da un altro utente (normale durante lo sniping se arriviamo con qualche millisecondo di ritardo)
         console.log(`[FC Sniper] Carta già acquistata da un altro utente (${response.status}) su Trade ${tradeId}`);
-        chrome.runtime.sendMessage({
+        sendMessageSafe({
           tipo: 'LOG',
           valore: `[SNIPE 461] Carta a ${buyNowPrice} crediti anticipata da un altro utente (Trade: ${tradeId})`
         });
@@ -1876,7 +1923,7 @@ async function sendFodderResearchRequest() {
             await sendToTransferList();
             await sellFodder(next.price);
             crediti = await getCrediti();
-            chrome.runtime.sendMessage({ tipo: 'CREDITI', valore: crediti });
+            sendMessageSafe({ tipo: 'CREDITI', valore: crediti });
             await sleep(getRandomGaussian(1.5, 0.2, 1.2, 2.0) * 1000);
           }
         }
@@ -1886,7 +1933,7 @@ async function sendFodderResearchRequest() {
           break;
         } else if (response.status === 458) {
           console.warn("[FC Sniper Ricerca Fodder] CAPTCHA 458 rilevato!");
-          chrome.runtime.sendMessage({
+          sendMessageSafe({
             tipo: 'LOG',
             valore: '[ATTENZIONE - CAPTCHA RILEVATO] Verifica richiesta nella Web App. Bot arrestato.'
           });
@@ -1905,7 +1952,7 @@ async function sendFodderResearchRequest() {
     if (start !== true) break;
 
     // Pacing competitivo per sniping
-    chrome.runtime.sendMessage({ tipo: 'TENTATIVI_RIMASTI', valore: numeroTentativi - (i + 1) });
+    sendMessageSafe({ tipo: 'TENTATIVI_RIMASTI', valore: numeroTentativi - (i + 1) });
     if ((i + 1) % 25 === 0) {
       await clearSoldItem();
     }
@@ -1940,7 +1987,7 @@ async function getFodderList() {
       console.warn(`[FC Sniper] Nessun fodder trovato nella risposta per rating ${fodderRating}`);
     }
   } catch (error) {
-    chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Errore durante recupero lista dei fodder dal server' });
+    sendMessageSafe({ tipo: 'LOG', valore: 'Errore durante recupero lista dei fodder dal server' });
     console.error("Errore durante recupero lista dei fodder dal server:", error);
   }
 }
@@ -1997,13 +2044,13 @@ async function sellFodder(price) {
         consecutive401Errors = 0;
         const data = await response.json();
 
-        chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Carta messa in vendita a: ' + price + ' crediti' });
+        sendMessageSafe({ tipo: 'LOG', valore: 'Carta messa in vendita a: ' + price + ' crediti' });
       } else {
         if (response.status === 401) {
           await handle401Error("Messa in Vendita Fodder");
         }
         console.error(`[FC Sniper] Errore HTTP: ${response.status} ${response.statusText} nella messa in vendita`);
-        chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Errore nella messa in vendita a ' + price + ' crediti' });
+        sendMessageSafe({ tipo: 'LOG', valore: 'Errore nella messa in vendita a ' + price + ' crediti' });
       }
 
     } catch (error) {
@@ -2289,7 +2336,7 @@ async function sellSingleItem(itemId, price, startingBid = null) {
       if (resp.status === 426) {
         listingRestrictedUntil = Date.now() + (15 * 60 * 1000);
         console.warn(`[FC Sniper Listing] Rate limit 426 su auctionhouse! Attivato stop temporaneo listing per 15 min.`);
-        chrome.runtime.sendMessage({
+        sendMessageSafe({
           tipo: 'LOG',
           valore: `[RATE LIMIT VENDITA] EA ha temporaneamente limitato il listing delle carte (426). Stop immediato alle richieste di vendita per 15 min per far decadere il blocco. Le carte restano al sicuro in Tradepile.`
         });
@@ -2555,7 +2602,7 @@ async function reconcileWatchlistOnStartup() {
     }
 
     if (recoveredWon > 0 || cleanedLost > 0) {
-      chrome.runtime.sendMessage({
+      sendMessageSafe({
         tipo: 'LOG',
         valore: `[Reconciliation] Recuperate e messe in vendita ${recoveredWon} carte vinte, rimosse ${cleanedLost} aste perse.`
       });
@@ -2596,7 +2643,7 @@ async function resolveWatchlist() {
     const data = await response.json();
     if (data.credits !== undefined) {
       crediti = data.credits;
-      chrome.runtime.sendMessage({ tipo: 'CREDITI', valore: crediti });
+      sendMessageSafe({ tipo: 'CREDITI', valore: crediti });
     }
     const auctions = data.auctionInfo || [];
       const storedBids = await getStoredPendingBids();
@@ -2645,7 +2692,7 @@ async function resolveWatchlist() {
           // Incrementa subito il conteggio delle carte vinte prima di spostare
           carteAcquistate += 1;
           carteVinteCiclo += 1;
-          chrome.runtime.sendMessage({ tipo: 'CARTA_ACQUISTATA', valore: carteAcquistate });
+          sendMessageSafe({ tipo: 'CARTA_ACQUISTATA', valore: carteAcquistate });
           try { chrome.storage.local.set({ carteAcquistate }); } catch (_) { }
 
           let sellPrice = tracked?.sellPrice;
@@ -2697,12 +2744,12 @@ async function resolveWatchlist() {
           if (sellPrice && sellPrice > 0) {
             const listed = await sellSingleItem(itemId, sellPrice);
             if (listed) {
-              chrome.runtime.sendMessage({ tipo: 'LOG', valore: `ASTA VINTA a ${buyPrice} crediti! Messa in vendita a ${sellPrice} crediti${tierTag}.` });
+              sendMessageSafe({ tipo: 'LOG', valore: `ASTA VINTA a ${buyPrice} crediti! Messa in vendita a ${sellPrice} crediti${tierTag}.` });
             } else {
-              chrome.runtime.sendMessage({ tipo: 'LOG', valore: `ASTA VINTA a ${buyPrice} crediti! Spostata in lista trasferimenti (sarà messa in vendita dal recupero Tradepile).` });
+              sendMessageSafe({ tipo: 'LOG', valore: `ASTA VINTA a ${buyPrice} crediti! Spostata in lista trasferimenti (sarà messa in vendita dal recupero Tradepile).` });
             }
           } else {
-            chrome.runtime.sendMessage({ tipo: 'LOG', valore: `ASTA VINTA a ${buyPrice} crediti! Spostata in lista trasferimenti (Prezzo sconosciuto, non listata).` });
+            sendMessageSafe({ tipo: 'LOG', valore: `ASTA VINTA a ${buyPrice} crediti! Spostata in lista trasferimenti (Prezzo sconosciuto, non listata).` });
           }
 
           await removeStoredPendingBid(tradeId);
@@ -2714,7 +2761,7 @@ async function resolveWatchlist() {
           activeBids.delete(String(tradeId));
           activeBids.delete(Number(tradeId));
           console.log(`[FC Sniper Watchlist] Asta conclusa non vinta (Trade: ${tradeId}). Rimossa dagli osservati.`);
-          chrome.runtime.sendMessage({
+          sendMessageSafe({
             tipo: 'LOG',
             valore: `[ASTA PERSA] Asta su ${tracked?.name || 'Trade ' + tradeId} conclusa non vinta (prezzo finale: ${item.currentBid || 'N/D'} cr). Rimossa dagli osservati.`
           });
@@ -2737,7 +2784,7 @@ async function resolveWatchlist() {
           if (item.bidState === "outbid") {
             if (nextBid > tracked.maxBidAllowed) {
               console.log(`[FC Sniper Watchlist] Asta Trade ${tradeId} (${tracked.name || 'Trade ' + tradeId}) superata da altro utente a ${item.currentBid}. Il prossimo rilancio (${nextBid}) supererebbe il limite (${tracked.maxBidAllowed}). Abbandono.`);
-              chrome.runtime.sendMessage({
+              sendMessageSafe({
                 tipo: 'LOG',
                 valore: `[ASTA SUPERATA] Asta su ${tracked.name || 'Trade ' + tradeId} superata a ${item.currentBid} cr. Rilancio (${nextBid} cr) oltre il limite max (${tracked.maxBidAllowed} cr): abbandono.`
               });
@@ -2786,7 +2833,7 @@ async function resolveWatchlist() {
         if (nextBid <= tracked.maxBidAllowed) {
           if (typeof crediti === 'number' && crediti < nextBid) {
             console.log(`[FC Sniper Watchlist] Controrilancio annullato su Trade ${tradeId}: crediti insufficienti (${crediti} cr < ${nextBid} cr).`);
-            chrome.runtime.sendMessage({
+            sendMessageSafe({
               tipo: 'LOG',
               valore: `[CONTRORILANCIO] Annullato su ${tracked.name || 'Trade ' + tradeId}: crediti insufficienti (${crediti} cr < ${nextBid} cr richiesti).`
             });
@@ -2804,7 +2851,7 @@ async function resolveWatchlist() {
             await storePendingBid(tradeId, tracked);
             activeBids.set(String(tradeId), tracked);
 
-            chrome.runtime.sendMessage({
+            sendMessageSafe({
               tipo: 'LOG',
               valore: `[CONTRORILANCIO] Rilancio #${nextRebidNumber} di ${nextBid} crediti su ${tracked.name || 'Trade ' + tradeId} (Superato a ${item.currentBid} cr | Max: ${tracked.maxBidAllowed} cr | Scade in ${Math.round(item.expires)}s)`
             });
@@ -2830,7 +2877,7 @@ async function resolveWatchlist() {
           }
         } else if (nextBid > tracked.maxBidAllowed) {
           console.log(`[FC Sniper] Asta Trade ${tradeId} superata a ${item.currentBid}. Il prossimo rilancio (${nextBid}) supererebbe il limite (${tracked.maxBidAllowed}). Abbandono.`);
-          chrome.runtime.sendMessage({
+          sendMessageSafe({
             tipo: 'LOG',
             valore: `[ASTA SUPERATA] Asta su ${tracked.name || 'Trade ' + tradeId} superata a ${item.currentBid} cr. Rilancio (${nextBid} cr) oltre il limite max (${tracked.maxBidAllowed} cr): abbandono.`
           });
@@ -2932,7 +2979,7 @@ async function runMassBiddingEngine() {
       // BLOCCO DI SICUREZZA: se il prezzo non è verificato con certezza, salta lo stile ed evita offerte cieche
       if (!marketPrice || marketPrice <= 0) {
         console.warn(`[FC Sniper Consumabili] Prezzo non identificato per ${styleMeta.name}. Salto per sicurezza.`);
-        chrome.runtime.sendMessage({
+        sendMessageSafe({
           tipo: 'LOG',
           valore: `[SICUREZZA] Prezzo di mercato sconosciuto per ${styleMeta.name}. Offerte sospese su questo stile!`
         });
@@ -3083,12 +3130,12 @@ async function runMassBiddingEngine() {
     }
 
     // Aggiornamento contatore tentativi rimasti
-    chrome.runtime.sendMessage({ tipo: 'TENTATIVI_RIMASTI', valore: numeroTentativi - (i + 1) });
+    sendMessageSafe({ tipo: 'TENTATIVI_RIMASTI', valore: numeroTentativi - (i + 1) });
 
     let randomValue;
     if ((i + 1) % 50 == 0 && i != numeroTentativi - 1) {
       randomValue = getRandomInRange(120, 180); // sleep tra 2 e 3 minuti ogni 50 tentativi
-      chrome.runtime.sendMessage({ tipo: 'LOG', valore: 'Cool down di: ' + randomValue + ' sec' });
+      sendMessageSafe({ tipo: 'LOG', valore: 'Cool down di: ' + randomValue + ' sec' });
       await clearSoldItem();
     } else if ((i + 1) % 5 == 0) {
       randomValue = getRandomGaussian(4.0, 0.4, 3.4, 4.8); // breve pausa ogni 5 target
@@ -3113,7 +3160,7 @@ async function runMassBiddingEngine() {
   if (start !== true) return;
   let activeRemaining = await resolveWatchlist();
   if (activeRemaining > 0 && start === true) {
-    chrome.runtime.sendMessage({
+    sendMessageSafe({
       tipo: 'LOG',
       valore: `Tentativi terminati. In attesa della chiusura di ${activeRemaining} aste in corso...`
     });
@@ -3129,7 +3176,7 @@ async function runMassBiddingEngine() {
 
   // Risoluzione finale e pulizia
   await resolveWatchlist();
-  chrome.runtime.sendMessage({
+  sendMessageSafe({
     tipo: 'LOG',
     valore: `[TENTATIVI COMPLETATI] Tutte le aste sono concluse! Carte vinte in questa sessione: ${carteAcquistate}`
   });
@@ -3137,7 +3184,7 @@ async function runMassBiddingEngine() {
 
   // credito aggiornato post-vendite e report Telegram di fine ciclo
   crediti = await getCrediti();
-  chrome.runtime.sendMessage({ tipo: 'CREDITI', valore: crediti });
+  sendMessageSafe({ tipo: 'CREDITI', valore: crediti });
   await sendCycleReport('bidding', { acquistate: carteAcquistate, vendute: carteVendute, crediti });
 }
 
@@ -3176,7 +3223,7 @@ async function discoverConsumableLowestBin(playStyleId, manualBinOverride = 0, f
   }
 
   console.log(`[FC Sniper Consumabili] Avvio rilevamento Lowest BIN istantaneo per ${styleMeta.name}...`);
-  chrome.runtime.sendMessage({
+  sendMessageSafe({
     tipo: 'LOG',
     valore: `[Auto-Discovery] Analisi di mercato per ${styleMeta.name}: cerco il prezzo di vendita istantanea (58-59m)...`
   });
@@ -3266,7 +3313,7 @@ async function discoverConsumableLowestBin(playStyleId, manualBinOverride = 0, f
 
   if (!candidateBin || candidateBin <= 0) {
     console.warn(`[FC Sniper Consumabili] Impossibile trovare carte sul mercato per ${styleMeta.name}.`);
-    chrome.runtime.sendMessage({
+    sendMessageSafe({
       tipo: 'LOG',
       valore: `[BLOCCO SICUREZZA] Nessuna carta presente sul mercato per ${styleMeta.name}. Offerte sospese!`
     });
@@ -3333,7 +3380,7 @@ async function discoverConsumableLowestBin(playStyleId, manualBinOverride = 0, f
     if (totalCards > 0 && staleCards.length === 0) {
       verifiedBin = candidateBin;
       console.log(`[FC Sniper Consumabili] Condizione di vendita istantanea confermata a ${verifiedBin} crediti! (${totalCards} carte, tutte fresche a 58-59 min).`);
-      chrome.runtime.sendMessage({
+      sendMessageSafe({
         tipo: 'LOG',
         valore: `[Auto-Discovery] Lowest BIN live per ${styleMeta.name}: ${verifiedBin} crediti (${totalCards} carte fresche a 58-59m)!`
       });
@@ -3347,7 +3394,7 @@ async function discoverConsumableLowestBin(playStyleId, manualBinOverride = 0, f
       const step = getEaStep(candidateBin);
       verifiedBin = candidateBin + step;
       console.log(`[FC Sniper Consumabili] 0 carte trovate a ${candidateBin}. Lowest BIN reale disponibile sul mercato: ${verifiedBin} crediti.`);
-      chrome.runtime.sendMessage({
+      sendMessageSafe({
         tipo: 'LOG',
         valore: `[Auto-Discovery] Lowest BIN reale per ${styleMeta.name}: ${verifiedBin} crediti (0 carte a ${candidateBin})!`
       });
@@ -3377,7 +3424,7 @@ async function discoverConsumableLowestBin(playStyleId, manualBinOverride = 0, f
   // BLOCCANTE DI SICUREZZA
   if (!verifiedBin || verifiedBin <= 0) {
     console.error(`[FC Sniper Consumabili] Auto-Discovery fallita per ${styleMeta.name}: impossibile determinare il prezzo di mercato reale!`);
-    chrome.runtime.sendMessage({
+    sendMessageSafe({
       tipo: 'LOG',
       valore: `[BLOCCO SICUREZZA] Lowest BIN non rilevato per ${styleMeta.name}. Nessuna offerta verrà piazzata!`
     });
@@ -3407,7 +3454,7 @@ async function sendConsumableResearchRequest() {
       sPrice = roundDownToStep(mPrice * 0.82);
     }
     styleConfig[sId] = { meta, marketPrice: mPrice, snipePrice: sPrice };
-    chrome.runtime.sendMessage({
+    sendMessageSafe({
       tipo: 'LOG',
       valore: `[SNIPING TARGET] ${meta.name} -> Mercato: ${mPrice} cr | Compra Ora Snipe: <= ${sPrice} cr`
     });
@@ -3479,7 +3526,7 @@ async function sendConsumableResearchRequest() {
               await sendToTransferList();
               await sellSingleItem(targetAuction.itemData?.id, target.marketPrice);
               crediti = await getCrediti();
-              chrome.runtime.sendMessage({ tipo: 'CREDITI', valore: crediti });
+              sendMessageSafe({ tipo: 'CREDITI', valore: crediti });
               // Breve respiro prima di riprendere le ricerche
               await sleep(getRandomGaussian(1.5, 0.2, 1.2, 2.0) * 1000);
             }
@@ -3490,7 +3537,7 @@ async function sendConsumableResearchRequest() {
         break;
       } else if (response.status === 458) {
         console.warn("[FC Sniper Sniping Consumabili] CAPTCHA 458 rilevato!");
-        chrome.runtime.sendMessage({
+        sendMessageSafe({
           tipo: 'LOG',
           valore: '[ATTENZIONE - CAPTCHA RILEVATO] Verifica richiesta nella Web App. Bot arrestato.'
         });
@@ -3507,7 +3554,7 @@ async function sendConsumableResearchRequest() {
 
     if (start !== true) break;
 
-    chrome.runtime.sendMessage({ tipo: 'TENTATIVI_RIMASTI', valore: numeroTentativi - (i + 1) });
+    sendMessageSafe({ tipo: 'TENTATIVI_RIMASTI', valore: numeroTentativi - (i + 1) });
 
     // Pulizia periodica venduti ogni 25 ricerche per liberare slot
     if ((i + 1) % 25 === 0) {
@@ -3548,13 +3595,13 @@ async function runLazyTradingEngine() {
       let isMacroPause = false;
       marketRestricted = false;
 
-      chrome.runtime.sendMessage({
+      sendMessageSafe({
         tipo: 'LOG',
         valore: `=== [${tag}] Inizio Ciclo #${cycle} ===`
       });
 
       // FASE 1: Riconciliazione aste Watchlist, rilevamento prezzi, riscossione vendite, relist automatico
-      chrome.runtime.sendMessage({
+      sendMessageSafe({
         tipo: 'LOG',
         valore: isFodder
           ? `[LAZY FODDER] Fase 1: Riconciliazione aste vinte, aggiornamento lista Fut.gg (Rating ${fodderRating}), riscossione vendite e relist 1 Ora...`
@@ -3582,7 +3629,7 @@ async function runLazyTradingEngine() {
         await getFodderList();
 
         if (listaFodder.length === 0) {
-          chrome.runtime.sendMessage({
+          sendMessageSafe({
             tipo: 'LOG',
             valore: `[LAZY FODDER] Nessun giocatore trovato per Rating ${fodderRating} dal server locale. Attendo 10s prima di riprovare...`
           });
@@ -3592,7 +3639,7 @@ async function runLazyTradingEngine() {
 
         const validPrices = listaFodder.map(f => f.price).filter(p => typeof p === 'number' && p > 0);
         if (validPrices.length === 0) {
-          chrome.runtime.sendMessage({
+          sendMessageSafe({
             tipo: 'LOG',
             valore: `[LAZY FODDER] Nessun prezzo valido disponibile per Rating ${fodderRating}. Attendo 10s...`
           });
@@ -3642,7 +3689,7 @@ async function runLazyTradingEngine() {
           playerPriceMap: playerPriceMap
         };
 
-        chrome.runtime.sendMessage({
+        sendMessageSafe({
           tipo: 'LOG',
           valore: `[PREZZI FODDER CICLO #${cycle}] Rating ${fodderRating} (${listaFodder.length} giocatori) -> Valori Fut.gg: ${benchmarkFloor} - ${maxPlayerPrice} cr | Prezzi Max Safe individuali: da ${minMaxBuy} a ${maxMaxBuy} cr (Margine netto min: +200 cr garantito) | Vendite Scaglionate 1 ORA (Tier A +6%, Tier B +${markup}%, Tier C +15%)`
         });
@@ -3679,7 +3726,7 @@ async function runLazyTradingEngine() {
         for (const sId of targetStyles) {
           if (start !== true) break;
           const meta = CHEM_STYLES[sId] || { id: sId, name: `Stile ${sId}` };
-          chrome.runtime.sendMessage({
+          sendMessageSafe({
             tipo: 'LOG',
             valore: `[Auto-Discovery Ciclo #${cycle}] Rilevamento Lowest BIN per ${meta.name}...`
           });
@@ -3710,7 +3757,7 @@ async function runLazyTradingEngine() {
             };
 
             const minProfitText = (minNetRevenue - maxBuyAllowed);
-            chrome.runtime.sendMessage({
+            sendMessageSafe({
               tipo: 'LOG',
               valore: `[PREZZI CICLO #${cycle}] ${meta.name} -> Floor: ${floor} | Prezzo Max Acquisto: <= ${maxBuyAllowed} (Profitto netto min: +${minProfitText} cr) | Vendite Scaglionate: A (+6%): ${pTierA}, B (+${markup}%): ${pTierB}, C (+15%): ${pTierC}`
             });
@@ -3763,7 +3810,7 @@ async function runLazyTradingEngine() {
 
       // 1e. Aggiornamento crediti
       crediti = await getCrediti();
-      chrome.runtime.sendMessage({ tipo: 'CREDITI', valore: crediti });
+      sendMessageSafe({ tipo: 'CREDITI', valore: crediti });
 
       if (start !== true) break;
 
@@ -3787,7 +3834,7 @@ async function runLazyTradingEngine() {
           const name = (CHEM_STYLES[sId]?.name || sId).split(" ")[0];
           return `${name}: ${currentStyleCounts[sId]}`;
         }).join(" | ");
-        chrome.runtime.sendMessage({
+        sendMessageSafe({
           tipo: 'LOG',
           valore: `[BILANCIAMENTO TRADEPILE] Presenze attuali: ${presenceLog} (Quota paritaria: ${Math.round(100 / targetStyles.length)}% per stile)`
         });
@@ -3802,7 +3849,7 @@ async function runLazyTradingEngine() {
       let cycleTarget = 0;
       if (isListingBlocked && (unlistedCount >= 6 || currentTotalCount >= 85)) {
         const remainingMin = Math.ceil((listingRestrictedUntil - Date.now()) / 60000);
-        chrome.runtime.sendMessage({
+        sendMessageSafe({
           tipo: 'LOG',
           valore: `[COOLDOWN LISTING ATTIVO] Ci sono ${unlistedCount} carte in attesa di vendita (${currentTotalCount}/100 in Tradepile) e il listing EA è in pausa (${remainingMin} min). Sospendo acquisti per non bloccare altri crediti.`
         });
@@ -3821,7 +3868,7 @@ async function runLazyTradingEngine() {
         }
         cycleTarget = Math.min(rawMissing, maxBatch);
         console.log(`[${tag}] Tradepile: ${currentActiveCount} attive, ${currentTotalCount}/${MAX_TRADEPILE_LIMIT} totali (Mancanti: ${rawMissing}, Target ciclo: ${cycleTarget})`);
-        chrome.runtime.sendMessage({
+        sendMessageSafe({
           tipo: 'LOG',
           valore: `[${tag}] Tradepile: ${currentActiveCount} attive (${currentTotalCount}/${targetSize} tot). Mancanti: ${rawMissing}` + (rawMissing > maxBatch ? ` (Acquisti scaglionati: target ${cycleTarget} carte per questo ciclo)` : '')
         });
@@ -3830,7 +3877,7 @@ async function runLazyTradingEngine() {
       // FASE 3: Rifornimento Ibrido Protetto (Mass Bidding mirato + eventuale Rabbocco Compra Ora)
       if (cycleTarget > 0 && start === true) {
         if (targets.length === 0) {
-          chrome.runtime.sendMessage({
+          sendMessageSafe({
             tipo: 'LOG',
             valore: `[${tag}] Impossibile determinare i prezzi di mercato. Salto il rifornimento per questo ciclo.`
           });
@@ -3867,12 +3914,12 @@ async function runLazyTradingEngine() {
               const name = (CHEM_STYLES[sId]?.name || sId).split(" ")[0];
               return `${name}: ${bidsTargetPerStyle[sId]}`;
             }).join(" | ");
-            chrome.runtime.sendMessage({
+            sendMessageSafe({
               tipo: 'LOG',
               valore: `[LAZY BIDDING] Step 1: Offerte all'asta paritarie (Quota offerte per stile: ${bidsQuotaLog} | Totale: ${MAX_BIDS_PER_CYCLE}). Finestra 1-10 min, controrilanci attivi...`
             });
           } else {
-            chrome.runtime.sendMessage({
+            sendMessageSafe({
               tipo: 'LOG',
               valore: `[LAZY FODDER BIDDING] Step 1: Offerte all'asta a sconto (Target: ${cycleTarget} carte, Max offerte: ${MAX_BIDS_PER_CYCLE}, Prezzi Max: ${minMaxBuy}-${maxMaxBuy} cr). Rotazione sui giocatori Rating ${fodderRating}...`
             });
@@ -3886,14 +3933,14 @@ async function runLazyTradingEngine() {
               // Se tutti gli stili hanno già raggiunto la propria quota paritaria di offerte
               const allBidsFilled = targetStyles.every(sId => (bidsPerStyle[sId] || 0) >= (bidsTargetPerStyle[sId] || 1));
               if (allBidsFilled || totalBidsPlaced >= MAX_BIDS_PER_CYCLE) {
-                chrome.runtime.sendMessage({
+                sendMessageSafe({
                   tipo: 'LOG',
                   valore: `[LAZY BIDDING] Quota paritaria offerte completata su tutti gli stili (${totalBidsPlaced}/${MAX_BIDS_PER_CYCLE}). Monitoraggio e risoluzione aste in corso...`
                 });
                 break;
               }
             } else if (totalBidsPlaced >= MAX_BIDS_PER_CYCLE) {
-              chrome.runtime.sendMessage({
+              sendMessageSafe({
                 tipo: 'LOG',
                 valore: `[LAZY FODDER BIDDING] Quota offerte ciclo raggiunta (${totalBidsPlaced}/${MAX_BIDS_PER_CYCLE}). Monitoraggio e risoluzione aste in corso...`
               });
@@ -3902,7 +3949,7 @@ async function runLazyTradingEngine() {
 
             // Verifica rapida crediti (saldo in memoria, senza chiamata extra)
             if (typeof crediti === 'number' && crediti < minBidRequired && activeBids.size === 0) {
-              chrome.runtime.sendMessage({
+              sendMessageSafe({
                 tipo: 'LOG',
                 valore: `[${bidTag}] Crediti insufficienti (${crediti} < ${minBidRequired}). Passo al controllo completamento.`
               });
@@ -3914,7 +3961,7 @@ async function runLazyTradingEngine() {
               ? ((wonInThisCycle + activeBids.size) >= (cycleTarget + 2) || activeBids.size >= MAX_ACTIVE_WATCHLIST)
               : (activeBids.size >= MAX_ACTIVE_WATCHLIST || (wonInThisCycle + activeBids.size) >= physicalFreeSlots);
             if (inFlightLimitHit) {
-              chrome.runtime.sendMessage({
+              sendMessageSafe({
                 tipo: 'LOG',
                 valore: `[${bidTag}ING] Quota offerte in volo raggiunta (${activeBids.size} attive, ${wonInThisCycle}/${cycleTarget} vinte). Monitoraggio risoluzione aste...`
               });
@@ -3925,7 +3972,7 @@ async function runLazyTradingEngine() {
                 if (carteAcquistate > prevWon) {
                   wonInThisCycle += (carteAcquistate - prevWon);
                   consecutive461InBidding = 0;
-                  chrome.runtime.sendMessage({
+                  sendMessageSafe({
                     tipo: 'LOG',
                     valore: `[${bidTag}ING] Vinta carta all'asta! Progresso ciclo: [${wonInThisCycle}/${cycleTarget}]`
                   });
@@ -3966,7 +4013,7 @@ async function runLazyTradingEngine() {
             });
 
             if (isFodder && searchCount % 4 === 0) {
-              chrome.runtime.sendMessage({
+              sendMessageSafe({
                 tipo: 'LOG',
                 valore: `[LAZY FODDER BIDDING] Analisi aste: ${target.name} (Max Bid: ${target.maxBid} cr) [Controllo ${searchCount + 1}/${maxBiddingSearches}]`
               });
@@ -4026,7 +4073,7 @@ async function runLazyTradingEngine() {
 
                     // Sonda di verifica preliminare post-softban (1 sola offerta di prova)
                     if (requiresSoftBanProbe) {
-                      chrome.runtime.sendMessage({
+                      sendMessageSafe({
                         tipo: 'LOG',
                         valore: `[SONDA ANTI-BAN] Verifica preliminare permessi offerte dopo la pausa di riposo (1 sola offerta test)...`
                       });
@@ -4039,7 +4086,7 @@ async function runLazyTradingEngine() {
 
                     if (requiresSoftBanProbe) {
                       if (!bidSuccess && lastBidErrorStatus === 461) {
-                        chrome.runtime.sendMessage({
+                        sendMessageSafe({
                           tipo: 'LOG',
                           valore: `[SONDA ANTI-BAN] L'offerta di test ha ricevuto 461 (Soft-ban EA ancora attivo). L'account necessita di ulteriore riposo: rientro in pausa senza insistere.`
                         });
@@ -4048,7 +4095,7 @@ async function runLazyTradingEngine() {
                         break;
                       } else if (bidSuccess) {
                         requiresSoftBanProbe = false;
-                        chrome.runtime.sendMessage({
+                        sendMessageSafe({
                           tipo: 'LOG',
                           valore: `[SONDA ANTI-BAN] Test superato con successo! Permessi di offerta ripristinati da EA.`
                         });
@@ -4074,7 +4121,7 @@ async function runLazyTradingEngine() {
                       activeBids.set(String(auction.tradeId), bidData);
                       await storePendingBid(auction.tradeId, bidData);
 
-                      chrome.runtime.sendMessage({
+                      sendMessageSafe({
                         tipo: 'LOG',
                         valore: `[${bidTag}] Offerta di ${nextBid} crediti su ${target.name} (Scade in ${Math.round(auction.expires)}s | Max: ${target.maxBid}) [Offerte ciclo: ${totalBidsPlaced}]`
                       });
@@ -4087,7 +4134,7 @@ async function runLazyTradingEngine() {
 
                       // Pausa distensiva ogni 5 offerte piazzate per far defluire il leaky bucket EA
                       if (totalBidsPlaced > 0 && totalBidsPlaced % 5 === 0) {
-                        chrome.runtime.sendMessage({
+                        sendMessageSafe({
                           tipo: 'LOG',
                           valore: `[${bidTag}ING] Pausa distensiva anti-spam (${totalBidsPlaced} offerte piazzate)... Lascio defluire i contatori EA prima delle prossime offerte.`
                         });
@@ -4100,14 +4147,14 @@ async function runLazyTradingEngine() {
                         bidPriceOffset++; // Varia micr per bypassare la cache EA sulla prossima ricerca
                         if (consecutive461InBidding === 3) {
                           console.log(`[${bidTag}ING] 3 aste contese o Watchlist piena (461). Eseguo pulizia Watchlist...`);
-                          chrome.runtime.sendMessage({
+                          sendMessageSafe({
                             tipo: 'LOG',
                             valore: `[${bidTag}ING] Aste contese o Watchlist satura (461). Eseguo pulizia Watchlist per liberare slot...`
                           });
                           await resolveWatchlist();
                         } else if (consecutive461InBidding >= 6) {
                           console.log(`[${bidTag}ING] Rilevate ${consecutive461InBidding} aste già chiuse/contese (461). Concludo Step 1 e passo a Compra Ora.`);
-                          chrome.runtime.sendMessage({
+                          sendMessageSafe({
                             tipo: 'LOG',
                             valore: `[${bidTag}ING] Mercato aste molto conteso (461). Concludo le offerte all'asta e passo direttamente a Compra Ora.`
                           });
@@ -4120,7 +4167,7 @@ async function runLazyTradingEngine() {
                         earlyExitRateLimit = true;
                         console.warn(`[${bidTag}ING] Avviso rate-limit EA (${lastBidErrorStatus}) su offerta. Attivazione Early-Exit preventiva...`);
                         reportTelemetry('EARLY_EXIT_RATE_LIMIT', `Avviso rate-limit EA (${lastBidErrorStatus}) su offerta. Uscita preventiva dagli acquisti.`, { status: lastBidErrorStatus });
-                        chrome.runtime.sendMessage({
+                        sendMessageSafe({
                           tipo: 'LOG',
                           valore: `[PREVENZIONE ANTI-BAN] Segnale di rate-limit EA (${lastBidErrorStatus}) rilevato. Per prevenire soft-ban, concludo anticipatamente gli acquisti e passo alla pausa di riposo.`
                         });
@@ -4140,7 +4187,7 @@ async function runLazyTradingEngine() {
                 earlyExitRateLimit = true;
                 console.warn(`[${bidTag}ING] Avviso rate-limit EA (${res.status}) su ricerca. Attivazione Early-Exit preventiva...`);
                 reportTelemetry('EARLY_EXIT_RATE_LIMIT', `Avviso rate-limit EA (${res.status}) su ricerca. Uscita preventiva dagli acquisti.`, { status: res.status });
-                chrome.runtime.sendMessage({
+                sendMessageSafe({
                   tipo: 'LOG',
                   valore: `[PREVENZIONE ANTI-BAN] Segnale di rate-limit EA (${res.status}) rilevato su ricerca. Concludo anticipatamente gli acquisti e passo alla pausa di riposo.`
                 });
@@ -4151,7 +4198,7 @@ async function runLazyTradingEngine() {
               consecutiveErrorsCount++;
               if (consecutiveErrorsCount >= 3) {
                 if (isFodder) {
-                  chrome.runtime.sendMessage({
+                  sendMessageSafe({
                     tipo: 'LOG',
                     valore: `[LAZY FODDER BID] Rilevati 3 errori consecutivi di ricerca. Passo allo Step 2.`
                   });
@@ -4169,7 +4216,7 @@ async function runLazyTradingEngine() {
               if (carteAcquistate > prevWon) {
                 wonInThisCycle += (carteAcquistate - prevWon);
                 consecutive461InBidding = 0;
-                chrome.runtime.sendMessage({
+                sendMessageSafe({
                   tipo: 'LOG',
                   valore: `[${bidTag}ING] Vinta carta all'asta! Progresso ciclo: [${wonInThisCycle}/${cycleTarget}]`
                 });
@@ -4197,7 +4244,7 @@ async function runLazyTradingEngine() {
               if (carteAcquistate > prevWon) {
                 wonInThisCycle += (carteAcquistate - prevWon);
                 consecutive461InBidding = 0;
-                chrome.runtime.sendMessage({
+                sendMessageSafe({
                   tipo: 'LOG',
                   valore: `[${bidTag}ING] Vinta carta all'asta! Progresso ciclo: [${wonInThisCycle}/${cycleTarget}]`
                 });
@@ -4206,7 +4253,7 @@ async function runLazyTradingEngine() {
 
             // Risoluzione finale offerte pendenti dello Step 1 con messa in vendita
             if (activeBids.size > 0) {
-              chrome.runtime.sendMessage({
+              sendMessageSafe({
                 tipo: 'LOG',
                 valore: `[${bidTag}] Risoluzione offerte inviate (${activeBids.size} attive)...`
               });
@@ -4232,7 +4279,7 @@ async function runLazyTradingEngine() {
             }
 
             if (topUpTarget > 0) {
-              chrome.runtime.sendMessage({
+              sendMessageSafe({
                 tipo: 'LOG',
                 valore: isFodder
                   ? `[LAZY FODDER TOP-UP] Step 2: Compra Ora rapido sotto-prezzo per completare il lotto (${topUpTarget} carte mancanti, Max Buy: <= ${minMaxBuy}-${maxMaxBuy} cr)...`
@@ -4260,7 +4307,7 @@ async function runLazyTradingEngine() {
 
                 // Verifica crediti per Compra Ora
                 if (typeof crediti === 'number' && crediti < target.maxBuyNow) {
-                  chrome.runtime.sendMessage({
+                  sendMessageSafe({
                     tipo: 'LOG',
                     valore: `[${topUpTag}] Crediti insufficienti (${crediti} < ${target.maxBuyNow}) per ulteriori acquisti Compra Ora.`
                   });
@@ -4271,7 +4318,7 @@ async function runLazyTradingEngine() {
                 styleSearchCounts["topup_" + target.key] = styleTopUpCount + 1;
 
                 if (isFodder && topUpSearches % 4 === 0) {
-                  chrome.runtime.sendMessage({
+                  sendMessageSafe({
                     tipo: 'LOG',
                     valore: `[LAZY FODDER TOP-UP] Analisi Compra Ora: ${target.name} (Max Buy: ${target.maxBuyNow} cr) [Ricerca ${topUpSearches + 1}/${maxTopUpSearches}]`
                   });
@@ -4308,14 +4355,14 @@ async function runLazyTradingEngine() {
                       const candidate = validAuctions[0];
                       // Controllo preventivo crediti
                       if (typeof crediti === 'number' && crediti < candidate.buyNowPrice) {
-                        chrome.runtime.sendMessage({
+                        sendMessageSafe({
                           tipo: 'LOG',
                           valore: `[${topUpTag}] Crediti insufficienti (${crediti} cr < ${candidate.buyNowPrice} cr richiesti) per acquistare ${target.name}. Concludo Step 2.`
                         });
                         break;
                       }
 
-                      attemptedTradeIds.set(String(candidate.tradeId), Date.now());
+                      markTradeAttempted(candidate.tradeId);
 
                       // Acquisto istantaneo (zero-delay) non appena la carta viene trovata
                       const buySuccess = await sendBuyNowRequest(candidate.tradeId, candidate.buyNowPrice, candidate.itemData?.id);
@@ -4336,12 +4383,12 @@ async function runLazyTradingEngine() {
                         const listed = await sellSingleItem(candItemId, tiered.price);
                         if (listed) {
                           const netEst = Math.floor(tiered.price * 0.95) - candidate.buyNowPrice;
-                          chrome.runtime.sendMessage({
+                          sendMessageSafe({
                             tipo: 'LOG',
                             valore: `[${topUpTag}] Acquistata carta (${target.name}) a ${candidate.buyNowPrice} e listata a ${tiered.price} (Tier ${tiered.tier}: +${tiered.markup}%, Netto stimato: +${netEst} cr) [${topUpBought}/${topUpTarget}]`
                           });
                         } else {
-                          chrome.runtime.sendMessage({
+                          sendMessageSafe({
                             tipo: 'LOG',
                             valore: `[${topUpTag}] Acquistata carta (${target.name}) a ${candidate.buyNowPrice}. Spostata in lista trasferimenti [${topUpBought}/${topUpTarget}].`
                           });
@@ -4354,7 +4401,7 @@ async function runLazyTradingEngine() {
                           earlyExitRateLimit = true;
                           console.warn(`[${topUpTag}] Avviso rate-limit EA (${lastBuyNowErrorStatus}) su Compra Ora. Attivazione Early-Exit preventiva...`);
                           reportTelemetry('EARLY_EXIT_RATE_LIMIT', `Avviso rate-limit EA (${lastBuyNowErrorStatus}) su Compra Ora. Uscita preventiva dagli acquisti.`, { status: lastBuyNowErrorStatus });
-                          chrome.runtime.sendMessage({
+                          sendMessageSafe({
                             tipo: 'LOG',
                             valore: `[PREVENZIONE ANTI-BAN] Segnale di rate-limit EA (${lastBuyNowErrorStatus}) rilevato su Compra Ora. Concludo anticipatamente gli acquisti e passo alla pausa di riposo.`
                           });
@@ -4365,13 +4412,13 @@ async function runLazyTradingEngine() {
                             minPriceOffset++;
                             const nextMinBump = minBidBumps[(styleTopUpCount + minPriceOffset) % minBidBumps.length];
 
-                            chrome.runtime.sendMessage({
+                            sendMessageSafe({
                               tipo: 'LOG',
                               valore: `[${topUpTag}] Carta anticipata (461). Eseguo nuova ricerca variando prezzo minimo (${nextMinBump} cr)... (${consecutive461InTopUp}/3)`
                             });
 
                             if (consecutive461InTopUp >= 3) {
-                              chrome.runtime.sendMessage({
+                              sendMessageSafe({
                                 tipo: 'LOG',
                                 valore: `[${topUpTag}] ${target.name} molto conteso (3 tentativi anticipati). La rotazione passa al prossimo target per diversificare...`
                               });
@@ -4401,7 +4448,7 @@ async function runLazyTradingEngine() {
                     if (!isFodder) {
                       console.warn(`[${topUpTag}] Avviso rate-limit EA (${res.status}) su ricerca Compra Ora. Attivazione Early-Exit preventiva...`);
                       reportTelemetry('EARLY_EXIT_RATE_LIMIT', `Avviso rate-limit EA (${res.status}) su ricerca Compra Ora.`, { status: res.status });
-                      chrome.runtime.sendMessage({
+                      sendMessageSafe({
                         tipo: 'LOG',
                         valore: `[PREVENZIONE ANTI-BAN] Segnale di rate-limit EA (${res.status}) rilevato su ricerca Compra Ora. Concludo anticipatamente gli acquisti e passo alla pausa di riposo.`
                       });
@@ -4413,7 +4460,7 @@ async function runLazyTradingEngine() {
                   consecutiveErrorsCount++;
                   if (!isFodder || consecutiveErrorsCount >= 3) {
                     if (isFodder) {
-                      chrome.runtime.sendMessage({
+                      sendMessageSafe({
                         tipo: 'LOG',
                         valore: `[LAZY FODDER TOP-UP] Troppi errori consecutivi di ricerca Compra Ora. Concludo lo Step 2.`
                       });
@@ -4432,7 +4479,7 @@ async function runLazyTradingEngine() {
                     const newlyWon = (carteAcquistate - prevWon);
                     wonInThisCycle += newlyWon;
                     topUpBought += newlyWon; // Le aste vinte riducono gli slot da comprare a BIN
-                    chrome.runtime.sendMessage({
+                    sendMessageSafe({
                       tipo: 'LOG',
                       valore: `[${tag} WATCHLIST] Asta vinta durante Compra Ora! Progresso rifornimento: [${topUpBought}/${topUpTarget}]`
                     });
@@ -4450,12 +4497,12 @@ async function runLazyTradingEngine() {
         }
       } else if (cycleTarget === 0) {
         if (isListingBlocked) {
-          chrome.runtime.sendMessage({
+          sendMessageSafe({
             tipo: 'LOG',
             valore: `[${tag}] Nessun acquisto per questo ciclo: listing EA in pausa e Tradepile a quota ${currentTotalCount}/${MAX_TRADEPILE_LIMIT} carte (${currentActiveCount} attive).`
           });
         } else {
-          chrome.runtime.sendMessage({
+          sendMessageSafe({
             tipo: 'LOG',
             valore: `[${tag}] Tradepile già al completo (${currentActiveCount}/${targetSize} carte attive sul mercato, ${currentTotalCount} totali).`
           });
@@ -4471,7 +4518,7 @@ async function runLazyTradingEngine() {
       await listUnlistedTradepileItems(cyclePrices);
       const finalPile = await getTradepileInfo();
       crediti = await getCrediti();
-      chrome.runtime.sendMessage({ tipo: 'CREDITI', valore: crediti });
+      sendMessageSafe({ tipo: 'CREDITI', valore: crediti });
 
       // report Telegram di fine ciclo (totali carte acquistate / carte vendute / crediti)
       await sendCycleReport('lazy', {
@@ -4480,7 +4527,7 @@ async function runLazyTradingEngine() {
         crediti
       });
 
-      chrome.runtime.sendMessage({
+      sendMessageSafe({
         tipo: 'LOG',
         valore: `[STATO TRADEPILE] ${finalPile.active}/${targetSize} carte attive sul mercato (${finalPile.total} totali in lista trasferimenti).`
       });
@@ -4506,7 +4553,7 @@ async function runLazyTradingEngine() {
           sleepMins = Math.min(180, Math.round(baseMins * 2.0));
         }
         reportTelemetry('COOLDOWN_START', `Pausa rigenerativa soft-ban #${consecutiveSoftBansInSession} (${sleepMins} min) avviata`, { sleepMins, consecutiveSoftBans: consecutiveSoftBansInSession, marketRestricted: true });
-        chrome.runtime.sendMessage({
+        sendMessageSafe({
           tipo: 'LOG',
           valore: `[${tag}] Rate limit EA attivo (Soft-ban consecutivo #${consecutiveSoftBansInSession}). Pausa rigenerativa incrementale di ${sleepMins} min per sblocco completo dell'account (Silenzio totale verso il mercato)...`
         });
@@ -4516,7 +4563,7 @@ async function runLazyTradingEngine() {
         sleepMins = lazySleepMinutes && lazySleepMinutes > 0 ? lazySleepMinutes : 60;
         const hoursActive = ((Date.now() - sessionActiveStartTime) / (1000 * 60 * 60)).toFixed(1);
         reportTelemetry('MACRO_PAUSE_START', `Superate le 3 ore di attività continuativa (${hoursActive}h). Macro-pausa rigenerativa (${sleepMins} min) avviata`, { sleepMins, hoursActive });
-        chrome.runtime.sendMessage({
+        sendMessageSafe({
           tipo: 'LOG',
           valore: `[MACRO-PAUSA RIGENERATIVA] Concluso intero ciclo dopo ${hoursActive}h di attività continuativa! Avvio macro-pausa di ${sleepMins} min per azzerare i contatori EA e favorire le vendite (Keep-alive attivo)...`
         });
@@ -4524,14 +4571,14 @@ async function runLazyTradingEngine() {
         consecutiveSoftBansInSession = 0;
         sleepMins = Math.round(getRandomGaussian(5.5, 0.4, 5.0, 6.5));
         reportTelemetry('PREVENTIVE_COOLING_PAUSE', `Pausa preventiva anti-ban post early-exit (${sleepMins} min)`, { sleepMins });
-        chrome.runtime.sendMessage({
+        sendMessageSafe({
           tipo: 'LOG',
           valore: `[${tag}] Raffreddamento preventivo attivo: pausa di riposo di ${sleepMins} min per azzerare i contatori EA (Ripresa automatica al termine)...`
         });
       } else if (Date.now() < listingRestrictedUntil && (finalPile.total - finalPile.active) >= 6) {
         consecutiveSoftBansInSession = 0;
         sleepMins = Math.max(10, Math.ceil((listingRestrictedUntil - Date.now()) / 60000));
-        chrome.runtime.sendMessage({
+        sendMessageSafe({
           tipo: 'LOG',
           valore: `[${tag}] Cooldown listing EA attivo (${sleepMins} min) con ${finalPile.total - finalPile.active} carte in attesa di vendita. Pausa distensiva...`
         });
@@ -4546,7 +4593,7 @@ async function runLazyTradingEngine() {
           sleepMins = Math.round(getRandomGaussian(28.0, 1.5, 25.0, 32.0));
         }
         reportTelemetry('PAUSE_START', `Pausa dinamica anti-spam (${sleepMins} min)`, { sleepMins, currentPile: finalPile.active, targetSize });
-        chrome.runtime.sendMessage({
+        sendMessageSafe({
           tipo: 'LOG',
           valore: `[${tag}] Tradepile a quota ${finalPile.active}/${targetSize}. Pausa dinamica anti-spam di ${sleepMins} min per favorire le vendite prima del prossimo lotto...`
         });
@@ -4554,7 +4601,7 @@ async function runLazyTradingEngine() {
         consecutiveSoftBansInSession = 0;
         sleepMins = lazySleepMinutes && lazySleepMinutes > 0 ? lazySleepMinutes : 60;
         reportTelemetry('SELLING_PHASE_START', `Fase di vendita Tradepile al completo (${sleepMins} min)`, { sleepMins, currentPile: finalPile.active });
-        chrome.runtime.sendMessage({
+        sendMessageSafe({
           tipo: 'LOG',
           valore: `[${tag}] Tradepile al completo (${finalPile.active}/${targetSize})! Entro in modalità vendita per ${sleepMins} minuti...`
         });
@@ -4590,20 +4637,20 @@ async function runLazyTradingEngine() {
                 crediti = await getCrediti();
                 if (start !== true) break;
                 reportTelemetry('COOLDOWN_KEEPALIVE', `Ping leggero anti-401 inviato durante cooldown silenziato`, { crediti, remainingMinutes });
-                chrome.runtime.sendMessage({
+                sendMessageSafe({
                   tipo: 'LOG',
                   valore: `[COOLDOWN KEEP-ALIVE] Ping leggero di sessione inviato per mantenere attivo il token Web App (anti-401). Mancano ${remainingMinutes} min alla ripresa.`
                 });
               } else {
                 // Silenzio totale verso il mercato durante soft-ban per consentire il reset del ban a EA
-                chrome.runtime.sendMessage({
+                sendMessageSafe({
                   tipo: 'LOG',
                   valore: `[COOLDOWN SILENZIATO] Sblocco soft-ban in corso (silenzio totale verso il mercato)... Mancano ${remainingMinutes} min alla ripresa.`
                 });
               }
             } else if (earlyExitRateLimit) {
               // Silenzio verso il mercato per ripristinare il rate limit delle offerte
-              chrome.runtime.sendMessage({
+              sendMessageSafe({
                 tipo: 'LOG',
                 valore: `[COOLDOWN PREVENTIVO] Riposo anti-ban in corso (azzeramento contatori EA)... Mancano ${remainingMinutes} min alla ripresa.`
               });
@@ -4618,10 +4665,10 @@ async function runLazyTradingEngine() {
               await listUnlistedTradepileItems(cyclePrices);
               crediti = await getCrediti();
               if (typeof crediti === 'number') {
-                chrome.runtime.sendMessage({ tipo: 'CREDITI', valore: crediti });
+                sendMessageSafe({ tipo: 'CREDITI', valore: crediti });
               }
               reportTelemetry('HEARTBEAT', `Heartbeat completato: vendite incassate e carte rilistate`, { crediti, remainingMinutes });
-              chrome.runtime.sendMessage({
+              sendMessageSafe({
                 tipo: 'LOG',
                 valore: `[${tag} HEARTBEAT] Tradepile sincronizzata: vendite incassate, carte vinte listate e crediti aggiornati (${crediti} cr). Prossimo restock tra ${remainingMinutes} min.`
               });
@@ -4642,7 +4689,7 @@ async function runLazyTradingEngine() {
         }
         marketRestricted = false;
         reportTelemetry('CYCLE_START', `Avvio Ciclo #${cycle + 1}`, { cycle: cycle + 1, crediti });
-        chrome.runtime.sendMessage({
+        sendMessageSafe({
           tipo: 'LOG',
           valore: `[${tag}] Pausa completata! Avvio Ciclo #${cycle + 1}...`
         });
@@ -4651,7 +4698,7 @@ async function runLazyTradingEngine() {
       }
     } catch (cycleErr) {
       console.error(`[${tag} ERROR] Ciclo #${cycle}:`, cycleErr);
-      chrome.runtime.sendMessage({
+      sendMessageSafe({
         tipo: 'LOG',
         valore: `[${tag} ERRORE] Errore imprevisto nel Ciclo #${cycle}: ${cycleErr?.message || cycleErr}. Riavvio nuovo ciclo tra 10s...`
       });
@@ -4661,7 +4708,7 @@ async function runLazyTradingEngine() {
     cycle++;
   }
 
-  chrome.runtime.sendMessage({
+  sendMessageSafe({
     tipo: 'LOG',
     valore: `[${tag}] Modalità arrestata. Eseguo pulizia finale...`
   });
