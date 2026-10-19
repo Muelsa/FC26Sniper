@@ -1,0 +1,6 @@
+# File runtime locali (non tracciare)
+fodder-data.json
+runtime-telemetry*.log
+
+# Artifact generati da Chrome (regole DNR compilate)
+_metadata/
