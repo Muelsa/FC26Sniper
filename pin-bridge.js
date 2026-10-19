@@ -64,19 +64,46 @@
     };
   } catch (e) {}
 
+  let lastPersonaSent = null;
+
+  function sendUserInfo(userInfo) {
+    if (!userInfo || typeof userInfo !== "object") return;
+    const personaName = userInfo.personaName || "";
+    const clubName = userInfo.clubName || "";
+    const key = `${personaName}::${clubName}`;
+    if (!personaName && !clubName) return;
+    if (key === lastPersonaSent) return;
+    lastPersonaSent = key;
+    try {
+      window.postMessage({ origin: "PIN_BRIDGE_USER", personaName, clubName }, ORIGIN);
+    } catch (e) {}
+  }
+
   function extractAndSendToken() {
     try {
-      const s = window.services || (typeof window.getAppServices === "function" ? window.getAppServices() : null);
+      const s = window.services;
       let token = null;
       if (s) {
-        if (s.User?.getUser()?.auth?.token) {
-          token = s.User.getUser().auth.token;
-        } else if (s.Network?.client?.defaultHeaders?.['X-UT-SID']) {
+        const userObj = typeof s.User?.getUser === "function" ? s.User.getUser() : null;
+        if (userObj) {
+          if (userObj.auth?.token) {
+            token = userObj.auth.token;
+          }
+
+          // Estrazione username direttamente da getSelectedPersona()
+          try {
+            const persona = typeof userObj.getSelectedPersona === "function" ? userObj.getSelectedPersona() : userObj.selectedPersona;
+            const personaName = persona?.name || persona?.personaName || "";
+            if (personaName) {
+              sendUserInfo({ personaName, clubName: "" });
+            }
+          } catch (_) {}
+        }
+
+        if (!token && s.Network?.client?.defaultHeaders?.['X-UT-SID']) {
           token = s.Network.client.defaultHeaders['X-UT-SID'];
-        } else if (typeof s.Authentication?.getAuthToken === "function") {
+        } else if (!token && typeof s.Authentication?.getAuthToken === "function") {
           token = s.Authentication.getAuthToken();
-        } else if (s.User?.auth?.token) {
-          token = s.User.auth.token;
         }
       }
       if (token) sendToken(token);
@@ -129,11 +156,12 @@
   }
 
   let attempts = 0;
-  const maxAttempts = 30;
+  const maxAttempts = 60;
   const timer = setInterval(() => {
     attempts++;
     extractAndSendToken();
-    if (findEaServices() || attempts >= maxAttempts) {
+    const servicesFound = findEaServices();
+    if ((servicesFound && lastPersonaSent) || attempts >= maxAttempts) {
       clearInterval(timer);
       extractAndSendToken();
     }
@@ -218,6 +246,10 @@
 
       case "REQUEST_TOKEN_REFRESH":
         performNativeWebAppKeepAlive(true);
+        extractAndSendToken();
+        break;
+
+      case "REQUEST_USER_INFO":
         extractAndSendToken();
         break;
 
@@ -310,7 +342,8 @@
     "TRIGGER_PIN_BID",
     "TRIGGER_PIN_WATCHLIST",
     "TRIGGER_PIN_SELL",
-    "REQUEST_TOKEN_REFRESH"
+    "REQUEST_TOKEN_REFRESH",
+    "REQUEST_USER_INFO"
   ]);
 
   // Ascolta messaggi inoltrati da content.js

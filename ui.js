@@ -23,6 +23,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const targetTradepileSizeInput = document.getElementById('targetTradepileSizeInput');
   const lazyMarkupPercentInput = document.getElementById('lazyMarkupPercentInput');
   const lazySleepMinutesInput = document.getElementById('lazySleepMinutesInput');
+  const telegramChatIdInput = document.getElementById('telegramChatIdInput');
+  const testTelegramBtn = document.getElementById('testTelegramBtn');
+  const telegramTestFeedback = document.getElementById('telegramTestFeedback');
   const modeLazy = document.getElementById('modeLazy');
   const labelModeLazy = document.getElementById('labelModeLazy') || document.querySelector('label[for="modeLazy"]');
   const snipeSpecificContainer = document.getElementById('snipeSpecificContainer');
@@ -257,13 +260,71 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  if (telegramChatIdInput) {
+    const saveChatId = () => {
+      const val = telegramChatIdInput.value.trim();
+      queueSettingsSave({ telegramChatId: val });
+    };
+    telegramChatIdInput.addEventListener('input', saveChatId);
+    telegramChatIdInput.addEventListener('change', saveChatId);
+  }
+
+  if (testTelegramBtn && telegramChatIdInput) {
+    testTelegramBtn.addEventListener('click', () => {
+      const chatId = telegramChatIdInput.value.trim();
+      if (!chatId) {
+        if (telegramTestFeedback) {
+          telegramTestFeedback.className = 'form-text text-danger';
+          telegramTestFeedback.textContent = 'Inserisci un Chat ID prima di effettuare il test.';
+        }
+        return;
+      }
+
+      // Salva subito il Chat ID
+      chrome.storage.local.set({ telegramChatId: chatId });
+
+      testTelegramBtn.setAttribute('disabled', 'true');
+      if (telegramTestFeedback) {
+        telegramTestFeedback.className = 'form-text text-muted';
+        telegramTestFeedback.textContent = 'Invio messaggio di test in corso...';
+      }
+
+      chrome.runtime.sendMessage({ tipo: 'TELEGRAM_TEST', chatId: chatId }, (response) => {
+        testTelegramBtn.removeAttribute('disabled');
+        if (chrome.runtime.lastError) {
+          if (telegramTestFeedback) {
+            telegramTestFeedback.className = 'form-text text-danger';
+            telegramTestFeedback.textContent = 'Errore comunicazione: ' + chrome.runtime.lastError.message;
+          }
+          return;
+        }
+
+        if (response && response.success) {
+          if (telegramTestFeedback) {
+            telegramTestFeedback.className = 'form-text text-success';
+            telegramTestFeedback.textContent = '✅ Messaggio inviato! Controlla Telegram.';
+          }
+        } else {
+          if (telegramTestFeedback) {
+            telegramTestFeedback.className = 'form-text text-danger';
+            telegramTestFeedback.textContent = '❌ Fallito: ' + (response?.error || 'Verifica il Chat ID o avvia il bot su Telegram.');
+          }
+        }
+      });
+    });
+  }
+
   // Ripristino stato salvato all'avvio
   chrome.storage.local.get([
     'numeroTentativi', 'targetMode', 'fodderMode', 'fodderRating',
     'chemStyle', 'autoBin', 'manualBin', 'strategyMode', 'minMargin', 'maxSnipePrice',
-    'targetTradepileSize', 'lazyMarkupPercent', 'lazySleepMinutes',
+    'targetTradepileSize', 'lazyMarkupPercent', 'lazySleepMinutes', 'telegramChatId', 'personaName',
     'tradepileCount', 'crediti', 'carteAcquistate', 'carteVendute', 'start', 'botStatus'
   ], (result) => {
+    const accBadge = document.getElementById('eaAccountNameBadge');
+    if (accBadge) {
+      accBadge.textContent = result.personaName ? result.personaName : 'In attesa di sync...';
+    }
     if (result.tradepileCount) {
       const tpEl = document.getElementById('tradepileCount');
       if (tpEl) tpEl.textContent = result.tradepileCount;
@@ -280,6 +341,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (result.numeroTentativi) {
       numeroTentativi.value = result.numeroTentativi;
+    }
+
+    if (result.telegramChatId && telegramChatIdInput) {
+      telegramChatIdInput.value = result.telegramChatId;
     }
 
     let savedTarget = result.targetMode;
@@ -386,6 +451,7 @@ document.addEventListener('DOMContentLoaded', () => {
       targetTradepileSize: targetTradepileSize,
       lazyMarkupPercent: lazyMarkupPercent,
       lazySleepMinutes: lazySleepMinutes,
+      telegramChatId: telegramChatIdInput ? telegramChatIdInput.value.trim() : '',
       start: true
     };
 
@@ -485,7 +551,7 @@ document.addEventListener('DOMContentLoaded', () => {
       const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
       const timeStr = `${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
 
-      const verText = document.getElementById('versione')?.textContent?.trim() || 'v2.6.1';
+      const verText = document.getElementById('versione')?.textContent?.trim() || 'v2.6.2';
       const targetMode = typeof getSelectedTargetMode === 'function' ? getSelectedTargetMode() : 'N/D';
       const strategyMode = typeof getSelectedStrategy === 'function' ? getSelectedStrategy() : 'N/D';
       const creditiVal = document.getElementById('crediti')?.textContent?.trim() || 'N/D';
@@ -578,6 +644,14 @@ document.addEventListener('DOMContentLoaded', () => {
             : (message.valore ? String(message.valore) : 'N/D');
         }
         break;
+
+      case 'USER_SYNC': {
+        const accBadge = document.getElementById('eaAccountNameBadge');
+        if (accBadge && message.personaName) {
+          accBadge.textContent = message.personaName;
+        }
+        break;
+      }
     }
   });
 });

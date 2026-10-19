@@ -33,6 +33,21 @@ export function getTargetMode() {
 
 export const getStoredPendingBids = () => getKey('pendingBids', {});
 
+// Chat ID Telegram dell'utente (fornito dalla UI)
+export const getTelegramChatId = () => getKey('telegramChatId', "");
+
+// Info account EA (catturate dal DOM bridge)
+export const getUserProfile = async () => {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['personaName', 'clubName'], (res) => {
+      resolve({
+        personaName: res.personaName || "",
+        clubName: res.clubName || ""
+      });
+    });
+  });
+};
+
 // Pulisce offerte pendenti obsolete (> 24 ore) per garantire memoria pulita
 export async function cleanExpiredPendingBids() {
   try {

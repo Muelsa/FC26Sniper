@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "FC Sniper by SaDizz",
-  "version": "2.6.1",
+  "version": "2.6.2",
   "description": "Snipe like a bomber!",
   "permissions": [
     "webRequest",
@@ -17,7 +17,8 @@
     "https://*.data.ea.com/*",
     "http://127.0.0.1:3000/*",
     "http://localhost:3000/*",
-    "https://www.futwiz.com/*"
+    "https://www.futwiz.com/*",
+    "https://api.telegram.org/*"
   ],
   "declarative_net_request": {
     "rule_resources": [
@@ -35,10 +36,10 @@
   "content_scripts": [
     {
       "matches": [
-        "https://www.ea.com/ea-sports-fc/ultimate-team/web-app/*"
+        "https://www.ea.com/*ea-sports-fc/ultimate-team/web-app/*"
       ],
       "js": ["content.js"],
-      "run_at": "document_idle"
+      "run_at": "document_start"
     }
   ],
   "web_accessible_resources": [
