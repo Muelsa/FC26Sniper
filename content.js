@@ -15,7 +15,8 @@
     "TRIGGER_PIN_BID",
     "TRIGGER_PIN_WATCHLIST",
     "TRIGGER_PIN_SELL",
-    "REQUEST_TOKEN_REFRESH"
+    "REQUEST_TOKEN_REFRESH",
+    "REQUEST_USER_INFO"
   ]);
 
   function injectBridgeScript() {
@@ -59,6 +60,18 @@
       lastToken = token;
       try {
         chrome.runtime.sendMessage({ tipo: "TOKEN_SYNC", valore: token });
+      } catch (_) {}
+      return;
+    }
+
+    if (data.origin === "PIN_BRIDGE_USER") {
+      const { personaName, clubName } = data;
+      try {
+        chrome.runtime.sendMessage({
+          tipo: "USER_SYNC",
+          personaName: typeof personaName === "string" ? personaName.slice(0, 50) : "",
+          clubName: typeof clubName === "string" ? clubName.slice(0, 50) : ""
+        });
       } catch (_) {}
       return;
     }

@@ -10,7 +10,7 @@
 <body>
     <div class="px-3 pt-2 pb-1 border-bottom d-flex justify-content-between align-items-center bg-white">
         <h5 class="m-0 fw-bold text-primary">FC Sniper & Trader</h5>
-        <span id="versione" class="badge bg-light text-secondary border">v2.6.1</span>
+        <span id="versione" class="badge bg-light text-secondary border">v2.6.2</span>
     </div>
 
     <div class="container-fluid px-3 pt-2">
@@ -193,6 +193,20 @@
                         <span class="text-muted" style="font-size: 0.8rem;">Tentativi Residui:</span>
                         <strong id="tentativiRimasti" class="text-secondary font-monospace"
                             style="font-size: 0.85rem;">-</strong>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <label for="telegramChatIdInput" class="form-label form-label-sm text-muted mb-1"
+                        style="font-size: 0.8rem;">Chat ID Telegram (notifiche fine ciclo):</label>
+                    <div class="input-group input-group-sm" style="max-width: 260px;">
+                        <input type="text" class="form-control form-control-sm" id="telegramChatIdInput"
+                            placeholder="Es. 123456789">
+                        <button class="btn btn-outline-info" type="button" id="testTelegramBtn" title="Invia un messaggio di test">Test</button>
+                    </div>
+                    <div id="telegramTestFeedback" class="form-text" style="font-size: 0.72rem; min-height: 1rem;"></div>
+                    <div class="mt-1" style="font-size: 0.72rem;">
+                        <span class="text-muted">Account Web App:</span>
+                        <strong id="eaAccountNameBadge" class="text-info font-monospace ms-1">In attesa di sync...</strong>
                     </div>
                 </div>
             </div>

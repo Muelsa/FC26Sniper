@@ -33,6 +33,34 @@ export function getTargetMode() {
 
 export const getStoredPendingBids = () => getKey('pendingBids', {});
 
+// Chat ID Telegram dell'utente (fornito dalla UI)
+export const getTelegramChatId = () => getKey('telegramChatId', "");
+
+// Info account EA (catturate dal DOM bridge)
+export const getUserProfile = async () => {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['personaName', 'clubName'], (res) => {
+      resolve({
+        personaName: res.personaName || "",
+        clubName: res.clubName || ""
+      });
+    });
+  });
+};
+
+// Conteggio elementi in vendita / Tradepile (come visualizzato nella UI)
+export const getTradepileStatus = async () => {
+  return new Promise((resolve) => {
+    chrome.storage.local.get(['tradepileCount', 'tradepileActive', 'tradepileTotal'], (res) => {
+      resolve({
+        tradepileCount: res.tradepileCount || "",
+        tradepileActive: res.tradepileActive !== undefined ? res.tradepileActive : null,
+        tradepileTotal: res.tradepileTotal !== undefined ? res.tradepileTotal : null
+      });
+    });
+  });
+};
+
 // Pulisce offerte pendenti obsolete (> 24 ore) per garantire memoria pulita
 export async function cleanExpiredPendingBids() {
   try {
