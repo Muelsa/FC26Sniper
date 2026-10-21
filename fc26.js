@@ -785,9 +785,17 @@ async function handleStartMessage(message) {
             await sendFodderResearchRequest();
           }
         } else {
+          const isManualBidding = strategyMode === "bidding";
+          if (isManualBidding) {
+            sendMessageSafe({ tipo: 'LOG', valore: `Avvio BIDDING Manuale (Max offerta: ${maxSnipePrice > 0 ? maxSnipePrice + ' cr' : 'NON IMPOSTATO — bidding disattivato'})` });
+          }
           let i = 0;
           while (start == true && i < numeroTentativi) {
-            await sendResearchRequest();
+            if (isManualBidding) {
+              await sendManualBiddingRequest();
+            } else {
+              await sendResearchRequest();
+            }
             if (start !== true) break;
 
             //aggiorno contatore tentativi rimasti
@@ -800,6 +808,11 @@ async function handleStartMessage(message) {
             await sleep(randomValue * 1000);
 
             i++;
+          }
+
+          // A fine bidding: risolvi le aste vinte/scadute prima di chiudere
+          if (isManualBidding) {
+            await resolveWatchlist();
           }
 
           //pulisco la lista trasferimenti dagli elementi venduti a fine ricerche
@@ -1643,6 +1656,11 @@ async function sendResearchRequest() {
         // Acquisto immediato sulla carta più recente
         for (const auction of auctions) {
           if (start !== true) break;
+          // Guard prezzo: mai comprare oltre il prezzo massimo impostato dall'utente
+          if (maxSnipePrice > 0 && auction.buyNowPrice > maxSnipePrice) {
+            console.log(`[FC Sniper Manuale] Scartata carta a ${auction.buyNowPrice} cr (oltre il max ${maxSnipePrice} cr)`);
+            continue;
+          }
           const bought = await sendBuyNowRequest(auction.tradeId, auction.buyNowPrice, auction.itemData?.id);
           if (bought) {
             break; // Stop immediato al primo acquisto per gestire l'oggetto
@@ -1671,6 +1689,96 @@ async function sendResearchRequest() {
     }
   } catch (error) {
     console.error("Errore durante l'invio della richiesta:", error);
+  }
+}
+
+// Funzione per il BIDDING manuale: cerca con la searchUrl impostata nella Web App
+// e piazza OFFERTE (non Compra Ora) sulle aste sotto il prezzo massimo impostato.
+async function sendManualBiddingRequest() {
+  try {
+    if (!searchUrl || !xUtSid) {
+      console.error("URL o Sessione non definiti");
+      return;
+    }
+
+    if (!maxSnipePrice || maxSnipePrice <= 0) {
+      sendMessageSafe({ tipo: 'LOG', valore: '[BIDDING MANUALE] Imposta il "Prezzo massimo sniping" nella UI: senza tetto prezzo il bidding manuale è disattivato per sicurezza.' });
+      await sleep(5000);
+      return;
+    }
+
+    await triggerPinEvent("TRIGGER_PIN_SEARCH");
+
+    let finalUrl = searchUrl;
+    try {
+      const parsedUrl = new URL(searchUrl);
+      parsedUrl.searchParams.set("start", "0");
+      parsedUrl.searchParams.set("num", "21");
+      parsedUrl.searchParams.delete("macr");
+      if (Math.random() < 0.4) {
+        parsedUrl.searchParams.delete("micr");
+      } else {
+        parsedUrl.searchParams.set("micr", "150");
+      }
+      manualSearchAttempt++;
+      finalUrl = parsedUrl.href;
+    } catch {
+      // fallback
+    }
+
+    const response = await fetch(finalUrl, {
+      method: "GET",
+      headers: {
+        "Accept": "*/*",
+        "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
+        "Cache-Control": "no-cache",
+        "X-UT-SID": xUtSid
+      }
+    });
+
+    if (response.ok) {
+      consecutiveSearchErrors = 0;
+      consecutive401Errors = 0;
+      const data = await response.json();
+      if (data.auctionInfo && data.auctionInfo.length > 0) {
+        // Aste in scadenza prima, escluse quelle già tentate
+        const auctions = [...data.auctionInfo]
+          .filter(a => !isTradeAttempted(a.tradeId))
+          .sort((a, b) => (a.expires || 0) - (b.expires || 0));
+
+        let bidsPlaced = 0;
+        const MAX_BIDS_PER_SEARCH = 5;
+        for (const auction of auctions) {
+          if (start !== true || bidsPlaced >= MAX_BIDS_PER_SEARCH) break;
+          const nextBid = calculateNextBid(auction.startingBid, auction.currentBid);
+          // Cap: mai oltre il prezzo massimo utente, né oltre il BIN dell'asta
+          const cap = auction.buyNowPrice > 0 ? Math.min(maxSnipePrice, auction.buyNowPrice) : maxSnipePrice;
+          if (nextBid > cap) continue;
+          const ok = await sendBidRequest(auction.tradeId, nextBid, auction.itemData?.id, cap);
+          if (ok) bidsPlaced++;
+        }
+        if (bidsPlaced > 0) {
+          sendMessageSafe({ tipo: 'LOG', valore: `[BIDDING MANUALE] ${bidsPlaced} offerte piazzate (max ${maxSnipePrice} cr).` });
+        }
+      }
+    } else {
+      if (response.status === 401) {
+        await handle401Error("Ricerca Bidding Manuale");
+      } else if (response.status === 458) {
+        console.warn("[FC Sniper Bidding Manuale] CAPTCHA 458 rilevato!");
+        sendMessageSafe({
+          tipo: 'LOG',
+          valore: '[ATTENZIONE - CAPTCHA RILEVATO] Verifica richiesta nella Web App. Bot arrestato.'
+        });
+        await stopBot("CAPTCHA 458 rilevato");
+      } else if (isRateLimitStatus(response.status)) {
+        await handleSearchRateLimit(response.status, "Ricerca Bidding Manuale");
+      } else {
+        console.error("Errore nella ricerca bidding manuale:", response.status, response.statusText);
+      }
+    }
+  } catch (error) {
+    console.error("Errore durante il bidding manuale:", error);
   }
 }
 
