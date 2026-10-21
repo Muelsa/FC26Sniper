@@ -9,7 +9,7 @@ import {
 import { WATCHLIST_URL, DELETE_SOLD_URL } from './src/ea/endpoints.js';
 import { buildEaHeaders } from './src/ea/client.js';
 import { isRateLimitStatus } from './src/ea/status-policy.js';
-import { CHEM_STYLES } from './src/ea/constants.js';
+import { CHEM_STYLES, MANAGER_LEAGUES, leagueTargetKey } from './src/ea/constants.js';
 import { fetchFodderList } from './src/services/fodder-service.js';
 import { sendCycleReport, sendTelegramMessage } from './src/services/telegram-service.js';
 import { getUrgentAuctionTimeRemaining } from './src/strategies/strategy-utils.js';
@@ -197,6 +197,68 @@ function detectChemistryStyle(itemOrAuction, fallbackStyle = null) {
   return "266";
 }
 
+// Rileva se un item/auction è un Modificatore Campionato Allenatore tracciato (top 5 campionati)
+function detectManagerLeague(itemOrAuction) {
+  if (!itemOrAuction) return null;
+  const data = itemOrAuction.itemData || itemOrAuction;
+  if (data?.itemType === "player") return null;
+  const tracked = itemOrAuction.tradeId ? activeBids.get(String(itemOrAuction.tradeId)) : null;
+
+  // Nei modificatori campionato EA memorizza l'ID della lega nel campo `amount` (mentre `leagueId` è 0)
+  const candidateIds = [
+    data?.amount,
+    itemOrAuction?.amount,
+    tracked?.amount,
+    tracked?.leagueId,
+    data?.leagueId,
+    itemOrAuction?.leagueId
+  ];
+
+  for (const c of candidateIds) {
+    if (c !== undefined && c !== null && c > 0) {
+      const s = String(c);
+      if (MANAGER_LEAGUES[s]) return s;
+    }
+  }
+
+  return null;
+}
+
+// Chiave di pricing unificata per consumabili: "league_X" per modificatori campionato, altrimenti playStyleId
+function detectConsumableKey(itemOrAuction, fallbackStyle = null) {
+  const lg = detectManagerLeague(itemOrAuction);
+  if (lg) return leagueTargetKey(lg);
+  return String(detectChemistryStyle(itemOrAuction, fallbackStyle));
+}
+
+// Nome leggibile per log: campionato o stile intesa
+function targetDisplayName(key) {
+  if (MANAGER_LEAGUES[String(key)]) return MANAGER_LEAGUES[String(key)].name;
+  if (String(key).startsWith("league_")) {
+    const lg = String(key).slice(7);
+    return MANAGER_LEAGUES[lg]?.name || `Lega ${lg}`;
+  }
+  return CHEM_STYLES[String(key)]?.name || `Stile ${key}`;
+}
+
+// Floor di mercato (lowest BIN) per qualsiasi consumabile: modificatore campionato (leagueId) o stile intesa.
+// Ritorna { floor, name, key }. Usa cache di ciclo (cachedPrices), poi cache 15min, poi discovery live.
+async function resolveConsumableFloor(itemOrAuction, cachedPrices = {}, fallbackStyle = null) {
+  const lg = detectManagerLeague(itemOrAuction);
+  if (lg) {
+    const key = leagueTargetKey(lg);
+    let floor = cachedPrices?.[key]?.floorBin;
+    if (!floor && consumableBinCache.has(key)) floor = consumableBinCache.get(key).price;
+    if (!floor) floor = await discoverLeagueModifierLowestBin(lg, manualBin);
+    return { floor: floor || 0, name: `Modificatore ${MANAGER_LEAGUES[lg].name}`, key };
+  }
+  const sId = String(detectChemistryStyle(itemOrAuction, fallbackStyle || chemStyle));
+  let floor = cachedPrices?.[sId]?.floorBin;
+  if (!floor && consumableBinCache.has(sId)) floor = consumableBinCache.get(sId).price;
+  if (!floor) floor = await discoverConsumableLowestBin(sId, manualBin);
+  return { floor: floor || 0, name: CHEM_STYLES[sId]?.name || `Stile ${sId}`, key: sId };
+}
+
 
 // SessionManager: le richieste concorrenti che ricevono 401 si accodano sulla STESSA
 // promise di recovery invece di proseguire con token vecchio o avviare recovery parallele
@@ -248,8 +310,8 @@ async function doRecover401(context = "") {
       for (const tab of eaTabs) {
         chrome.tabs.reload(tab.id);
       }
-      // Attesa fino a 20 secondi per l'avvio della Web App e l'intercettazione del nuovo token (polling con jitter)
-      for (let i = 0; i < 20; i++) {
+      // Attesa fino a 35 secondi per l'avvio della Web App e l'intercettazione del nuovo token (polling con jitter)
+      for (let i = 0; i < 35; i++) {
         await sleep(getRandomGaussian(1.0, 0.15, 0.8, 1.3) * 1000);
         if (xUtSid && xUtSid !== currentToken) {
           consecutive401Errors = 0;
@@ -393,7 +455,7 @@ chrome.webRequest.onSendHeaders.addListener(
       });
     }
   },
-  { urls: ["https://utas.mob.v1.prd.futc-ext.gcp.ea.com/ut/game/fc27/*"] },
+  { urls: ["https://utas.mob.v1.prd.futc-ext.gcp.ea.com/ut/*"] },
   ["requestHeaders"]
 );
 
@@ -748,6 +810,10 @@ async function handleStartMessage(message) {
           ricercaFodder = true;
           sendMessageSafe({ tipo: 'LOG', valore: `Avvio LAZY TRADING Fodder (Rating ${fodderRating}, Target: ${targetTradepileSize}, Ricarico: +${lazyMarkupPercent}%, Pausa: ${lazySleepMinutes}m)` });
           await runLazyTradingEngine();
+        } else if (targetMode === "managerLeague") {
+          ricercaFodder = false;
+          sendMessageSafe({ tipo: 'LOG', valore: `Avvio LAZY TRADING Campionati Allenatore (Premier League, LaLiga, Serie A, Bundesliga, Ligue 1 | Target: ${targetTradepileSize}, Ricarico: +${lazyMarkupPercent}%, Pausa: ${lazySleepMinutes}m)` });
+          await runLazyTradingEngine();
         } else {
           targetMode = "consumables";
           ricercaFodder = false;
@@ -756,6 +822,11 @@ async function handleStartMessage(message) {
           await runLazyTradingEngine();
         }
       } else {
+        if (targetMode === "managerLeague") {
+          sendMessageSafe({ tipo: 'LOG', valore: '[ATTENZIONE] I Campionati Allenatore sono supportati solo in modalità Lazy. Seleziona strategia "Lazy" e riavvia.' });
+          await stopBot("Campionati Allenatore richiede strategia Lazy");
+          return;
+        }
         // Per le altre modalità: all'avvio puliamo la lista trasferimenti da venduti e rimettiamo in vendita eventuali invendute
         await processUnassignedItems();
         await clearSoldItem();
@@ -1006,6 +1077,13 @@ async function getTradepileInfo() {
     try {
       chrome.storage.local.set({ tradepileCount: tradepileDisplay, tradepileActive: active, tradepileTotal: auctions.length });
     } catch (_) { }
+
+    try {
+      if (typeof crediti === 'number' && crediti >= 0) {
+        calculateAndPublishProiezioneCrediti(crediti, auctions);
+      }
+    } catch (_) { }
+
     return {
       total: auctions.length,
       active: active,
@@ -1014,6 +1092,58 @@ async function getTradepileInfo() {
   } catch (e) {
     console.error("[FC Sniper Tradepile Info Error]", e);
     return { total: 0, active: 0, auctions: [] };
+  }
+}
+
+// Calcola e pubblica la "Proiezione crediti posseduti":
+// somma di tutti i prezzi Compra Ora (buyNowPrice) delle carte attualmente in vendita + crediti attuali
+async function calculateAndPublishProiezioneCrediti(currentCrediti = null, preloadedAuctions = null) {
+  try {
+    let cred = currentCrediti;
+    if (typeof cred !== 'number') {
+      cred = await getCrediti();
+    }
+    let auctions = preloadedAuctions;
+    if (!Array.isArray(auctions)) {
+      const pileInfo = await getTradepileInfo();
+      auctions = pileInfo?.auctions || [];
+    }
+
+    // Filtra le carte attualmente in vendita (attive sul mercato)
+    const activeAuctions = auctions.filter(a => a.tradeState === "active" || a.expires > 0);
+    const sumBuyNow = activeAuctions.reduce((sum, a) => sum + (Number(a.buyNowPrice) || 0), 0);
+    const numCrediti = (typeof cred === 'number' && !isNaN(cred)) ? cred : 0;
+    const totaleProiezione = numCrediti + sumBuyNow;
+
+    const displayFormatted = totaleProiezione.toLocaleString('it-IT');
+    sendMessageSafe({
+      tipo: 'PROIEZIONE_CREDITI',
+      valore: displayFormatted,
+      totale: totaleProiezione,
+      sommaVendite: sumBuyNow,
+      crediti: numCrediti,
+      activeCount: activeAuctions.length
+    });
+
+    try {
+      chrome.storage.local.set({
+        proiezioneCrediti: displayFormatted,
+        proiezioneCreditiValore: totaleProiezione,
+        proiezioneSommaVendite: sumBuyNow,
+        proiezioneActiveCount: activeAuctions.length
+      });
+    } catch (_) {}
+
+    return {
+      totale: totaleProiezione,
+      sommaVendite: sumBuyNow,
+      crediti: numCrediti,
+      display: displayFormatted,
+      activeCount: activeAuctions.length
+    };
+  } catch (err) {
+    console.warn("[Proiezione Crediti Error]", err);
+    return null;
   }
 }
 
@@ -1093,18 +1223,9 @@ async function checkAndRelistExpiredItems(cachedPrices = {}, preloadedAuctions =
           }
         }
       } else if (a.itemData?.itemType === "training" || a.itemData?.playStyle || a.itemData?.cardsubtypeid) {
-        // Consumabile / Stile Intesa
-        const sId = detectChemistryStyle(a, chemStyle);
-        const meta = CHEM_STYLES[sId] || { name: `Stile ${sId}` };
-        cardName = meta.name;
-
-        let floor = cachedPrices[sId]?.floorBin;
-        if (!floor && consumableBinCache.has(sId)) {
-          floor = consumableBinCache.get(sId).price;
-        }
-        if (!floor) {
-          floor = await discoverConsumableLowestBin(sId, manualBin);
-        }
+        // Consumabile / Stile Intesa / Modificatore Campionato
+        const { floor, name } = await resolveConsumableFloor(a, cachedPrices);
+        cardName = name;
 
         if (floor && floor > 0) {
           const tiered = getTieredSellPrice(floor, null, true);
@@ -1212,17 +1333,8 @@ async function processUnassignedItems(cachedPrices = {}) {
             }
           }
         } else if (item.itemType === "training" || item.playStyle || item.cardsubtypeid) {
-          const sId = detectChemistryStyle(item, chemStyle);
-          const meta = CHEM_STYLES[sId] || { name: `Stile ${sId}` };
-          cardName = meta.name;
-
-          let floor = cachedPrices[sId]?.floorBin;
-          if (!floor && consumableBinCache.has(sId)) {
-            floor = consumableBinCache.get(sId).price;
-          }
-          if (!floor) {
-            floor = await discoverConsumableLowestBin(sId, manualBin);
-          }
+          const { floor, name } = await resolveConsumableFloor(item, cachedPrices);
+          cardName = name;
 
           if (floor && floor > 0) {
             const tiered = getTieredSellPrice(floor, null, true);
@@ -1352,17 +1464,8 @@ async function listUnlistedTradepileItems(cachedPrices = {}) {
           }
         }
       } else if (item.itemType === "training" || item.playStyle || item.cardsubtypeid) {
-        // 2. Caso Consumabile / Stile Intesa
-        const sId = detectChemistryStyle(a, chemStyle);
-        const meta = CHEM_STYLES[sId] || { name: `Stile ${sId}` };
-
-        let floor = cachedPrices[sId]?.floorBin;
-        if (!floor && consumableBinCache.has(sId)) {
-          floor = consumableBinCache.get(sId).price;
-        }
-        if (!floor) {
-          floor = await discoverConsumableLowestBin(sId, manualBin);
-        }
+        // 2. Caso Consumabile / Stile Intesa / Modificatore Campionato
+        const { floor, name } = await resolveConsumableFloor(item, cachedPrices);
 
         if (floor && floor > 0) {
           const tiered = getTieredSellPrice(floor, null, true);
@@ -1373,7 +1476,7 @@ async function listUnlistedTradepileItems(cachedPrices = {}) {
             listedCount++;
             sendMessageSafe({
               tipo: 'LOG',
-              valore: `[VENDITA RECUPERATA] ${meta.name} messa in vendita a ${sellPrice} crediti (Tier ${tiered.tier}: +${tiered.markup}%)`
+              valore: `[VENDITA RECUPERATA] ${name} messa in vendita a ${sellPrice} crediti (Tier ${tiered.tier}: +${tiered.markup}%)`
             });
             await sleep(getRandomGaussian(1.6, 0.15, 1.5, 2.0) * 1000);
           } else {
@@ -1487,16 +1590,7 @@ async function checkAndProcessWatchlistForLazy(cyclePrices = {}) {
               sellPrice = tracked.sellPrice;
             }
           } else {
-            const sId = detectChemistryStyle(item, tracked?.playStyleId || chemStyle);
-            const meta = CHEM_STYLES[sId] || { name: `Stile ${sId}` };
-
-            let floor = cyclePrices[sId]?.floorBin;
-            if (!floor && consumableBinCache.has(sId)) {
-              floor = consumableBinCache.get(sId).price;
-            }
-            if (!floor) {
-              floor = await discoverConsumableLowestBin(sId, manualBin);
-            }
+            const { floor } = await resolveConsumableFloor(item, cyclePrices, tracked?.playStyleId);
 
             if (floor && floor > 0) {
               const tiered = getTieredSellPrice(floor, null, true);
@@ -2643,6 +2737,16 @@ async function reconcileWatchlistOnStartup() {
 
           let tierTag = "";
           if (!sellPrice || sellPrice <= 0) {
+            const lgId = detectManagerLeague(item);
+            if (lgId) {
+              console.log(`[FC Sniper Reconciliation] Rilevato modificatore campionato ${MANAGER_LEAGUES[lgId].name}. Recupero Lowest BIN...`);
+              const floor = await discoverLeagueModifierLowestBin(lgId, manualBin);
+              if (floor > 0) {
+                const tiered = getTieredSellPrice(floor, null, true);
+                sellPrice = tiered.price;
+                tierTag = ` (Tier ${tiered.tier}: +${tiered.markup}%)`;
+              }
+            } else {
             const detectedStyleId = detectChemistryStyle(item, tracked?.playStyleId || chemStyle);
 
             if (detectedStyleId && CHEM_STYLES[String(detectedStyleId)]) {
@@ -2667,6 +2771,7 @@ async function reconcileWatchlistOnStartup() {
                 sellPrice = tiered.price;
                 tierTag = ` (Tier ${tiered.tier}: +${tiered.markup}%)`;
               }
+            }
             }
           }
 
@@ -2824,6 +2929,16 @@ async function resolveWatchlist() {
                 }
               }
             } else {
+              const lgId = detectManagerLeague(item);
+              if (lgId) {
+                console.log(`[FC Sniper Watchlist] Risoluzione dinamica prezzo per Modificatore ${MANAGER_LEAGUES[lgId].name}...`);
+                const floor = await discoverLeagueModifierLowestBin(lgId, manualBin);
+                if (floor > 0) {
+                  const tiered = getTieredSellPrice(floor, null, true);
+                  sellPrice = tiered.price;
+                  tierTag = ` (Tier ${tiered.tier}: +${tiered.markup}%)`;
+                }
+              } else {
               const detectedStyleId = detectChemistryStyle(item, tracked?.playStyleId || chemStyle);
               if (detectedStyleId && CHEM_STYLES[String(detectedStyleId)]) {
                 console.log(`[FC Sniper Watchlist] Risoluzione dinamica prezzo per ${CHEM_STYLES[String(detectedStyleId)].name}...`);
@@ -2840,6 +2955,7 @@ async function resolveWatchlist() {
                   sellPrice = tiered.price;
                   tierTag = ` (Tier ${tiered.tier}: +${tiered.markup}%)`;
                 }
+              }
               }
             }
           }
@@ -3543,6 +3659,228 @@ async function discoverConsumableLowestBin(playStyleId, manualBinOverride = 0, f
   return verifiedBin;
 }
 
+// Rileva il Lowest BIN di un Modificatore Campionato Allenatore (cat=managerLeagueModifier&amount=<leagueId>).
+// Utilizza Downward Skimming con filtro amount=<leagueId> nativo EA e analisi carte fresche (58-59m)
+async function discoverLeagueModifierLowestBin(leagueId, manualBinOverride = 0, forceRefresh = false) {
+  const meta = MANAGER_LEAGUES[String(leagueId)] || { id: leagueId, name: `Lega ${leagueId}`, defaultGuess: 1000 };
+  const cacheKey = leagueTargetKey(leagueId);
+
+  if (manualBinOverride && manualBinOverride > 0) {
+    console.log(`[FC Sniper Campionati] Usato BIN manuale impostato dall'utente: ${manualBinOverride} crediti`);
+    return manualBinOverride;
+  }
+
+  const CACHE_TTL_MS = 15 * 60 * 1000;
+  if (!forceRefresh && consumableBinCache.has(cacheKey)) {
+    const cached = consumableBinCache.get(cacheKey);
+    if (Date.now() - cached.timestamp < CACHE_TTL_MS) {
+      const minsLeft = Math.round((CACHE_TTL_MS - (Date.now() - cached.timestamp)) / 60000);
+      console.log(`[FC Sniper Campionati] Usato Floor BIN in cache (${cached.price} cr) per ${meta.name} (valido ancora per ${minsLeft} min)`);
+      return cached.price;
+    }
+  }
+
+  // Protezione Soft-Ban: mercato in restrizione -> nessuna ricerca extra
+  if (marketRestricted) {
+    if (consumableBinCache.has(cacheKey)) return consumableBinCache.get(cacheKey).price;
+    return meta.defaultGuess;
+  }
+
+  console.log(`[FC Sniper Campionati] Avvio rilevamento Lowest BIN per ${meta.name}...`);
+  sendMessageSafe({
+    tipo: 'LOG',
+    valore: `[Auto-Discovery] Analisi di mercato per Modificatore ${meta.name}: cerco il prezzo di vendita istantanea (58-59m)...`
+  });
+
+  const baseUrl = "https://utas.mob.v1.prd.futc-ext.gcp.ea.com/ut/game/fc27/transfermarket";
+  const headers = new Headers({
+    "Accept": "*/*",
+    "Accept-Encoding": "gzip, deflate, br, zstd",
+    "Accept-Language": "it-IT,it;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Cache-Control": "no-cache",
+    "X-UT-SID": xUtSid
+  });
+
+  // FASE 1: Ricerca iniziale per determinare il tetto massimo da cui iniziare la scrematura
+  let candidateBin = 0;
+  const initialCache = consumableBinCache.get(cacheKey);
+  let startingPrice = initialCache?.price ? initialCache.price + (getEaStep(initialCache.price) * 2) : 0;
+
+  try {
+    const probeUrl = new URL(baseUrl);
+    probeUrl.searchParams.set("num", "21");
+    probeUrl.searchParams.set("start", "0");
+    probeUrl.searchParams.set("type", "training");
+    probeUrl.searchParams.set("cat", "managerLeagueModifier");
+    probeUrl.searchParams.set("amount", String(leagueId));
+    if (startingPrice > 0) {
+      probeUrl.searchParams.set("maxb", String(startingPrice));
+    }
+    probeUrl.searchParams.set("micr", "150");
+
+    await triggerPinEvent("TRIGGER_PIN_SEARCH");
+    const probeResp = await fetch(probeUrl.href, { method: "GET", headers });
+    if (probeResp.status === 401) {
+      await handle401Error("AutoDiscovery Campionati Probe");
+      return 0;
+    } else if (probeResp.status === 429 || probeResp.status === 426 || probeResp.status === 521 || probeResp.status === 512) {
+      await handleSearchRateLimit(probeResp.status, "AutoDiscovery Campionati Probe");
+      return 0;
+    }
+
+    if (probeResp.ok) {
+      const probeData = await probeResp.json();
+      const probeAuctions = probeData.auctionInfo || [];
+      const buyNows = probeAuctions.map(a => a.buyNowPrice).filter(p => p > 0);
+      if (buyNows.length > 0) {
+        candidateBin = Math.min(...buyNows);
+      }
+    }
+  } catch (e) {
+    console.error("[AutoDiscovery Campionati Probe Error]", e);
+  }
+
+  // Se con il filtro maxb non abbiamo trovato carte, ricerca aperta senza maxb per individuare i prezzi presenti
+  if (!candidateBin || candidateBin <= 0) {
+    await sleep(getRandomGaussian(0.8, 0.1, 0.6, 1.0) * 1000);
+    try {
+      const openUrl = new URL(baseUrl);
+      openUrl.searchParams.set("num", "21");
+      openUrl.searchParams.set("start", "0");
+      openUrl.searchParams.set("type", "training");
+      openUrl.searchParams.set("cat", "managerLeagueModifier");
+      openUrl.searchParams.set("amount", String(leagueId));
+      openUrl.searchParams.set("micr", "200");
+
+      await triggerPinEvent("TRIGGER_PIN_SEARCH");
+      const openResp = await fetch(openUrl.href, { method: "GET", headers });
+      if (openResp.status === 401) {
+        await handle401Error("AutoDiscovery Campionati Open Probe");
+        return 0;
+      } else if (openResp.status === 429 || openResp.status === 426 || openResp.status === 521 || openResp.status === 512) {
+        await handleSearchRateLimit(openResp.status, "AutoDiscovery Campionati Open Probe");
+        return 0;
+      }
+
+      if (openResp.ok) {
+        const openData = await openResp.json();
+        const openAuctions = openData.auctionInfo || [];
+        const openBuyNows = openAuctions.map(a => a.buyNowPrice).filter(p => p > 0);
+        if (openBuyNows.length > 0) {
+          candidateBin = Math.min(...openBuyNows);
+        }
+      }
+    } catch (e) {
+      console.error("[AutoDiscovery Campionati Open Probe Error]", e);
+    }
+  }
+
+  if (!candidateBin || candidateBin <= 0) {
+    console.warn(`[FC Sniper Campionati] Impossibile trovare carte sul mercato per ${meta.name}.`);
+    sendMessageSafe({
+      tipo: 'LOG',
+      valore: `[BLOCCO SICUREZZA] Nessun modificatore presente sul mercato per ${meta.name}. Offerte sospese!`
+    });
+    return 0;
+  }
+
+  console.log(`[FC Sniper Campionati] Inizio scrematura verso il basso per ${meta.name} a partire da ${candidateBin} crediti.`);
+
+  // FASE 2: Scrematura progressiva del prezzo (Downward Skimming)
+  const MAX_SCREMATURA_ITERATIONS = 7;
+  let verifiedBin = 0;
+
+  for (let stepIdx = 0; stepIdx < MAX_SCREMATURA_ITERATIONS; stepIdx++) {
+    if (start !== true) break;
+
+    await sleep(getRandomGaussian(0.9, 0.12, 0.7, 1.2) * 1000);
+
+    const testUrl = new URL(baseUrl);
+    testUrl.searchParams.set("num", "21");
+    testUrl.searchParams.set("start", "0");
+    testUrl.searchParams.set("type", "training");
+    testUrl.searchParams.set("cat", "managerLeagueModifier");
+    testUrl.searchParams.set("amount", String(leagueId));
+    testUrl.searchParams.set("maxb", String(candidateBin));
+    testUrl.searchParams.set("micr", String(150 + (stepIdx * 50) + (Math.random() < 0.5 ? 0 : 50)));
+
+    await triggerPinEvent("TRIGGER_PIN_SEARCH");
+
+    let auctions = [];
+    try {
+      const resp = await fetch(testUrl.href, { method: "GET", headers });
+      if (resp.status === 401) {
+        await handle401Error("AutoDiscovery Campionati Scrematura");
+        return 0;
+      } else if (resp.status === 429 || resp.status === 426 || resp.status === 521 || resp.status === 512) {
+        await handleSearchRateLimit(resp.status, "AutoDiscovery Campionati Scrematura");
+        return 0;
+      }
+      if (!resp.ok) break;
+
+      const data = await resp.json();
+      auctions = data.auctionInfo || [];
+    } catch (err) {
+      console.error("[AutoDiscovery Campionati Scrematura Error]", err);
+      break;
+    }
+
+    const totalCards = auctions.length;
+    const freshCards = auctions.filter(a => (a.expires >= 3450 && a.expires <= 3600) || (a.expires >= 10650 && a.expires <= 10800));
+    const staleCards = auctions.filter(a => a.expires > 0 && a.expires < 3450);
+
+    console.log(`[FC Sniper Campionati] Test maxb: ${candidateBin} crediti -> ${totalCards} carte per ${meta.name} (Fresche 58-59m: ${freshCards.length}, Stagnanti: ${staleCards.length})`);
+
+    // CASO A: Trovate carte e tutte fresche a 58-59 minuti -> Lowest BIN reale attivo
+    if (totalCards > 0 && staleCards.length === 0) {
+      verifiedBin = candidateBin;
+      console.log(`[FC Sniper Campionati] Condizione di vendita istantanea confermata per ${meta.name} a ${verifiedBin} crediti! (${totalCards} carte fresche).`);
+      sendMessageSafe({
+        tipo: 'LOG',
+        valore: `[Auto-Discovery] Lowest BIN live per Modificatore ${meta.name}: ${verifiedBin} crediti (${totalCards} carte fresche a 58-59m)!`
+      });
+      break;
+    }
+
+    // CASO B: 0 carte trovate a questo prezzo -> il Lowest BIN reale è il gradino superiore
+    if (totalCards === 0) {
+      const step = getEaStep(candidateBin);
+      verifiedBin = candidateBin + step;
+      console.log(`[FC Sniper Campionati] 0 carte trovate a ${candidateBin} per ${meta.name}. Lowest BIN reale: ${verifiedBin} crediti.`);
+      sendMessageSafe({
+        tipo: 'LOG',
+        valore: `[Auto-Discovery] Lowest BIN reale per Modificatore ${meta.name}: ${verifiedBin} crediti (0 carte a ${candidateBin})!`
+      });
+      break;
+    }
+
+    // CASO C: Ci sono carte stagnanti (< 58m) o troppe carte -> scremiamo verso il basso
+    const step = getEaStep(candidateBin);
+    const nextLower = candidateBin - step;
+    if (nextLower < 200) {
+      verifiedBin = 200;
+      break;
+    }
+    candidateBin = nextLower;
+  }
+
+  if (!verifiedBin && candidateBin > 0) {
+    verifiedBin = candidateBin;
+  }
+
+  if (!verifiedBin || verifiedBin <= 0) {
+    console.error(`[FC Sniper Campionati] Auto-Discovery fallita per ${meta.name}: impossibile determinare il prezzo di mercato!`);
+    sendMessageSafe({
+      tipo: 'LOG',
+      valore: `[BLOCCO SICUREZZA] Lowest BIN non rilevato per ${meta.name}. Offerte sospese su questo campionato!`
+    });
+    return 0;
+  }
+
+  consumableBinCache.set(cacheKey, { price: verifiedBin, timestamp: Date.now() });
+  return verifiedBin;
+}
+
 // Motore di SNIPING Consumabili (Stili Intesa) - Ottimizzato per massima velocità e zero ritardi
 async function sendConsumableResearchRequest() {
   let i = 0;
@@ -3687,9 +4025,9 @@ async function sendConsumableResearchRequest() {
 // e in pochi parametri per-mode; tutto il resto del ciclo è condiviso.
 async function runLazyTradingEngine() {
   const isFodder = targetMode === "fodder";
-  const tag = isFodder ? "LAZY FODDER" : "LAZY TRADING";
-  const bidTag = isFodder ? "LAZY FODDER BID" : "LAZY BID";
-  const topUpTag = isFodder ? "LAZY FODDER TOP-UP" : "LAZY TOP-UP";
+  const tag = isFodder ? "LAZY FODDER" : (targetMode === "managerLeague" ? "LAZY CAMPIONATI" : "LAZY TRADING");
+  const bidTag = isFodder ? "LAZY FODDER BID" : (targetMode === "managerLeague" ? "LAZY CAMPIONATI BID" : "LAZY BID");
+  const topUpTag = isFodder ? "LAZY FODDER TOP-UP" : (targetMode === "managerLeague" ? "LAZY CAMPIONATI TOP-UP" : "LAZY TOP-UP");
   let cycle = 1;
   let consecutiveSoftBansInSession = 0;
   let sessionActiveStartTime = Date.now();
@@ -3723,7 +4061,8 @@ async function runLazyTradingEngine() {
 
       // 1b. Costruzione prezzi e lista target del ciclo (UNICA parte divergente tra fodder e consumabili)
       const markup = lazyMarkupPercent && lazyMarkupPercent > 0 ? lazyMarkupPercent : 10;
-      const MIN_NET_PROFIT = 200;
+      // Guard-Rail Netto Minimo: garantisce un profitto netto di almeno 200 crediti (o minMargin se configurato superiore)
+      const MIN_NET_PROFIT = Math.max(200, (typeof minMargin === 'number' && minMargin > 0 ? minMargin : 200));
       let cyclePrices;      // shape nativa per-mode, passata a clearSold/processUnassigned/listUnlisted
       let targets = [];     // [{ key, name, maxBid, maxBuyNow, strongBase, tierBase, isConsumableTarget, buildUrl(micr, kind), bidDataBase }]
       let minBidRequired = Infinity;
@@ -3802,7 +4141,7 @@ async function runLazyTradingEngine() {
           valore: `[PREZZI FODDER CICLO #${cycle}] Rating ${fodderRating} (${listaFodder.length} giocatori) -> Valori Fut.gg: ${benchmarkFloor} - ${maxPlayerPrice} cr | Prezzi Max Safe individuali: da ${minMaxBuy} a ${maxMaxBuy} cr (Margine netto min: +200 cr garantito) | Vendite Scaglionate 1 ORA (Tier A +6%, Tier B +${markup}%, Tier C +15%)`
         });
 
-        targets = listaFodder.filter(p => p && p.pid && p.priceInfo).map(p => {
+        targets = listaFodder.filter(p => p && p.pid && p.priceInfo && p.priceInfo.maxBuyAllowed >= 150).map(p => {
           const pi = p.priceInfo;
           return {
             key: String(p.pid),
@@ -3827,6 +4166,103 @@ async function runLazyTradingEngine() {
           };
         });
         minBidRequired = minMaxBuy;
+      } else if (targetMode === "managerLeague") {
+        // Modificatori Campionato Allenatore: un target per ciascuno dei top 5 campionati
+        targetStyles = Object.keys(MANAGER_LEAGUES); // ["13","53","31","19","16"] usati come indice
+        const leagueKeys = targetStyles.map(leagueTargetKey);
+
+        cyclePrices = {};
+        for (const lgId of targetStyles) {
+          if (start !== true) break;
+          const meta = MANAGER_LEAGUES[lgId];
+          const key = leagueTargetKey(lgId);
+          sendMessageSafe({
+            tipo: 'LOG',
+            valore: `[Auto-Discovery Ciclo #${cycle}] Rilevamento Lowest BIN per Modificatore ${meta.name}...`
+          });
+
+          const floor = await discoverLeagueModifierLowestBin(lgId, manualBin, false);
+          if (start !== true) break;
+          if (floor && floor > 0) {
+            const pTierA = Math.min(5000, roundUpToStep(floor * 1.06));
+            const pTierB = Math.min(5000, roundUpToStep(floor * (1 + (markup / 100))));
+            const pTierC = Math.min(5000, roundUpToStep(floor * 1.15));
+
+            // Cap-Awareness: mai oltre il tetto EA dei consumabili (5000 cr max -> 5000 * 0.95 = 4750 - 200 = 4550 -> max 4500)
+            const minNetRevenue = Math.floor(pTierA * 0.95);
+            let maxBuyAllowed = roundDownToStep(minNetRevenue - MIN_NET_PROFIT);
+            if (maxBuyAllowed > 4500) {
+              maxBuyAllowed = 4500;
+            }
+
+            // Guard-Rail Netto Minimo: se il prezzo massimo d'acquisto calcolato è inferiore alla prima offerta valida EA (150 cr),
+            // non possiamo garantire il profitto netto minimo di sicurezza (+MIN_NET_PROFIT cr) -> escludi dalle offerte
+            if (maxBuyAllowed < 150) {
+              sendMessageSafe({
+                tipo: 'LOG',
+                valore: `[GUARD-RAIL NETTO MINIMO] Modificatore ${meta.name} (Floor: ${floor} cr): prezzo max d'acquisto (${maxBuyAllowed} cr) insufficiente per garantire il margine netto minimo di +${MIN_NET_PROFIT} cr. Campionato escluso in questo ciclo!`
+              });
+              continue;
+            }
+
+            cyclePrices[key] = {
+              floorBin: floor,
+              maxBidAllowed: maxBuyAllowed,
+              maxBuyNowAllowed: maxBuyAllowed,
+              sellPrice: pTierB,
+              meta: meta,
+              tierAPrice: pTierA,
+              tierBPrice: pTierB,
+              tierCPrice: pTierC
+            };
+
+            const minProfitText = (minNetRevenue - maxBuyAllowed);
+            sendMessageSafe({
+              tipo: 'LOG',
+              valore: `[PREZZI CICLO #${cycle}] Modificatore ${meta.name} -> Floor: ${floor} | Prezzo Max Acquisto: <= ${maxBuyAllowed} (Profitto netto min garantito: +${minProfitText} cr) | Vendite Scaglionate: A (+6%): ${pTierA}, B (+${markup}%): ${pTierB}, C (+15%): ${pTierC}`
+            });
+          }
+          if (start !== true) break;
+          await sleep(getRandomGaussian(1.5, 0.2, 1.2, 1.8) * 1000);
+        }
+        if (start !== true) break;
+
+        targetStyles = leagueKeys; // da qui in poi le quote paritarie usano le chiavi league_X
+        targets = leagueKeys.filter(key => cyclePrices[key] && cyclePrices[key].maxBidAllowed >= 150).map(key => {
+          const pi = cyclePrices[key];
+          const lgId = key.slice(7);
+          return {
+            key: key,
+            name: `Modificatore ${pi.meta.name}`,
+            maxBid: pi.maxBidAllowed,
+            maxBuyNow: pi.maxBuyNowAllowed,
+            strongBase: pi.floorBin,
+            tierBase: pi.floorBin,
+            sellPrice: pi.sellPrice,
+            tierIsConsumable: true,
+            // Filtro server-side via amount=<leagueId> + validazione client-side di sicurezza
+            itemFilter: (a) => detectManagerLeague(a) === lgId,
+            buildUrl: (micr, kind) => {
+              const url = new URL("https://utas.mob.v1.prd.futc-ext.gcp.ea.com/ut/game/fc27/transfermarket");
+              url.searchParams.set("num", "21");
+              url.searchParams.set("start", "0");
+              url.searchParams.set("type", "training");
+              url.searchParams.set("cat", "managerLeagueModifier");
+              url.searchParams.set("amount", String(lgId));
+              url.searchParams.set(kind === "bid" ? "macr" : "maxb", String(kind === "bid" ? pi.maxBidAllowed : pi.maxBuyNowAllowed));
+              url.searchParams.set("micr", String(micr));
+              return url;
+            },
+            bidDataBase: { playStyleId: null, leagueId: lgId, amount: Number(lgId), name: `Modificatore ${pi.meta.name}`, isConsumable: true }
+          };
+        });
+        if (targets.length === 0) {
+          sendMessageSafe({
+            tipo: 'LOG',
+            valore: `[LAZY CAMPIONATI] Nessun campionato rispetta il guard-rail di margine netto minimo (+${MIN_NET_PROFIT} cr). Attendo il prossimo ciclo...`
+          });
+        }
+        minBidRequired = targets.length > 0 ? Math.min(...targets.map(t => t.maxBid)) : Infinity;
       } else {
         targetStyles = (chemStyle === "all") ? ["268", "266", "265", "260"] : [String(chemStyle)];
 
@@ -3853,6 +4289,16 @@ async function runLazyTradingEngine() {
               maxBuyAllowed = 4500;
             }
 
+            // Guard-Rail Netto Minimo: se il prezzo massimo d'acquisto calcolato è inferiore alla prima offerta valida EA (150 cr),
+            // non possiamo garantire il profitto netto minimo di sicurezza (+MIN_NET_PROFIT cr) -> escludi dalle offerte
+            if (maxBuyAllowed < 150) {
+              sendMessageSafe({
+                tipo: 'LOG',
+                valore: `[GUARD-RAIL NETTO MINIMO] ${meta.name} (Floor: ${floor} cr): prezzo max d'acquisto (${maxBuyAllowed} cr) insufficiente per garantire il margine netto minimo di +${MIN_NET_PROFIT} cr. Stile escluso in questo ciclo!`
+              });
+              continue;
+            }
+
             cyclePrices[sId] = {
               floorBin: floor,
               maxBidAllowed: maxBuyAllowed,
@@ -3867,7 +4313,7 @@ async function runLazyTradingEngine() {
             const minProfitText = (minNetRevenue - maxBuyAllowed);
             sendMessageSafe({
               tipo: 'LOG',
-              valore: `[PREZZI CICLO #${cycle}] ${meta.name} -> Floor: ${floor} | Prezzo Max Acquisto: <= ${maxBuyAllowed} (Profitto netto min: +${minProfitText} cr) | Vendite Scaglionate: A (+6%): ${pTierA}, B (+${markup}%): ${pTierB}, C (+15%): ${pTierC}`
+              valore: `[PREZZI CICLO #${cycle}] ${meta.name} -> Floor: ${floor} | Prezzo Max Acquisto: <= ${maxBuyAllowed} (Profitto netto min garantito: +${minProfitText} cr) | Vendite Scaglionate: A (+6%): ${pTierA}, B (+${markup}%): ${pTierB}, C (+15%): ${pTierC}`
             });
           }
           if (start !== true) break;
@@ -3875,7 +4321,7 @@ async function runLazyTradingEngine() {
         }
         if (start !== true) break;
 
-        targets = targetStyles.filter(sId => cyclePrices[sId]).map(sId => {
+        targets = targetStyles.filter(sId => cyclePrices[sId] && cyclePrices[sId].maxBidAllowed >= 150).map(sId => {
           const pi = cyclePrices[sId];
           return {
             key: sId,
@@ -3900,7 +4346,13 @@ async function runLazyTradingEngine() {
             bidDataBase: { playStyleId: sId, name: pi.meta.name, isConsumable: true }
           };
         });
-        minBidRequired = Math.min(...targets.map(t => t.maxBid), Infinity);
+        if (targets.length === 0) {
+          sendMessageSafe({
+            tipo: 'LOG',
+            valore: `[LAZY CONSUMABILI] Nessuno stile intesa rispetta il guard-rail di margine netto minimo (+${MIN_NET_PROFIT} cr). Attendo il prossimo ciclo...`
+          });
+        }
+        minBidRequired = targets.length > 0 ? Math.min(...targets.map(t => t.maxBid)) : Infinity;
       }
 
       // 1c. Rimuove le vendute e rimette in vendita quelle invendute con prezzi ricalcolati
@@ -3935,11 +4387,11 @@ async function runLazyTradingEngine() {
         const currentStyleCounts = {};
         for (const sId of targetStyles) currentStyleCounts[sId] = 0;
         for (const a of (pileInfo.auctions || [])) {
-          const detected = String(detectChemistryStyle(a));
+          const detected = detectConsumableKey(a);
           if (currentStyleCounts[detected] !== undefined) currentStyleCounts[detected]++;
         }
         const presenceLog = targetStyles.map(sId => {
-          const name = (CHEM_STYLES[sId]?.name || sId).split(" ")[0];
+          const name = targetDisplayName(sId).split(" ")[0];
           return `${name}: ${currentStyleCounts[sId]}`;
         }).join(" | ");
         sendMessageSafe({
@@ -4013,13 +4465,14 @@ async function runLazyTradingEngine() {
           consecutive461InBidding = 0;
           consecutive512InCycle = 0;
           marketRestricted = false;
+          let stopBiddingDueTo461 = false;
           const maxBiddingSearches = isFodder ? Math.max(25, cycleTarget * 3) : Math.max(80, Math.round(MAX_BIDS_PER_CYCLE * 2.5));
           const MAX_ACTIVE_WATCHLIST = isFodder ? 35 : 45; // Cuscinetto di sicurezza sui 50 slot EA
           let targetCycleIdx = 0;
 
           if (!isFodder) {
             const bidsQuotaLog = targetStyles.map(sId => {
-              const name = (CHEM_STYLES[sId]?.name || sId).split(" ")[0];
+              const name = targetDisplayName(sId).split(" ")[0];
               return `${name}: ${bidsTargetPerStyle[sId]}`;
             }).join(" | ");
             sendMessageSafe({
@@ -4154,6 +4607,11 @@ async function runLazyTradingEngine() {
                   );
                 }
 
+                // Filtro client-side opzionale del target (es. modificatori campionato: filtra per leagueId)
+                if (target.itemFilter) {
+                  targetAuctions = targetAuctions.filter(target.itemFilter);
+                }
+
                 targetAuctions.sort((a, b) => (a.expires || 0) - (b.expires || 0));
 
                 let bidsInThisSearch = 0;
@@ -4168,6 +4626,10 @@ async function runLazyTradingEngine() {
                   if (capBreak) break;
 
                   const minNextBid = calculateNextBid(auction.startingBid, auction.currentBid);
+                  // Guard-Rail Netto Minimo: se l'offerta minima necessaria supera il tetto massimo consentito, salta l'asta
+                  if (minNextBid > target.maxBid) {
+                    continue;
+                  }
                   // Strong Bid: offre subito circa il 70% del riferimento per eliminare la concorrenza casuale
                   const strongBidTarget = roundUpToStep(target.strongBase * 0.70);
                   const nextBid = Math.min(target.maxBid, Math.max(minNextBid, strongBidTarget));
@@ -4253,19 +4715,14 @@ async function runLazyTradingEngine() {
                       if (lastBidErrorStatus === 461) {
                         consecutive461InBidding++;
                         bidPriceOffset++; // Varia micr per bypassare la cache EA sulla prossima ricerca
-                        if (consecutive461InBidding === 3) {
-                          console.log(`[${bidTag}ING] 3 aste contese o Watchlist piena (461). Eseguo pulizia Watchlist...`);
+                        if (consecutive461InBidding >= 3) {
+                          console.log(`[${bidTag}ING] Rilevate ${consecutive461InBidding} aste contese o rifiutate (461). Concludo Step 1 e passo a Compra Ora.`);
                           sendMessageSafe({
                             tipo: 'LOG',
-                            valore: `[${bidTag}ING] Aste contese o Watchlist satura (461). Eseguo pulizia Watchlist per liberare slot...`
+                            valore: `[${bidTag}ING] Mercato aste molto conteso o blocco temporaneo (3 errori 461 consecutivi). Concludo le offerte all'asta e passo direttamente a Compra Ora.`
                           });
                           await resolveWatchlist();
-                        } else if (consecutive461InBidding >= 6) {
-                          console.log(`[${bidTag}ING] Rilevate ${consecutive461InBidding} aste già chiuse/contese (461). Concludo Step 1 e passo a Compra Ora.`);
-                          sendMessageSafe({
-                            tipo: 'LOG',
-                            valore: `[${bidTag}ING] Mercato aste molto conteso (461). Concludo le offerte all'asta e passo direttamente a Compra Ora.`
-                          });
+                          stopBiddingDueTo461 = true;
                           break;
                         }
                         // Interrompe i tentativi su questa pagina e passa alla prossima ricerca
@@ -4284,7 +4741,7 @@ async function runLazyTradingEngine() {
                     }
                   }
                 }
-                if (marketRestricted || earlyExitRateLimit) break;
+                if (marketRestricted || earlyExitRateLimit || stopBiddingDueTo461) break;
               } else if (res.status === 401) {
                 await handle401Error(isFodder ? "Lazy Fodder Bidding Search" : "Lazy Bidding Search");
                 break;
@@ -4314,6 +4771,8 @@ async function runLazyTradingEngine() {
                 break;
               }
             }
+
+            if (stopBiddingDueTo461) break;
 
             searchCount++;
 
@@ -4403,6 +4862,7 @@ async function runLazyTradingEngine() {
               lastBidErrorStatus = 0;
               lastBuyNowErrorStatus = 0;
               consecutiveErrorsCount = 0;
+              let stopTopUpDueTo461 = false;
 
               while (topUpBought < topUpTarget && topUpSearches < maxTopUpSearches && start === true) {
                 const target = targets[topUpTargetIdx % targets.length];
@@ -4455,7 +4915,8 @@ async function runLazyTradingEngine() {
                     const validAuctions = auctions.filter(a =>
                       a.buyNowPrice &&
                       a.buyNowPrice <= target.maxBuyNow &&
-                      !attemptedTradeIds.has(String(a.tradeId))
+                      !attemptedTradeIds.has(String(a.tradeId)) &&
+                      (!target.itemFilter || target.itemFilter(a))
                     );
                     validAuctions.sort((a, b) => (b.expires || 0) - (a.expires || 0));
 
@@ -4520,20 +4981,22 @@ async function runLazyTradingEngine() {
                             minPriceOffset++;
                             const nextMinBump = minBidBumps[(styleTopUpCount + minPriceOffset) % minBidBumps.length];
 
-                            sendMessageSafe({
-                              tipo: 'LOG',
-                              valore: `[${topUpTag}] Carta anticipata (461). Eseguo nuova ricerca variando prezzo minimo (${nextMinBump} cr)... (${consecutive461InTopUp}/3)`
-                            });
-
                             if (consecutive461InTopUp >= 3) {
+                              console.log(`[${topUpTag}] Rilevati ${consecutive461InTopUp} tentativi di Compra Ora rifiutati/anticipati (461). Concludo Step 2.`);
                               sendMessageSafe({
                                 tipo: 'LOG',
-                                valore: `[${topUpTag}] ${target.name} molto conteso (3 tentativi anticipati). La rotazione passa al prossimo target per diversificare...`
+                                valore: `[${topUpTag}] Rilevati 3 tentativi consecutivi di Compra Ora rifiutati/anticipati (461). Concludo gli acquisti per prevenire soft-ban e passo alla pausa di riposo.`
                               });
-                              consecutive461InTopUp = 0;
+                              stopTopUpDueTo461 = true;
+                              requiresSoftBanProbe = true;
+                              break;
+                            } else {
+                              sendMessageSafe({
+                                tipo: 'LOG',
+                                valore: `[${topUpTag}] Carta anticipata (461). Eseguo nuova ricerca variando prezzo minimo (${nextMinBump} cr)... (${consecutive461InTopUp}/3)`
+                              });
+                              await sleep(getRandomGaussian(2.5, 0.3, 2.0, 3.2) * 1000);
                             }
-
-                            await sleep(getRandomGaussian(2.5, 0.3, 2.0, 3.2) * 1000);
                           } else {
                             await sleep(getRandomGaussian(2.5, 0.3, 2.0, 3.2) * 1000);
                           }
@@ -4544,7 +5007,7 @@ async function runLazyTradingEngine() {
                       await sleep(getRandomGaussian(isFodder ? 3.0 : 3.8, 0.4, isFodder ? 2.4 : 3.0, isFodder ? 4.0 : 4.8) * 1000);
                     }
 
-                    if (earlyExitRateLimit) break;
+                    if (earlyExitRateLimit || stopTopUpDueTo461) break;
                   } else if (res.status === 401) {
                     await handle401Error(isFodder ? "Lazy Fodder Top-Up Search" : "Lazy Top-Up Search");
                     break;
@@ -4576,6 +5039,8 @@ async function runLazyTradingEngine() {
                     break;
                   }
                 }
+
+                if (stopTopUpDueTo461) break;
 
                 topUpSearches++;
 
@@ -4628,6 +5093,9 @@ async function runLazyTradingEngine() {
       crediti = await getCrediti();
       sendMessageSafe({ tipo: 'CREDITI', valore: crediti });
 
+      // Calcolo e pubblicazione proiezione crediti posseduti (crediti attuali + somma Compra Ora carte in vendita)
+      const proj = await calculateAndPublishProiezioneCrediti(crediti, finalPile.auctions);
+
       // report Telegram di fine ciclo (totali carte acquistate / carte vendute / crediti)
       await sendCycleReport('lazy', {
         acquistate: carteAcquistate,
@@ -4635,9 +5103,10 @@ async function runLazyTradingEngine() {
         crediti
       });
 
+      const projLogText = proj && proj.activeCount > 0 ? ` | Proiezione crediti posseduti: ${proj.display} cr (valore in vendita: +${proj.sommaVendite.toLocaleString('it-IT')} cr)` : '';
       sendMessageSafe({
         tipo: 'LOG',
-        valore: `[STATO TRADEPILE] ${finalPile.active}/${targetSize} carte attive sul mercato (${finalPile.total} totali in lista trasferimenti).`
+        valore: `[STATO TRADEPILE] ${finalPile.active}/${targetSize} carte attive sul mercato (${finalPile.total} totali in lista trasferimenti)${projLogText}.`
       });
 
       if (start !== true) break;
@@ -4771,14 +5240,20 @@ async function runLazyTradingEngine() {
               // 3. Recupera carte vinte ma non ancora listate (anti-accumulo)
               await processUnassignedItems(cyclePrices);
               await listUnlistedTradepileItems(cyclePrices);
+              const pileInfo = await getTradepileInfo();
               crediti = await getCrediti();
               if (typeof crediti === 'number') {
                 sendMessageSafe({ tipo: 'CREDITI', valore: crediti });
               }
-              reportTelemetry('HEARTBEAT', `Heartbeat completato: vendite incassate e carte rilistate`, { crediti, remainingMinutes });
+
+              // Calcolo e pubblicazione proiezione crediti posseduti durante heartbeat
+              const hbProj = await calculateAndPublishProiezioneCrediti(crediti, pileInfo?.auctions);
+
+              reportTelemetry('HEARTBEAT', `Heartbeat completato: vendite incassate e carte rilistate`, { crediti, remainingMinutes, proiezione: hbProj?.totale });
+              const projText = hbProj && hbProj.activeCount > 0 ? ` | Proiezione: ${hbProj.display} cr (${hbProj.activeCount} in vendita)` : '';
               sendMessageSafe({
                 tipo: 'LOG',
-                valore: `[${tag} HEARTBEAT] Tradepile sincronizzata: vendite incassate, carte vinte listate e crediti aggiornati (${crediti} cr). Prossimo restock tra ${remainingMinutes} min.`
+                valore: `[${tag} HEARTBEAT] Tradepile sincronizzata: vendite incassate, carte vinte listate e crediti aggiornati (${crediti} cr${projText}). Prossimo restock tra ${remainingMinutes} min.`
               });
             }
           } catch (hbErr) {

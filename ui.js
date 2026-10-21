@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const carteAcquistate = document.getElementById('carteAcquistate');
   const carteVendute = document.getElementById('carteVendute');
   const crediti = document.getElementById('crediti');
+  const proiezioneCrediti = document.getElementById('proiezioneCrediti');
   const switchFodder = document.getElementById('switchFodder');
   const targetModeRadios = document.querySelectorAll('input[name="targetMode"]');
   const fodderRatingContainer = document.getElementById('fodderRatingContainer');
@@ -113,6 +114,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
       // Mostra pulsante Lazy per Consumabili
       if (modeLazy) modeLazy.classList.remove('d-none');
+      if (labelModeLazy) labelModeLazy.classList.remove('d-none');
+    } else if (target === 'managerLeague') {
+      fodderRatingContainer.classList.add('d-none');
+      consumablesConfigContainer.classList.add('d-none');
+      if (switchFodder) switchFodder.checked = false;
+
+      // Campionati Allenatore: solo Lazy, pulsante visibile e pre-selezionato
+      if (modeLazy) {
+        modeLazy.classList.remove('d-none');
+        if (!modeLazy.checked) {
+          modeLazy.checked = true;
+          toggleStrategyContainers();
+          queueSettingsSave({ strategyMode: 'lazy' });
+        }
+      }
       if (labelModeLazy) labelModeLazy.classList.remove('d-none');
     } else {
       fodderRatingContainer.classList.add('d-none');
@@ -319,7 +335,7 @@ document.addEventListener('DOMContentLoaded', () => {
     'numeroTentativi', 'targetMode', 'fodderMode', 'fodderRating',
     'chemStyle', 'autoBin', 'manualBin', 'strategyMode', 'minMargin', 'maxSnipePrice',
     'targetTradepileSize', 'lazyMarkupPercent', 'lazySleepMinutes', 'telegramChatId', 'personaName',
-    'tradepileCount', 'crediti', 'carteAcquistate', 'carteVendute', 'start', 'botStatus'
+    'tradepileCount', 'crediti', 'proiezioneCrediti', 'carteAcquistate', 'carteVendute', 'start', 'botStatus'
   ], (result) => {
     const accBadge = document.getElementById('eaAccountNameBadge');
     if (accBadge) {
@@ -331,6 +347,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (result.crediti !== undefined && crediti) {
       crediti.textContent = typeof result.crediti === 'number' ? result.crediti.toLocaleString('it-IT') : String(result.crediti);
+    }
+    if (result.proiezioneCrediti !== undefined && proiezioneCrediti) {
+      proiezioneCrediti.textContent = String(result.proiezioneCrediti);
     }
     if (result.carteAcquistate !== undefined && carteAcquistate) {
       carteAcquistate.textContent = String(result.carteAcquistate);
@@ -551,10 +570,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
       const timeStr = `${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
 
-      const verText = document.getElementById('versione')?.textContent?.trim() || 'v2.6.2';
+      const verText = document.getElementById('versione')?.textContent?.trim() || 'v2.7.0';
       const targetMode = typeof getSelectedTargetMode === 'function' ? getSelectedTargetMode() : 'N/D';
       const strategyMode = typeof getSelectedStrategy === 'function' ? getSelectedStrategy() : 'N/D';
       const creditiVal = document.getElementById('crediti')?.textContent?.trim() || 'N/D';
+      const proiezioneVal = document.getElementById('proiezioneCrediti')?.textContent?.trim() || 'N/D';
       const carteVal = document.getElementById('carteAcquistate')?.textContent?.trim() || '0';
       const tentativiVal = document.getElementById('tentativi')?.value || 'N/D';
       const truncated = totalLogEvents > allLogRecords.length;
@@ -563,7 +583,7 @@ document.addEventListener('DOMContentLoaded', () => {
       content += `  FC Sniper & Trader - Report Log Sessione\n`;
       content += `  Versione: ${verText} | Data Export: ${now.toLocaleString()}\n`;
       content += `  Modalità: ${String(targetMode).toUpperCase()} | Strategia: ${String(strategyMode).toUpperCase()}\n`;
-      content += `  Crediti: ${creditiVal} | Carte Acquistate: ${carteVal} | Tentativi: ${tentativiVal}\n`;
+      content += `  Crediti: ${creditiVal} (Proiezione: ${proiezioneVal}) | Carte Acquistate: ${carteVal} | Tentativi: ${tentativiVal}\n`;
       content += `  Totale Eventi Registrati: ${totalLogEvents}\n`;
       content += `  Eventi Inclusi nel Report: ${allLogRecords.length} (buffer max ${MAX_LOG_RECORDS})\n`;
       if (truncated) {
@@ -642,6 +662,12 @@ document.addEventListener('DOMContentLoaded', () => {
           crediti.textContent = typeof message.valore === 'number'
             ? message.valore.toLocaleString('it-IT')
             : (message.valore ? String(message.valore) : 'N/D');
+        }
+        break;
+
+      case 'PROIEZIONE_CREDITI':
+        if (proiezioneCrediti) {
+          proiezioneCrediti.textContent = message.valore !== "" ? String(message.valore) : "-";
         }
         break;
 

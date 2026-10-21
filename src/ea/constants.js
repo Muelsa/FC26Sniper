@@ -7,3 +7,17 @@ export const CHEM_STYLES = {
   "267": { id: 267, name: "Catalizzatore (Catalyst)", defaultGuess: 800 },
   "255": { id: 255, name: "Falco (Hawk)", defaultGuess: 700 }
 };
+
+// Modificatori Campionato Allenatore (cat=managerLeagueModifier) — ID lega EA dei top 5 campionati
+export const MANAGER_LEAGUES = {
+  "13": { id: 13, name: "Premier League", defaultGuess: 1200 },
+  "53": { id: 53, name: "LaLiga", defaultGuess: 1000 },
+  "31": { id: 31, name: "Serie A", defaultGuess: 900 },
+  "19": { id: 19, name: "Bundesliga", defaultGuess: 800 },
+  "16": { id: 16, name: "Ligue 1", defaultGuess: 700 }
+};
+
+// Chiave sintetica usata in cyclePrices/cache per un modificatore campionato
+export function leagueTargetKey(leagueId) {
+  return `league_${leagueId}`;
+}

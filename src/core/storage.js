@@ -61,6 +61,9 @@ export const getTradepileStatus = async () => {
   });
 };
 
+// Proiezione crediti posseduti (crediti attuali + somma Compra Ora carte in vendita)
+export const getProiezioneCrediti = () => getKey('proiezioneCrediti', "-");
+
 // Pulisce offerte pendenti obsolete (> 24 ore) per garantire memoria pulita
 export async function cleanExpiredPendingBids() {
   try {
