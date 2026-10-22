@@ -30,6 +30,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const modeLazy = document.getElementById('modeLazy');
   const labelModeLazy = document.getElementById('labelModeLazy') || document.querySelector('label[for="modeLazy"]');
   const snipeSpecificContainer = document.getElementById('snipeSpecificContainer');
+  const manualConfigContainer = document.getElementById('manualConfigContainer');
+  const manualPriceInput = document.getElementById('manualPriceInput');
+  const manualPriceLabel = document.getElementById('manualPriceLabel');
+  const manualPriceHelp = document.getElementById('manualPriceHelp');
 
   const getSelectedTargetMode = () => {
     const checkedRadio = document.querySelector('input[name="targetMode"]:checked');
@@ -59,6 +63,10 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const getMaxSnipePrice = () => {
+    const target = getSelectedTargetMode();
+    if (target === 'manual' && manualPriceInput) {
+      return parseInt(manualPriceInput.value) || 0;
+    }
     return maxSnipePriceInput ? (parseInt(maxSnipePriceInput.value) || 0) : 0;
   };
 
@@ -102,6 +110,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (target === 'fodder') {
       fodderRatingContainer.classList.remove('d-none');
       consumablesConfigContainer.classList.add('d-none');
+      if (manualConfigContainer) manualConfigContainer.classList.add('d-none');
       if (switchFodder) switchFodder.checked = true;
 
       // Mostra pulsante Lazy sia per Fodder che per Consumabili
@@ -110,6 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if (target === 'consumables') {
       fodderRatingContainer.classList.add('d-none');
       consumablesConfigContainer.classList.remove('d-none');
+      if (manualConfigContainer) manualConfigContainer.classList.add('d-none');
       if (switchFodder) switchFodder.checked = false;
 
       // Mostra pulsante Lazy per Consumabili
@@ -118,6 +128,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if (target === 'managerLeague') {
       fodderRatingContainer.classList.add('d-none');
       consumablesConfigContainer.classList.add('d-none');
+      if (manualConfigContainer) manualConfigContainer.classList.add('d-none');
       if (switchFodder) switchFodder.checked = false;
 
       // Campionati Allenatore: solo Lazy, pulsante visibile e pre-selezionato
@@ -133,6 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       fodderRatingContainer.classList.add('d-none');
       consumablesConfigContainer.classList.add('d-none');
+      if (manualConfigContainer) manualConfigContainer.classList.remove('d-none');
       if (switchFodder) switchFodder.checked = false;
 
       // Nascondi pulsante Lazy su Manuale
@@ -141,10 +153,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (modeLazy && modeLazy.checked) {
         const snipingRadio = document.getElementById('modeSniping');
         if (snipingRadio) snipingRadio.checked = true;
-        toggleStrategyContainers();
         queueSettingsSave({ strategyMode: 'sniping' });
       }
     }
+    toggleStrategyContainers();
   };
 
   const toggleManualBinVisibility = () => {
@@ -159,6 +171,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const toggleStrategyContainers = () => {
     const strategy = getSelectedStrategy();
+    const target = getSelectedTargetMode();
+
+    if (target === 'manual') {
+      if (biddingConfigContainer) biddingConfigContainer.classList.add('d-none');
+      if (lazyConfigContainer) lazyConfigContainer.classList.add('d-none');
+      if (snipeSpecificContainer) snipeSpecificContainer.classList.add('d-none');
+      if (manualConfigContainer) manualConfigContainer.classList.remove('d-none');
+
+      if (strategy === 'bidding') {
+        if (manualPriceLabel) manualPriceLabel.textContent = "Prezzo Max Offerta (Asta):";
+        if (manualPriceInput) manualPriceInput.placeholder = "es. 1000 (obbligatorio)";
+        if (manualPriceHelp) manualPriceHelp.textContent = "Tetto massimo per le offerte all'asta. Obbligatorio per sicurezza.";
+      } else {
+        if (manualPriceLabel) manualPriceLabel.textContent = "Prezzo Max Compra Ora (Snipe):";
+        if (manualPriceInput) manualPriceInput.placeholder = "es. 2000 (obbligatorio)";
+        if (manualPriceHelp) manualPriceHelp.textContent = "Tetto massimo per il Compra Ora. Obbligatorio per sicurezza.";
+      }
+      return;
+    }
+
+    if (manualConfigContainer) manualConfigContainer.classList.add('d-none');
+
     if (strategy === 'bidding') {
       if (biddingConfigContainer) biddingConfigContainer.classList.remove('d-none');
       if (lazyConfigContainer) lazyConfigContainer.classList.add('d-none');
@@ -183,6 +217,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (autoBinCheck) disabled ? autoBinCheck.setAttribute('disabled', 'true') : autoBinCheck.removeAttribute('disabled');
     if (manualBinInput) disabled ? manualBinInput.setAttribute('disabled', 'true') : manualBinInput.removeAttribute('disabled');
     if (maxSnipePriceInput) disabled ? maxSnipePriceInput.setAttribute('disabled', 'true') : maxSnipePriceInput.removeAttribute('disabled');
+    if (manualPriceInput) disabled ? manualPriceInput.setAttribute('disabled', 'true') : manualPriceInput.removeAttribute('disabled');
     if (minMarginInput) disabled ? minMarginInput.setAttribute('disabled', 'true') : minMarginInput.removeAttribute('disabled');
     if (targetTradepileSizeInput) disabled ? targetTradepileSizeInput.setAttribute('disabled', 'true') : targetTradepileSizeInput.removeAttribute('disabled');
     if (lazyMarkupPercentInput) disabled ? lazyMarkupPercentInput.setAttribute('disabled', 'true') : lazyMarkupPercentInput.removeAttribute('disabled');
@@ -229,7 +264,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (maxSnipePriceInput) {
     maxSnipePriceInput.addEventListener('change', () => {
-      queueSettingsSave({ maxSnipePrice: parseInt(maxSnipePriceInput.value) || 0 });
+      const val = parseInt(maxSnipePriceInput.value) || 0;
+      if (manualPriceInput) manualPriceInput.value = val > 0 ? val : '';
+      queueSettingsSave({ maxSnipePrice: val });
+    });
+  }
+
+  if (manualPriceInput) {
+    manualPriceInput.addEventListener('change', () => {
+      const val = parseInt(manualPriceInput.value) || 0;
+      if (maxSnipePriceInput) maxSnipePriceInput.value = val > 0 ? val : '';
+      queueSettingsSave({ maxSnipePrice: val });
     });
   }
 
@@ -394,8 +439,9 @@ document.addEventListener('DOMContentLoaded', () => {
       manualBinInput.value = result.manualBin;
     }
 
-    if (result.maxSnipePrice && maxSnipePriceInput) {
-      maxSnipePriceInput.value = result.maxSnipePrice;
+    if (result.maxSnipePrice) {
+      if (maxSnipePriceInput) maxSnipePriceInput.value = result.maxSnipePrice;
+      if (manualPriceInput) manualPriceInput.value = result.maxSnipePrice;
     }
 
     if (result.targetTradepileSize && targetTradepileSizeInput) {
@@ -451,6 +497,16 @@ document.addEventListener('DOMContentLoaded', () => {
     const autoBin = isAutoBinEnabled();
     const manualBin = getManualBinPrice();
     const maxSnipePrice = getMaxSnipePrice();
+
+    if (selectedTarget === 'manual') {
+      if (!maxSnipePrice || maxSnipePrice <= 0) {
+        const fieldName = selectedStrategy === 'bidding' ? 'Prezzo Max Offerta (Asta)' : 'Prezzo Max Compra Ora (Snipe)';
+        alert(`Attenzione: devi impostare il "${fieldName}" per avviare la modalità Manuale.`);
+        if (manualPriceInput) manualPriceInput.focus();
+        return;
+      }
+    }
+
     const minMargin = minMarginInput ? (parseInt(minMarginInput.value) || 200) : 200;
     const targetTradepileSize = getTargetTradepileSize();
     const lazyMarkupPercent = getLazyMarkupPercent();

@@ -162,6 +162,17 @@
                                 </div>
                             </div>
                         </div>
+                        <div id="manualConfigContainer" class="mt-2 mb-2 d-none">
+                            <div class="mb-2">
+                                <label for="manualPriceInput" id="manualPriceLabel" class="form-label form-label-sm text-muted mb-0"
+                                    style="font-size: 0.8rem;">Prezzo Max Offerta (Asta):</label>
+                                <input type="number" class="form-control form-control-sm" id="manualPriceInput"
+                                    placeholder="es. 1000 (obbligatorio)" min="150" step="50" style="width: 200px;">
+                                <small id="manualPriceHelp" class="text-muted d-block" style="font-size: 0.72rem; max-width: 220px;">
+                                    Tetto massimo crediti per le offerte manuali.
+                                </small>
+                            </div>
+                        </div>
                         <button type="button" class="btn btn-primary" style="margin-top: 5px;"
                             id="startBtn">Start</button>
                         <button type="button" class="btn btn-danger" style="margin-top: 5px;" id="stopBtn">Stop</button>

@@ -858,7 +858,9 @@ async function handleStartMessage(message) {
         } else {
           const isManualBidding = strategyMode === "bidding";
           if (isManualBidding) {
-            sendMessageSafe({ tipo: 'LOG', valore: `Avvio BIDDING Manuale (Max offerta: ${maxSnipePrice > 0 ? maxSnipePrice + ' cr' : 'NON IMPOSTATO — bidding disattivato'})` });
+            sendMessageSafe({ tipo: 'LOG', valore: `Avvio BIDDING Manuale (Tetto Max Offerta: ${maxSnipePrice > 0 ? maxSnipePrice + ' cr' : 'NON IMPOSTATO — inserisci Prezzo Max Offerta nella UI'})` });
+          } else {
+            sendMessageSafe({ tipo: 'LOG', valore: `Avvio SNIPING Manuale (Tetto Max Compra Ora: ${maxSnipePrice > 0 ? maxSnipePrice + ' cr' : 'NON IMPOSTATO — inserisci Prezzo Max Compra Ora nella UI'})` });
           }
           let i = 0;
           while (start == true && i < numeroTentativi) {
@@ -1703,6 +1705,12 @@ async function sendResearchRequest() {
       return;
     }
 
+    if (!maxSnipePrice || maxSnipePrice <= 0) {
+      sendMessageSafe({ tipo: 'LOG', valore: '[SNIPING MANUALE] Imposta il "Prezzo Max Compra Ora" nella UI: senza tetto prezzo lo sniping manuale è disattivato per sicurezza.' });
+      await sleep(5000);
+      return;
+    }
+
     // 1. Telemetria nativa PIN: inviata rigorosamente PRIMA della ricerca
     await triggerPinEvent("TRIGGER_PIN_SEARCH");
 
@@ -1796,7 +1804,7 @@ async function sendManualBiddingRequest() {
     }
 
     if (!maxSnipePrice || maxSnipePrice <= 0) {
-      sendMessageSafe({ tipo: 'LOG', valore: '[BIDDING MANUALE] Imposta il "Prezzo massimo sniping" nella UI: senza tetto prezzo il bidding manuale è disattivato per sicurezza.' });
+      sendMessageSafe({ tipo: 'LOG', valore: '[BIDDING MANUALE] Imposta il "Prezzo Max Offerta" nella UI: senza tetto prezzo il bidding manuale è disattivato per sicurezza.' });
       await sleep(5000);
       return;
     }
