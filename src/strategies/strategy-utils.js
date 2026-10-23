@@ -9,8 +9,8 @@ export function getUrgentAuctionTimeRemaining(activeBids) {
       const diff = bid.expiresAt - now;
       if (diff > 0 && diff < minRemainingMs) {
         minRemainingMs = diff;
-      } else if (diff <= 0 && diff > -30000) {
-        // Asta appena scaduta o in chiusura: richiede risoluzione immediata
+      } else if (diff <= 0 && diff > -120000) {
+        // Asta appena scaduta o in attesa di chiusura EA: richiede risoluzione immediata
         minRemainingMs = Math.min(minRemainingMs, 0);
       }
     }

@@ -21,3 +21,22 @@ export const MANAGER_LEAGUES = {
 export function leagueTargetKey(leagueId) {
   return `league_${leagueId}`;
 }
+
+// Top Nazioni Allenatori (cat=manager, nat=<id>)
+export const TOP_MANAGER_NATIONS = {
+  "18": { id: 18, name: "Francia", defaultGuess: 2500 },
+  "34": { id: 34, name: "Olanda", defaultGuess: 2000 },
+  "27": { id: 27, name: "Italia", defaultGuess: 1500 },
+  "45": { id: 45, name: "Spagna", defaultGuess: 1200 },
+  "21": { id: 21, name: "Germania", defaultGuess: 1000 },
+  "14": { id: 14, name: "Inghilterra", defaultGuess: 1200 },
+  "10": { id: 10, name: "Brasile", defaultGuess: 1200 },
+  "38": { id: 38, name: "Portogallo", defaultGuess: 1200 },
+  "52": { id: 52, name: "Argentina", defaultGuess: 1000 }
+};
+
+// Chiave sintetica usata in cyclePrices/cache per un target allenatore per nazione
+export function managerTargetKey(natId) {
+  return `manager_nat_${natId}`;
+}
+

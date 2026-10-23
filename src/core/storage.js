@@ -19,6 +19,7 @@ export const getMaxSnipePrice = async () => parseInt(await getKey('maxSnipePrice
 export const getTargetTradepileSize = async () => parseInt(await getKey('targetTradepileSize', 50)) || 50;
 export const getLazyMarkupPercent = async () => parseInt(await getKey('lazyMarkupPercent', 10)) || 10;
 export const getLazySleepMinutes = async () => parseInt(await getKey('lazySleepMinutes', 63)) || 63;
+export const getManagerNation = () => getKey('managerNation', "18,34");
 
 // targetMode con retro-compatibilità dalla vecchia chiave booleana fodderMode
 export function getTargetMode() {
