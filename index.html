@@ -10,7 +10,7 @@
 <body>
     <div class="px-3 pt-2 pb-1 border-bottom d-flex justify-content-between align-items-center bg-white">
         <h5 class="m-0 fw-bold text-primary">FC Sniper & Trader</h5>
-        <span id="versione" class="badge bg-light text-secondary border">v2.6.2</span>
+        <span id="versione" class="badge bg-light text-secondary border">v2.7.5</span>
     </div>
 
     <div class="container-fluid px-3 pt-2">
@@ -43,6 +43,14 @@
                                 <input type="radio" class="btn-check" name="targetMode" id="targetConsumables"
                                     value="consumables" autocomplete="off">
                                 <label class="btn btn-outline-primary" for="targetConsumables">Consumabili</label>
+
+                                <input type="radio" class="btn-check" name="targetMode" id="targetManagerLeague"
+                                    value="managerLeague" autocomplete="off">
+                                <label class="btn btn-outline-primary" for="targetManagerLeague">Campionati</label>
+
+                                <input type="radio" class="btn-check" name="targetMode" id="targetManagers"
+                                    value="managers" autocomplete="off">
+                                <label class="btn btn-outline-primary" for="targetManagers">Allenatori</label>
 
                                 <input type="radio" class="btn-check" name="targetMode" id="targetManual" value="manual"
                                     autocomplete="off">
@@ -158,6 +166,36 @@
                                 </div>
                             </div>
                         </div>
+                        <div id="managersConfigContainer" class="mt-2 mb-2 d-none">
+                            <label for="managerNationSelect" class="form-label form-label-sm d-block mb-1 text-muted"
+                                style="font-size: 0.8rem;">Nazionalità Allenatore:</label>
+                            <select class="form-select form-select-sm mb-2" id="managerNationSelect" style="width: 200px;">
+                                <option value="18,34" selected>Francia + Olanda</option>
+                                <option value="18">Francia</option>
+                                <option value="34">Olanda</option>
+                                <option value="27">Italia</option>
+                                <option value="45">Spagna</option>
+                                <option value="21">Germania</option>
+                                <option value="14">Inghilterra</option>
+                                <option value="10">Brasile</option>
+                                <option value="38">Portogallo</option>
+                                <option value="52">Argentina</option>
+                            </select>
+                            <small class="text-muted d-block" style="font-size: 0.72rem; max-width: 200px;">
+                                Acquisto automatico a -15% dal Lowest BIN live. Vendita istantanea al Lowest BIN.
+                            </small>
+                        </div>
+                        <div id="manualConfigContainer" class="mt-2 mb-2 d-none">
+                            <div class="mb-2">
+                                <label for="manualPriceInput" id="manualPriceLabel" class="form-label form-label-sm text-muted mb-0"
+                                    style="font-size: 0.8rem;">Prezzo Max Offerta (Asta):</label>
+                                <input type="number" class="form-control form-control-sm" id="manualPriceInput"
+                                    placeholder="es. 1000 (obbligatorio)" min="150" step="50" style="width: 200px;">
+                                <small id="manualPriceHelp" class="text-muted d-block" style="font-size: 0.72rem; max-width: 220px;">
+                                    Tetto massimo crediti per le offerte manuali.
+                                </small>
+                            </div>
+                        </div>
                         <button type="button" class="btn btn-primary" style="margin-top: 5px;"
                             id="startBtn">Start</button>
                         <button type="button" class="btn btn-danger" style="margin-top: 5px;" id="stopBtn">Stop</button>
@@ -173,6 +211,10 @@
                     <div class="d-flex justify-content-between align-items-center mb-1">
                         <span class="text-muted" style="font-size: 0.8rem;">Crediti EA:</span>
                         <strong id="crediti" class="text-success font-monospace" style="font-size: 0.95rem;">-</strong>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mb-1">
+                        <span class="text-muted" style="font-size: 0.8rem;">Proiezione Crediti:</span>
+                        <strong id="proiezioneCrediti" class="text-info font-monospace" style="font-size: 0.85rem;" title="Crediti attuali + valore Compra Ora di tutte le carte attualmente in vendita">-</strong>
                     </div>
                     <div class="d-flex justify-content-between align-items-center mb-1">
                         <span class="text-muted" style="font-size: 0.8rem;">Carte Acquistate:</span>

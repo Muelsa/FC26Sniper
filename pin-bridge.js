@@ -84,9 +84,17 @@
       const s = window.services;
       let token = null;
       if (s) {
+        // 1. Metodo primario e nativo EA: ID di sessione UTAS live (X-UT-SID)
+        if (typeof s.Authentication?.getUtasSession === "function") {
+          const session = s.Authentication.getUtasSession();
+          if (session?.id) {
+            token = session.id;
+          }
+        }
+
         const userObj = typeof s.User?.getUser === "function" ? s.User.getUser() : null;
         if (userObj) {
-          if (userObj.auth?.token) {
+          if (!token && userObj.auth?.token) {
             token = userObj.auth.token;
           }
 
@@ -102,8 +110,6 @@
 
         if (!token && s.Network?.client?.defaultHeaders?.['X-UT-SID']) {
           token = s.Network.client.defaultHeaders['X-UT-SID'];
-        } else if (!token && typeof s.Authentication?.getAuthToken === "function") {
-          token = s.Authentication.getAuthToken();
         }
       }
       if (token) sendToken(token);

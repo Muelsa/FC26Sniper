@@ -6,6 +6,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const carteAcquistate = document.getElementById('carteAcquistate');
   const carteVendute = document.getElementById('carteVendute');
   const crediti = document.getElementById('crediti');
+  const proiezioneCrediti = document.getElementById('proiezioneCrediti');
   const switchFodder = document.getElementById('switchFodder');
   const targetModeRadios = document.querySelectorAll('input[name="targetMode"]');
   const fodderRatingContainer = document.getElementById('fodderRatingContainer');
@@ -29,10 +30,20 @@ document.addEventListener('DOMContentLoaded', () => {
   const modeLazy = document.getElementById('modeLazy');
   const labelModeLazy = document.getElementById('labelModeLazy') || document.querySelector('label[for="modeLazy"]');
   const snipeSpecificContainer = document.getElementById('snipeSpecificContainer');
+  const manualConfigContainer = document.getElementById('manualConfigContainer');
+  const manualPriceInput = document.getElementById('manualPriceInput');
+  const manualPriceLabel = document.getElementById('manualPriceLabel');
+  const manualPriceHelp = document.getElementById('manualPriceHelp');
+  const managersConfigContainer = document.getElementById('managersConfigContainer');
+  const managerNationSelect = document.getElementById('managerNationSelect');
 
   const getSelectedTargetMode = () => {
     const checkedRadio = document.querySelector('input[name="targetMode"]:checked');
     return checkedRadio ? checkedRadio.value : 'fodder';
+  };
+
+  const getSelectedManagerNation = () => {
+    return managerNationSelect ? managerNationSelect.value : '18,34';
   };
 
   const getSelectedRating = () => {
@@ -58,6 +69,10 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   const getMaxSnipePrice = () => {
+    const target = getSelectedTargetMode();
+    if (target === 'manual' && manualPriceInput) {
+      return parseInt(manualPriceInput.value) || 0;
+    }
     return maxSnipePriceInput ? (parseInt(maxSnipePriceInput.value) || 0) : 0;
   };
 
@@ -98,9 +113,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const toggleTargetContainers = () => {
     const target = getSelectedTargetMode();
+    if (managersConfigContainer) {
+      managersConfigContainer.classList.toggle('d-none', target !== 'managers');
+    }
     if (target === 'fodder') {
       fodderRatingContainer.classList.remove('d-none');
       consumablesConfigContainer.classList.add('d-none');
+      if (manualConfigContainer) manualConfigContainer.classList.add('d-none');
       if (switchFodder) switchFodder.checked = true;
 
       // Mostra pulsante Lazy sia per Fodder che per Consumabili
@@ -109,14 +128,48 @@ document.addEventListener('DOMContentLoaded', () => {
     } else if (target === 'consumables') {
       fodderRatingContainer.classList.add('d-none');
       consumablesConfigContainer.classList.remove('d-none');
+      if (manualConfigContainer) manualConfigContainer.classList.add('d-none');
       if (switchFodder) switchFodder.checked = false;
 
       // Mostra pulsante Lazy per Consumabili
       if (modeLazy) modeLazy.classList.remove('d-none');
       if (labelModeLazy) labelModeLazy.classList.remove('d-none');
+    } else if (target === 'managerLeague') {
+      fodderRatingContainer.classList.add('d-none');
+      consumablesConfigContainer.classList.add('d-none');
+      if (manualConfigContainer) manualConfigContainer.classList.add('d-none');
+      if (switchFodder) switchFodder.checked = false;
+
+      // Campionati Allenatore: solo Lazy, pulsante visibile e pre-selezionato
+      if (modeLazy) {
+        modeLazy.classList.remove('d-none');
+        if (!modeLazy.checked) {
+          modeLazy.checked = true;
+          toggleStrategyContainers();
+          queueSettingsSave({ strategyMode: 'lazy' });
+        }
+      }
+      if (labelModeLazy) labelModeLazy.classList.remove('d-none');
+    } else if (target === 'managers') {
+      fodderRatingContainer.classList.add('d-none');
+      consumablesConfigContainer.classList.add('d-none');
+      if (manualConfigContainer) manualConfigContainer.classList.add('d-none');
+      if (switchFodder) switchFodder.checked = false;
+
+      // Allenatori: solo Lazy, pulsante visibile e pre-selezionato
+      if (modeLazy) {
+        modeLazy.classList.remove('d-none');
+        if (!modeLazy.checked) {
+          modeLazy.checked = true;
+          toggleStrategyContainers();
+          queueSettingsSave({ strategyMode: 'lazy' });
+        }
+      }
+      if (labelModeLazy) labelModeLazy.classList.remove('d-none');
     } else {
       fodderRatingContainer.classList.add('d-none');
       consumablesConfigContainer.classList.add('d-none');
+      if (manualConfigContainer) manualConfigContainer.classList.remove('d-none');
       if (switchFodder) switchFodder.checked = false;
 
       // Nascondi pulsante Lazy su Manuale
@@ -125,10 +178,10 @@ document.addEventListener('DOMContentLoaded', () => {
       if (modeLazy && modeLazy.checked) {
         const snipingRadio = document.getElementById('modeSniping');
         if (snipingRadio) snipingRadio.checked = true;
-        toggleStrategyContainers();
         queueSettingsSave({ strategyMode: 'sniping' });
       }
     }
+    toggleStrategyContainers();
   };
 
   const toggleManualBinVisibility = () => {
@@ -143,6 +196,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const toggleStrategyContainers = () => {
     const strategy = getSelectedStrategy();
+    const target = getSelectedTargetMode();
+
+    if (target === 'manual') {
+      if (biddingConfigContainer) biddingConfigContainer.classList.add('d-none');
+      if (lazyConfigContainer) lazyConfigContainer.classList.add('d-none');
+      if (snipeSpecificContainer) snipeSpecificContainer.classList.add('d-none');
+      if (manualConfigContainer) manualConfigContainer.classList.remove('d-none');
+
+      if (strategy === 'bidding') {
+        if (manualPriceLabel) manualPriceLabel.textContent = "Prezzo Max Offerta (Asta):";
+        if (manualPriceInput) manualPriceInput.placeholder = "es. 1000 (obbligatorio)";
+        if (manualPriceHelp) manualPriceHelp.textContent = "Tetto massimo per le offerte all'asta. Obbligatorio per sicurezza.";
+      } else {
+        if (manualPriceLabel) manualPriceLabel.textContent = "Prezzo Max Compra Ora (Snipe):";
+        if (manualPriceInput) manualPriceInput.placeholder = "es. 2000 (obbligatorio)";
+        if (manualPriceHelp) manualPriceHelp.textContent = "Tetto massimo per il Compra Ora. Obbligatorio per sicurezza.";
+      }
+      return;
+    }
+
+    if (manualConfigContainer) manualConfigContainer.classList.add('d-none');
+
     if (strategy === 'bidding') {
       if (biddingConfigContainer) biddingConfigContainer.classList.remove('d-none');
       if (lazyConfigContainer) lazyConfigContainer.classList.add('d-none');
@@ -167,10 +242,12 @@ document.addEventListener('DOMContentLoaded', () => {
     if (autoBinCheck) disabled ? autoBinCheck.setAttribute('disabled', 'true') : autoBinCheck.removeAttribute('disabled');
     if (manualBinInput) disabled ? manualBinInput.setAttribute('disabled', 'true') : manualBinInput.removeAttribute('disabled');
     if (maxSnipePriceInput) disabled ? maxSnipePriceInput.setAttribute('disabled', 'true') : maxSnipePriceInput.removeAttribute('disabled');
+    if (manualPriceInput) disabled ? manualPriceInput.setAttribute('disabled', 'true') : manualPriceInput.removeAttribute('disabled');
     if (minMarginInput) disabled ? minMarginInput.setAttribute('disabled', 'true') : minMarginInput.removeAttribute('disabled');
     if (targetTradepileSizeInput) disabled ? targetTradepileSizeInput.setAttribute('disabled', 'true') : targetTradepileSizeInput.removeAttribute('disabled');
     if (lazyMarkupPercentInput) disabled ? lazyMarkupPercentInput.setAttribute('disabled', 'true') : lazyMarkupPercentInput.removeAttribute('disabled');
     if (lazySleepMinutesInput) disabled ? lazySleepMinutesInput.setAttribute('disabled', 'true') : lazySleepMinutesInput.removeAttribute('disabled');
+    if (managerNationSelect) disabled ? managerNationSelect.setAttribute('disabled', 'true') : managerNationSelect.removeAttribute('disabled');
   };
 
   // Salvataggio impostazioni accumulato con debounce breve:
@@ -211,9 +288,25 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  if (managerNationSelect) {
+    managerNationSelect.addEventListener('change', () => {
+      queueSettingsSave({ managerNation: managerNationSelect.value });
+    });
+  }
+
   if (maxSnipePriceInput) {
     maxSnipePriceInput.addEventListener('change', () => {
-      queueSettingsSave({ maxSnipePrice: parseInt(maxSnipePriceInput.value) || 0 });
+      const val = parseInt(maxSnipePriceInput.value) || 0;
+      if (manualPriceInput) manualPriceInput.value = val > 0 ? val : '';
+      queueSettingsSave({ maxSnipePrice: val });
+    });
+  }
+
+  if (manualPriceInput) {
+    manualPriceInput.addEventListener('change', () => {
+      const val = parseInt(manualPriceInput.value) || 0;
+      if (maxSnipePriceInput) maxSnipePriceInput.value = val > 0 ? val : '';
+      queueSettingsSave({ maxSnipePrice: val });
     });
   }
 
@@ -319,7 +412,8 @@ document.addEventListener('DOMContentLoaded', () => {
     'numeroTentativi', 'targetMode', 'fodderMode', 'fodderRating',
     'chemStyle', 'autoBin', 'manualBin', 'strategyMode', 'minMargin', 'maxSnipePrice',
     'targetTradepileSize', 'lazyMarkupPercent', 'lazySleepMinutes', 'telegramChatId', 'personaName',
-    'tradepileCount', 'crediti', 'carteAcquistate', 'carteVendute', 'start', 'botStatus'
+    'managerNation',
+    'tradepileCount', 'crediti', 'proiezioneCrediti', 'carteAcquistate', 'carteVendute', 'start', 'botStatus'
   ], (result) => {
     const accBadge = document.getElementById('eaAccountNameBadge');
     if (accBadge) {
@@ -331,6 +425,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     if (result.crediti !== undefined && crediti) {
       crediti.textContent = typeof result.crediti === 'number' ? result.crediti.toLocaleString('it-IT') : String(result.crediti);
+    }
+    if (result.proiezioneCrediti !== undefined && proiezioneCrediti) {
+      proiezioneCrediti.textContent = String(result.proiezioneCrediti);
     }
     if (result.carteAcquistate !== undefined && carteAcquistate) {
       carteAcquistate.textContent = String(result.carteAcquistate);
@@ -345,6 +442,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (result.telegramChatId && telegramChatIdInput) {
       telegramChatIdInput.value = result.telegramChatId;
+    }
+
+    if (result.managerNation && managerNationSelect) {
+      managerNationSelect.value = result.managerNation;
     }
 
     let savedTarget = result.targetMode;
@@ -375,8 +476,9 @@ document.addEventListener('DOMContentLoaded', () => {
       manualBinInput.value = result.manualBin;
     }
 
-    if (result.maxSnipePrice && maxSnipePriceInput) {
-      maxSnipePriceInput.value = result.maxSnipePrice;
+    if (result.maxSnipePrice) {
+      if (maxSnipePriceInput) maxSnipePriceInput.value = result.maxSnipePrice;
+      if (manualPriceInput) manualPriceInput.value = result.maxSnipePrice;
     }
 
     if (result.targetTradepileSize && targetTradepileSizeInput) {
@@ -392,7 +494,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     if (result.strategyMode) {
-      if (result.strategyMode === 'lazy' && savedTarget !== 'consumables' && savedTarget !== 'fodder') {
+      if (result.strategyMode === 'lazy' && savedTarget !== 'consumables' && savedTarget !== 'fodder' && savedTarget !== 'managerLeague' && savedTarget !== 'managers') {
         savedTarget = 'consumables';
         const targetRadio = document.querySelector('input[name="targetMode"][value="consumables"]');
         if (targetRadio) targetRadio.checked = true;
@@ -432,10 +534,21 @@ document.addEventListener('DOMContentLoaded', () => {
     const autoBin = isAutoBinEnabled();
     const manualBin = getManualBinPrice();
     const maxSnipePrice = getMaxSnipePrice();
+
+    if (selectedTarget === 'manual') {
+      if (!maxSnipePrice || maxSnipePrice <= 0) {
+        const fieldName = selectedStrategy === 'bidding' ? 'Prezzo Max Offerta (Asta)' : 'Prezzo Max Compra Ora (Snipe)';
+        alert(`Attenzione: devi impostare il "${fieldName}" per avviare la modalità Manuale.`);
+        if (manualPriceInput) manualPriceInput.focus();
+        return;
+      }
+    }
+
     const minMargin = minMarginInput ? (parseInt(minMarginInput.value) || 200) : 200;
     const targetTradepileSize = getTargetTradepileSize();
     const lazyMarkupPercent = getLazyMarkupPercent();
     const lazySleepMinutes = getLazySleepMinutes();
+    const selectedManagerNation = getSelectedManagerNation();
 
     const settings = {
       numeroTentativi: numeroTentativi.value,
@@ -443,6 +556,7 @@ document.addEventListener('DOMContentLoaded', () => {
       fodderMode: selectedTarget === 'fodder',
       fodderRating: selectedRating,
       chemStyle: selectedChemStyle,
+      managerNation: selectedManagerNation,
       autoBin: autoBin,
       manualBin: manualBin,
       maxSnipePrice: maxSnipePrice,
@@ -462,6 +576,7 @@ document.addEventListener('DOMContentLoaded', () => {
       strategyMode: selectedStrategy,
       minMargin: minMargin,
       chemStyle: selectedChemStyle,
+      managerNation: selectedManagerNation,
       autoBin: autoBin,
       manualBin: manualBin,
       maxSnipePrice: maxSnipePrice,
@@ -551,10 +666,11 @@ document.addEventListener('DOMContentLoaded', () => {
       const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
       const timeStr = `${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
 
-      const verText = document.getElementById('versione')?.textContent?.trim() || 'v2.6.2';
+      const verText = document.getElementById('versione')?.textContent?.trim() || 'v2.7.5';
       const targetMode = typeof getSelectedTargetMode === 'function' ? getSelectedTargetMode() : 'N/D';
       const strategyMode = typeof getSelectedStrategy === 'function' ? getSelectedStrategy() : 'N/D';
       const creditiVal = document.getElementById('crediti')?.textContent?.trim() || 'N/D';
+      const proiezioneVal = document.getElementById('proiezioneCrediti')?.textContent?.trim() || 'N/D';
       const carteVal = document.getElementById('carteAcquistate')?.textContent?.trim() || '0';
       const tentativiVal = document.getElementById('tentativi')?.value || 'N/D';
       const truncated = totalLogEvents > allLogRecords.length;
@@ -563,7 +679,7 @@ document.addEventListener('DOMContentLoaded', () => {
       content += `  FC Sniper & Trader - Report Log Sessione\n`;
       content += `  Versione: ${verText} | Data Export: ${now.toLocaleString()}\n`;
       content += `  Modalità: ${String(targetMode).toUpperCase()} | Strategia: ${String(strategyMode).toUpperCase()}\n`;
-      content += `  Crediti: ${creditiVal} | Carte Acquistate: ${carteVal} | Tentativi: ${tentativiVal}\n`;
+      content += `  Crediti: ${creditiVal} (Proiezione: ${proiezioneVal}) | Carte Acquistate: ${carteVal} | Tentativi: ${tentativiVal}\n`;
       content += `  Totale Eventi Registrati: ${totalLogEvents}\n`;
       content += `  Eventi Inclusi nel Report: ${allLogRecords.length} (buffer max ${MAX_LOG_RECORDS})\n`;
       if (truncated) {
@@ -573,7 +689,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (allLogRecords.length > 0) {
         allLogRecords.forEach((r) => {
-          content += `[${r.timestamp}] [${r.tag}] ${r.raw}\n`;
+          content += `[${r.timestamp}] [${r.tag}] ${r.text || r.raw}\n`;
         });
       } else {
         content += `Nessun evento registrato nella sessione corrente.\n`;
@@ -645,6 +761,12 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         break;
 
+      case 'PROIEZIONE_CREDITI':
+        if (proiezioneCrediti) {
+          proiezioneCrediti.textContent = message.valore !== "" ? String(message.valore) : "-";
+        }
+        break;
+
       case 'USER_SYNC': {
         const accBadge = document.getElementById('eaAccountNameBadge');
         if (accBadge && message.personaName) {
@@ -687,66 +809,76 @@ function applyLogFilter() {
   }
 }
 
+// Rimuove ricorsivamente qualsiasi tag iniziale racchiuso tra parentesi quadre tipo [TAG]
+function stripLeadingBrackets(str) {
+  let s = String(str || '').trim();
+  while (/^\[[^\]]+\]\s*/.test(s)) {
+    s = s.replace(/^\[[^\]]+\]\s*/, '').trim();
+  }
+  return s;
+}
+
+let lastLoggedText = '';
+let lastLoggedTag = '';
+let lastLoggedTime = 0;
+let lastLoggedCount = 1;
+let lastLogRowElement = null;
+let lastRecordRef = null;
+
 function classifyLogMessage(raw) {
   const text = String(raw || '').trim();
+  const clean = stripLeadingBrackets(text);
 
-  // 1. Aste Superate, Perse o Abbandonate (Priorità alta con colore dedicato Arancione: intercetta prima che "non vinta" o "rilancio" vengano confusi con acquisti/offerte)
+  // 1. Aste Superate, Perse o Abbandonate
   if (!/^\[CONTRORILANCIO\]/i.test(text) && (/superata|superato|asta persa|non vinta|abbandon/i.test(text) || /^\[ASTA SUPERATA\]/i.test(text))) {
-    let clean = text.replace(/^\[(ASTA SUPERATA|ASTA PERSA|ASTA NON VINTA)\]\s*/i, '');
     let tag = 'SUPERATA';
     if (/persa|non vinta/i.test(text)) tag = 'ASTA PERSA';
-    if (/abbandon/i.test(text) && !/superat/i.test(text)) tag = 'ABBANDONO';
+    else if (/abbandon/i.test(text) && !/superat/i.test(text)) tag = 'ABBANDONO';
     return { category: 'outbid', tag, text: clean };
   }
 
-  // 2. Trades: Acquisti e Vendite (Verde)
+  // 2. Trades: Acquisti e Vendite
   if (/acquisto|acquistata|acquistate|vinta|vendita|listata|listato/i.test(text) && !/errore|persa|non vinta/i.test(text)) {
-    let clean = text.replace(/^\[(ACQUISTO RIUSCITO|LAZY BUY NOW|ASTA VINTA|Reconciliation)\]\s*/i, '');
     let tag = 'ACQUISTO';
     if (/vendita|listat/i.test(text) && !/acquist/i.test(text)) tag = 'VENDITA';
-    if (/vinta/i.test(text)) tag = 'VINTA';
+    else if (/vinta/i.test(text)) tag = 'VINTA';
     return { category: 'trade', tag, text: clean };
   }
 
-  // 3. Offerte / Bidding & Controrilanci (Viola)
+  // 3. Offerte / Bidding & Controrilanci
   if (/offerta|bid|bidding|controrilancio|rilancio/i.test(text) && !/errore|terminat|abbandon/i.test(text)) {
-    let clean = text.replace(/^\[(LAZY BID|MASS BID|FC Sniper|CONTRORILANCIO)\]\s*/i, '');
     let tag = 'OFFERTA';
     if (/controrilancio|rilancio/i.test(text)) tag = 'RILANCIO';
     return { category: 'bid', tag, text: clean };
   }
 
-  // 4. Pause / Sleep / Heartbeat (Giallo/Oro)
+  // 4. Pause / Sleep / Heartbeat
   if (/pausa|dormiente|heartbeat|cool\s*down|attesa|attendo/i.test(text)) {
-    let clean = text.replace(/^\[(LAZY HEARTBEAT|PAUSA DI SICUREZZA[^\]]*|PAUSA)\]\s*/i, '');
     return { category: 'sleep', tag: 'PAUSA', text: clean };
   }
 
-  // 5. Avvisi ed Errori / 461 / Captcha / Limiti (Rosso)
+  // 5. Avvisi ed Errori / 461 / Captcha / Limiti
   if (/errore|461|401|429|458|captcha|soft-ban|fallit|attenzione/i.test(text)) {
-    let clean = text.replace(/^\[(ATTENZIONE[^\]]*|SNIPE 461|SOFT-BAN[^\]]*)\]\s*/i, '');
     let tag = 'AVVISO';
     if (/461/i.test(text)) tag = '461 PRESA';
-    if (/captcha|458/i.test(text)) tag = 'CAPTCHA';
-    if (/401/i.test(text)) tag = 'AUTH 401';
-    if (/soft-ban|429/i.test(text)) tag = 'RATE LIMIT';
+    else if (/captcha|458/i.test(text)) tag = 'CAPTCHA';
+    else if (/401/i.test(text)) tag = 'AUTH 401';
+    else if (/soft-ban|429/i.test(text)) tag = 'RATE LIMIT';
     return { category: 'warn', tag, text: clean };
   }
 
-  // 6. Telemetria PIN (Blu)
+  // 6. Telemetria PIN
   if (/pin\s*telemetry|telemetr/i.test(text)) {
-    let clean = text.replace(/^\[(PIN TELEMETRY)\]\s*/i, '');
-    return { category: 'status', tag: 'PIN EVENT', text: clean };
+    return { category: 'status', tag: 'TELEMETRIA', text: clean };
   }
 
-  // 7. Stato, Target, Configurazione e Cicli (Blu)
-  if (/avvio|ciclo|fase|target|completat|pronto|inizializz|terminat|filtro|riconciliazione|tradepile/i.test(text)) {
-    let clean = text.replace(/^\[(SNIPING TARGET|LAZY TRADING|LAZY BIDDING|TENTATIVI COMPLETATI)\]\s*/i, '');
+  // 7. Stato, Target, Configurazione e Cicli
+  if (/avvio|ciclo|fase|target|progresso|lotto|completat|pronto|inizializz|terminat|filtro|riconciliazione|tradepile/i.test(text)) {
     return { category: 'status', tag: 'STATO', text: clean };
   }
 
-  // 8. Generico Info (Grigio)
-  return { category: 'info', tag: 'INFO', text: text.replace(/^\[[^\]]+\]\s*/, '') };
+  // 8. Generico Info
+  return { category: 'info', tag: 'INFO', text: clean };
 }
 
 function updateBotStatusBar(category, tag, text) {
@@ -796,14 +928,36 @@ function logToScreen(message) {
   const timeStr = now.toTimeString().split(' ')[0]; // HH:MM:SS
   const { category, tag, text } = classifyLogMessage(message);
 
+  // Deduplicazione log consecutivi identici entro 5 secondi (es. spam di abbandono o retry)
+  if (text && text === lastLoggedText && tag === lastLoggedTag && (now.getTime() - lastLoggedTime < 5000)) {
+    lastLoggedCount++;
+    const countSuffix = ` (x${lastLoggedCount})`;
+    if (lastLogRowElement) {
+      const msgSpan = lastLogRowElement.querySelector('.log-msg');
+      if (msgSpan) msgSpan.textContent = text + countSuffix;
+    }
+    if (lastRecordRef) {
+      lastRecordRef.text = text + countSuffix;
+    }
+    return;
+  }
+
+  lastLoggedText = text;
+  lastLoggedTag = tag;
+  lastLoggedTime = now.getTime();
+  lastLoggedCount = 1;
+
   // Buffer bounded: mantiene al massimo MAX_LOG_RECORDS record per l'export
-  allLogRecords.push({
+  const record = {
     timestamp: timeStr,
     iso: now.toISOString(),
     category,
     tag,
+    text,
     raw: String(message || '').trim()
-  });
+  };
+  lastRecordRef = record;
+  allLogRecords.push(record);
   if (allLogRecords.length > MAX_LOG_RECORDS) {
     allLogRecords.splice(0, allLogRecords.length - MAX_LOG_RECORDS);
   }
@@ -815,6 +969,7 @@ function logToScreen(message) {
   const row = document.createElement('div');
   row.className = `log-row filter-${category}`;
   row.dataset.category = category;
+  lastLogRowElement = row;
 
   if (currentFilter !== 'all') {
     if (currentFilter === 'trade' && category !== 'trade' && category !== 'bid' && category !== 'outbid') {
