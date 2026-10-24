@@ -197,6 +197,7 @@
   const jitter = (min, max) => Math.floor(min + Math.random() * (max - min));
 
   let currentView = "";
+  let currentContext = ""; // "market" | "targets" | "tradepile" | "hub" | ""
   let lastSearchPinAt = 0;
   let lastActivityAt = 0;
   let localStepCounter = 0;
@@ -233,11 +234,19 @@
           return { status: "throttled", events: [], stepCounter: getPinStepCounter() };
         }
         lastSearchPinAt = now;
-        if (currentView && currentView !== "Transfer Market Results - List View" && currentView !== "Hub - Transfers") {
+
+        // Se non siamo già nel flusso di ricerca mercato, transitiamo da Hub - Transfers
+        if (currentContext !== "market" && currentView !== "Hub - Transfers") {
           if (emitPageView("Hub - Transfers")) sentEvents.push("Hub - Transfers");
         }
+        // Passaggio dalla schermata filtri di ricerca (esattamente come Back -> Search nella Web App)
+        if (currentView !== "Transfer Market Search") {
+          if (emitPageView("Transfer Market Search")) sentEvents.push("Transfer Market Search");
+        }
+        // Apertura risultati di ricerca
         if (emitPageView("Transfer Market Results - List View")) {
           sentEvents.push("Transfer Market Results - List View");
+          currentContext = "market";
         }
         return {
           status: sentEvents.length > 0 ? "ok" : "no_pin_service",
@@ -247,11 +256,12 @@
       }
 
       case "TRIGGER_PIN_WATCHLIST": {
-        if (currentView !== "Transfer Targets - List View") {
+        if (currentContext !== "targets" && currentView !== "Hub - Transfers") {
           if (emitPageView("Hub - Transfers")) sentEvents.push("Hub - Transfers");
         }
         if (emitPageView("Transfer Targets - List View")) {
           sentEvents.push("Transfer Targets - List View");
+          currentContext = "targets";
         }
         return {
           status: sentEvents.length > 0 ? "ok" : "no_pin_service",
@@ -261,8 +271,18 @@
       }
 
       case "TRIGGER_PIN_SELL": {
-        if (emitPageView("Transfer List - List View")) {
-          sentEvents.push("Transfer List - List View");
+        // Se non siamo già su una lista/dettaglio valido (mercato, watchlist o tradepile), apriamo la Transfer List
+        if (!currentContext) {
+          if (currentView !== "Hub - Transfers") {
+            if (emitPageView("Hub - Transfers")) sentEvents.push("Hub - Transfers");
+          }
+          if (emitPageView("Transfer List - List View")) {
+            sentEvents.push("Transfer List - List View");
+            currentContext = "tradepile";
+          }
+        }
+        if (emitPageView("Item - Detail View")) {
+          sentEvents.push("Item - Detail View");
         }
         return {
           status: sentEvents.length > 0 ? "ok" : "no_pin_service",
