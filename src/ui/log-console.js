@@ -281,7 +281,11 @@ export function initLogConsoleControls(getContextInfo = () => ({})) {
       const timeStr = `${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
 
       const info = getContextInfo() || {};
+<<<<<<< Updated upstream
       const verText = document.getElementById('versione')?.textContent?.trim() || 'v2.8.3';
+=======
+      const verText = document.getElementById('versione')?.textContent?.trim() || 'v2.8.4';
+>>>>>>> Stashed changes
       const targetMode = info.targetMode || 'N/D';
       const strategyMode = info.strategyMode || 'N/D';
       const creditiVal = document.getElementById('crediti')?.textContent?.trim() || 'N/D';

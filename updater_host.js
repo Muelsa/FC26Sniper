@@ -258,7 +258,11 @@ process.stdin.on('data', async (chunk) => {
 
     try {
       if (message.action === 'PING' || message.type === 'PING') {
+<<<<<<< Updated upstream
         let currentVer = '2.8.3';
+=======
+        let currentVer = '2.8.4';
+>>>>>>> Stashed changes
         try {
           const manifest = JSON.parse(fs.readFileSync(path.join(PROJECT_DIR, 'manifest.json'), 'utf8'));
           currentVer = manifest.version || currentVer;

@@ -1,6 +1,10 @@
 {
   "name": "fc26-sniper",
+<<<<<<< Updated upstream
   "version": "2.8.3",
+=======
+  "version": "2.8.4",
+>>>>>>> Stashed changes
   "description": "FC Sniper & Trader — Automated FUT Market Companion",
   "main": "fc26.js",
   "scripts": {
