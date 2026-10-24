@@ -30,10 +30,10 @@ export function compareSemver(v1, v2) {
 export function getCurrentVersion() {
   if (typeof chrome !== 'undefined' && chrome.runtime?.getManifest) {
     try {
-      return chrome.runtime.getManifest().version || '2.8.1';
+      return chrome.runtime.getManifest().version || '2.8.2';
     } catch (_) {}
   }
-  return '2.8.1';
+  return '2.8.2';
 }
 
 /**

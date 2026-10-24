@@ -2,6 +2,7 @@ import {
   DOM,
   initFormControls,
   flushPendingSettingsSave,
+  saveAllCurrentFormSettings,
   setRunningUiState,
   getSelectedTargetMode,
   getSelectedStrategy,
@@ -222,6 +223,9 @@ function initApp() {
   confirmUpdateBtn?.addEventListener('click', async () => {
     if (!activeReleaseInfo || !activeReleaseInfo.zipUrl) return;
 
+    // Salvataggio immediato e forzato di tutte le impostazioni correnti della UI
+    saveAllCurrentFormSettings();
+
     confirmUpdateBtn.setAttribute('disabled', 'true');
     cancelUpdateBtn?.setAttribute('disabled', 'true');
     closeUpdateModalBtn?.setAttribute('disabled', 'true');
@@ -280,7 +284,7 @@ function initApp() {
         });
       });
     },
-    simulateUpdateAlert: (fakeVersion = '2.8.1', notes = 'Miglioramenti UI Bento Grid e ottimizzazioni performance.') => {
+    simulateUpdateAlert: (fakeVersion = '2.8.2', notes = 'Miglioramenti UI Bento Grid e ottimizzazioni performance.') => {
       showUpdateNotification({
         updateAvailable: true,
         currentVersion: getCurrentVersion(),
