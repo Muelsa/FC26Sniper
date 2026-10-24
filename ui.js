@@ -2,6 +2,7 @@ import {
   DOM,
   initFormControls,
   flushPendingSettingsSave,
+  saveAllCurrentFormSettings,
   setRunningUiState,
   getSelectedTargetMode,
   getSelectedStrategy,
@@ -221,6 +222,9 @@ function initApp() {
 
   confirmUpdateBtn?.addEventListener('click', async () => {
     if (!activeReleaseInfo || !activeReleaseInfo.zipUrl) return;
+
+    // Salvataggio immediato e forzato di tutte le impostazioni correnti della UI
+    saveAllCurrentFormSettings();
 
     confirmUpdateBtn.setAttribute('disabled', 'true');
     cancelUpdateBtn?.setAttribute('disabled', 'true');

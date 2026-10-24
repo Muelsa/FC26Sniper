@@ -365,12 +365,48 @@ export const queueSettingsSave = (partial) => {
 export const flushPendingSettingsSave = () => {
   if (settingsSaveTimer) {
     clearTimeout(settingsSaveTimer);
-    const toSave = pendingSettings;
-    pendingSettings = {};
     settingsSaveTimer = null;
+  }
+  if (Object.keys(pendingSettings).length > 0) {
+    const toSave = { ...pendingSettings };
+    pendingSettings = {};
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      chrome.storage.local.set(toSave);
+    }
     return toSave;
   }
   return {};
+};
+
+export const saveAllCurrentFormSettings = () => {
+  const current = {};
+  if (DOM.numeroTentativi) current.numeroTentativi = DOM.numeroTentativi.value;
+  const targetRadio = document.querySelector('input[name="targetMode"]:checked');
+  if (targetRadio) {
+    current.targetMode = targetRadio.value;
+    current.fodderMode = targetRadio.value === 'fodder';
+  }
+  const stratRadio = document.querySelector('input[name="strategyMode"]:checked');
+  if (stratRadio) current.strategyMode = stratRadio.value;
+  const ratingRadio = document.querySelector('input[name="fodderRating"]:checked');
+  if (ratingRadio) current.fodderRating = ratingRadio.value;
+  if (DOM.chemStyleSelect) current.chemStyle = DOM.chemStyleSelect.value;
+  if (DOM.managerNationSelect) current.managerNation = DOM.managerNationSelect.value;
+  if (DOM.autoBinCheck) current.autoBin = DOM.autoBinCheck.checked;
+  if (DOM.manualBinInput) current.manualBin = parseInt(DOM.manualBinInput.value) || 0;
+  if (DOM.maxSnipePriceInput) current.maxSnipePrice = parseInt(DOM.maxSnipePriceInput.value) || 0;
+  if (DOM.manualPriceInput && !DOM.maxSnipePriceInput?.value) current.maxSnipePrice = parseInt(DOM.manualPriceInput.value) || 0;
+  if (DOM.minMarginInput) current.minMargin = parseInt(DOM.minMarginInput.value) || 200;
+  if (DOM.targetTradepileSizeInput) current.targetTradepileSize = parseInt(DOM.targetTradepileSizeInput.value) || 50;
+  if (DOM.lazyMarkupPercentInput) current.lazyMarkupPercent = parseInt(DOM.lazyMarkupPercentInput.value) || 10;
+  if (DOM.lazySleepMinutesInput) current.lazySleepMinutes = parseInt(DOM.lazySleepMinutesInput.value) || 63;
+  if (DOM.telegramChatIdInput) current.telegramChatId = DOM.telegramChatIdInput.value.trim();
+
+  flushPendingSettingsSave();
+  if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+    chrome.storage.local.set(current);
+  }
+  return current;
 };
 
 export function initThemeToggle() {
@@ -418,6 +454,18 @@ export function initFormControls() {
   initDomReferences();
   initThemeToggle();
 
+  window.addEventListener('beforeunload', () => {
+    saveAllCurrentFormSettings();
+  });
+
+  if (DOM.numeroTentativi) {
+    const saveTentativi = () => {
+      queueSettingsSave({ numeroTentativi: DOM.numeroTentativi.value });
+    };
+    DOM.numeroTentativi.addEventListener('input', saveTentativi);
+    DOM.numeroTentativi.addEventListener('change', saveTentativi);
+  }
+
   DOM.targetModeRadios?.forEach(radio => {
     radio.addEventListener('change', () => {
       toggleTargetContainers();
@@ -436,9 +484,11 @@ export function initFormControls() {
   }
 
   if (DOM.manualBinInput) {
-    DOM.manualBinInput.addEventListener('change', () => {
+    const saveBin = () => {
       queueSettingsSave({ manualBin: parseInt(DOM.manualBinInput.value) || 0 });
-    });
+    };
+    DOM.manualBinInput.addEventListener('input', saveBin);
+    DOM.manualBinInput.addEventListener('change', saveBin);
   }
 
   if (DOM.managerNationSelect) {
@@ -448,19 +498,23 @@ export function initFormControls() {
   }
 
   if (DOM.maxSnipePriceInput) {
-    DOM.maxSnipePriceInput.addEventListener('change', () => {
+    const saveMaxSnipe = () => {
       const val = parseInt(DOM.maxSnipePriceInput.value) || 0;
       if (DOM.manualPriceInput) DOM.manualPriceInput.value = val > 0 ? val : '';
       queueSettingsSave({ maxSnipePrice: val });
-    });
+    };
+    DOM.maxSnipePriceInput.addEventListener('input', saveMaxSnipe);
+    DOM.maxSnipePriceInput.addEventListener('change', saveMaxSnipe);
   }
 
   if (DOM.manualPriceInput) {
-    DOM.manualPriceInput.addEventListener('change', () => {
+    const saveManualPrice = () => {
       const val = parseInt(DOM.manualPriceInput.value) || 0;
       if (DOM.maxSnipePriceInput) DOM.maxSnipePriceInput.value = val > 0 ? val : '';
       queueSettingsSave({ maxSnipePrice: val });
-    });
+    };
+    DOM.manualPriceInput.addEventListener('input', saveManualPrice);
+    DOM.manualPriceInput.addEventListener('change', saveManualPrice);
   }
 
   if (DOM.chemStyleSelect) {
@@ -483,27 +537,35 @@ export function initFormControls() {
   });
 
   if (DOM.minMarginInput) {
-    DOM.minMarginInput.addEventListener('change', () => {
+    const saveMargin = () => {
       queueSettingsSave({ minMargin: parseInt(DOM.minMarginInput.value) || 200 });
-    });
+    };
+    DOM.minMarginInput.addEventListener('input', saveMargin);
+    DOM.minMarginInput.addEventListener('change', saveMargin);
   }
 
   if (DOM.targetTradepileSizeInput) {
-    DOM.targetTradepileSizeInput.addEventListener('change', () => {
+    const saveTradepileSize = () => {
       queueSettingsSave({ targetTradepileSize: parseInt(DOM.targetTradepileSizeInput.value) || 50 });
-    });
+    };
+    DOM.targetTradepileSizeInput.addEventListener('input', saveTradepileSize);
+    DOM.targetTradepileSizeInput.addEventListener('change', saveTradepileSize);
   }
 
   if (DOM.lazyMarkupPercentInput) {
-    DOM.lazyMarkupPercentInput.addEventListener('change', () => {
+    const saveMarkup = () => {
       queueSettingsSave({ lazyMarkupPercent: parseInt(DOM.lazyMarkupPercentInput.value) || 10 });
-    });
+    };
+    DOM.lazyMarkupPercentInput.addEventListener('input', saveMarkup);
+    DOM.lazyMarkupPercentInput.addEventListener('change', saveMarkup);
   }
 
   if (DOM.lazySleepMinutesInput) {
-    DOM.lazySleepMinutesInput.addEventListener('change', () => {
+    const saveSleep = () => {
       queueSettingsSave({ lazySleepMinutes: parseInt(DOM.lazySleepMinutesInput.value) || 63 });
-    });
+    };
+    DOM.lazySleepMinutesInput.addEventListener('input', saveSleep);
+    DOM.lazySleepMinutesInput.addEventListener('change', saveSleep);
   }
 
   if (DOM.telegramChatIdInput) {
