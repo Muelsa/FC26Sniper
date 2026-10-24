@@ -34,9 +34,15 @@
 
   // Deduplica token consecutivi prima di TOKEN_SYNC (mai loggare token o prefissi)
   let lastToken = null;
+  let kaTimer = null;
 
   // Messaggi provenienti dal MAIN world (pin-bridge.js)
-  window.addEventListener("message", (event) => {
+  const onPageMessage = (event) => {
+    if (!chrome.runtime?.id) {
+      window.removeEventListener("message", onPageMessage);
+      if (kaTimer) clearInterval(kaTimer);
+      return;
+    }
     // Verifica rigorosa: stessa finestra, stesso origin, payload oggetto non nullo
     if (event.source !== window) return;
     if (event.origin !== window.location.origin) return;
@@ -83,12 +89,16 @@
           tipo: "PIN_BRIDGE_ACK",
           requestId: data.requestId,
           status: data.status,
-          detail: typeof data.detail === "string" ? data.detail.slice(0, 200) : ""
+          detail: typeof data.detail === "string" ? data.detail.slice(0, 200) : "",
+          events: Array.isArray(data.events) ? data.events.slice(0, 5) : [],
+          stepCounter: data.stepCounter !== undefined ? String(data.stepCounter).slice(0, 40) : "OK"
         });
       } catch (_) {}
       return;
     }
-  });
+  };
+
+  window.addEventListener("message", onPageMessage);
 
   // Messaggi dal Service Worker (fc26.js) -> inoltro alla pagina
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -128,6 +138,7 @@
   let reconnecting = false;
 
   function setupKeepAlive() {
+    if (!chrome.runtime?.id) return;
     if (keepAlivePort || reconnecting) return; // niente doppio setup concorrente
     reconnecting = true;
     try {
@@ -136,7 +147,7 @@
         const _ = chrome.runtime.lastError;
         keepAlivePort = null;
         reconnecting = false;
-        setTimeout(setupKeepAlive, 1000);
+        if (chrome.runtime?.id) setTimeout(setupKeepAlive, 1000);
       });
       port.onMessage.addListener(() => {});
       keepAlivePort = port;
@@ -144,14 +155,18 @@
     } catch (e) {
       keepAlivePort = null;
       reconnecting = false;
-      setTimeout(setupKeepAlive, 1000);
+      if (chrome.runtime?.id) setTimeout(setupKeepAlive, 1000);
     }
   }
 
   setupKeepAlive();
 
   // Ping ogni 20s: azzera il timer di inattività (30s) del Service Worker
-  setInterval(() => {
+  kaTimer = setInterval(() => {
+    if (!chrome.runtime?.id) {
+      clearInterval(kaTimer);
+      return;
+    }
     try {
       if (keepAlivePort) {
         keepAlivePort.postMessage({ type: "KEEP_ALIVE_PING" });

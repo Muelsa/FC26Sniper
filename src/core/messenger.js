@@ -34,8 +34,29 @@ export function sendMessageSafe(message, callback) {
   }
 }
 
+let lastNoTabWarn = 0;
+
+// Inietta o aggiorna a caldo content.js + pin-bridge.js in tutte le schede EA Web App già aperte
+export function reinjectContentScriptIntoEaTabs() {
+  try {
+    if (!chrome.tabs?.query || !chrome.scripting?.executeScript) return;
+    chrome.tabs.query({}, (tabs) => {
+      if (chrome.runtime.lastError || !tabs) return;
+      const eaTabs = tabs.filter(t => t.id && !t.discarded && t.url && t.url.includes("ea.com"));
+      for (const tab of eaTabs) {
+        chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['content.js']
+        }, () => {
+          void chrome.runtime.lastError;
+        });
+      }
+    });
+  } catch (_) {}
+}
+
 // Funzione helper per PIN Event: inoltra l'evento alla scheda attiva della Web App EA
-// Restituisce una Promise protetta da timeout di sicurezza (max 500ms) per evitare blocchi infiniti
+// Restituisce una Promise protetta da timeout di sicurezza (max 700ms) per evitare blocchi infiniti
 export async function triggerPinEvent(type, payload = {}) {
   return new Promise((resolve) => {
     let resolved = false;
@@ -45,26 +66,69 @@ export async function triggerPinEvent(type, payload = {}) {
         resolve();
       }
     };
-    const safetyTimer = setTimeout(finish, 500);
+    const safetyTimer = setTimeout(finish, 700);
 
     try {
       chrome.tabs.query({}, (tabs) => {
         const eaTabs = (tabs || []).filter(t => t.url && t.url.includes("ea.com"));
         if (chrome.runtime.lastError || !eaTabs || eaTabs.length === 0) {
+          const now = Date.now();
+          if (now - lastNoTabWarn > 45000) {
+            lastNoTabWarn = now;
+            sendMessageSafe({
+              tipo: 'LOG',
+              valore: '[ATTENZIONE TELEMETRIA] Nessuna scheda della Web App di EA rilevata nel browser! Apri la Web App di EA nello stesso browser per consentire l\'invio della telemetria PIN anti-ban.'
+            });
+          }
           clearTimeout(safetyTimer);
           return finish();
         }
+
+        const activeEaTabs = eaTabs.filter(t => !t.discarded);
+        if (activeEaTabs.length === 0 && eaTabs.length > 0) {
+          const now = Date.now();
+          if (now - lastNoTabWarn > 45000) {
+            lastNoTabWarn = now;
+            sendMessageSafe({
+              tipo: 'LOG',
+              valore: '[ATTENZIONE TELEMETRIA] La scheda della Web App EA è stata sospesa dal risparmio memoria del browser (tab discarded). Clicca sulla scheda di EA per mantenerla attiva.'
+            });
+          }
+        }
+
         let pending = eaTabs.length;
         const requestId = 'pin_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+        const msg = {
+          scope: "PIN_BRIDGE",
+          requestId: requestId,
+          type: type,
+          payload: payload
+        };
+
         for (const tab of eaTabs) {
           console.log(`[FC Sniper SW] Invio PIN ${type} a scheda ${tab.id}`);
-          chrome.tabs.sendMessage(tab.id, {
-            scope: "PIN_BRIDGE",
-            requestId: requestId,
-            type: type,
-            payload: payload
-          }, () => {
-            const _ = chrome.runtime.lastError; // Consuma l'errore per prevenire Unchecked runtime.lastError
+          chrome.tabs.sendMessage(tab.id, msg, () => {
+            const err = chrome.runtime.lastError;
+            if (err && chrome.scripting?.executeScript && !tab.discarded) {
+              // Auto-healing: content.js invalidato dopo reload estensione -> re-iniezione immediata e retry
+              chrome.scripting.executeScript({
+                target: { tabId: tab.id },
+                files: ['content.js']
+              }, () => {
+                void chrome.runtime.lastError;
+                setTimeout(() => {
+                  chrome.tabs.sendMessage(tab.id, msg, () => {
+                    void chrome.runtime.lastError;
+                    pending--;
+                    if (pending <= 0) {
+                      clearTimeout(safetyTimer);
+                      finish();
+                    }
+                  });
+                }, 180);
+              });
+              return;
+            }
             pending--;
             if (pending <= 0) {
               clearTimeout(safetyTimer);

@@ -4,6 +4,7 @@ import { botState, restoreInitialStateFromStorage } from './src/core/state.js';
 import {
   sendMessageSafe,
   triggerPinEvent,
+  reinjectContentScriptIntoEaTabs,
   ensureOffscreenDocument,
   stopOffscreenDocument,
   stopBot
@@ -120,8 +121,10 @@ function checkPendingPostUpdateReopen() {
 
 // Controllo sia all'avvio del Service Worker sia all'evento onInstalled
 checkPendingPostUpdateReopen();
+reinjectContentScriptIntoEaTabs();
 chrome.runtime.onInstalled?.addListener(() => {
   checkPendingPostUpdateReopen();
+  reinjectContentScriptIntoEaTabs();
 });
 
 // 4. Keep-alive MV3: porta long-lived dal content script
@@ -201,6 +204,31 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
 
+  if (message.tipo === 'PIN_BRIDGE_ACK') {
+    const now = Date.now();
+    if (message.status === 'ok' && Array.isArray(message.events) && message.events.length > 0) {
+      botState.lastPinAckAt = now;
+      if (now - (botState.lastWebRequestPinAt || 0) > 1500) {
+        const evCount = message.events.length;
+        const types = message.events.join(", ");
+        sendMessageSafe({
+          tipo: 'LOG',
+          valore: `[PIN TELEMETRY] Inviati a EA ${evCount} eventi (${types}) | stepCounter: ${message.stepCounter || 'OK'}`
+        });
+      }
+    } else if (message.status === 'no_pin_service') {
+      if (!botState.lastNoPinServiceWarn || now - botState.lastNoPinServiceWarn > 45000) {
+        botState.lastNoPinServiceWarn = now;
+        sendMessageSafe({
+          tipo: 'LOG',
+          valore: '[ATTENZIONE TELEMETRIA] Scheda EA Web App trovata, ma il servizio PIN non è attivo (assicurati di aver effettuato il login completo nella Web App).'
+        });
+      }
+    }
+    sendResponse?.({ ok: true });
+    return false;
+  }
+
   if (message.tipo === 'TELEGRAM_TEST') {
     (async () => {
       let { personaName } = await getUserProfile();
@@ -252,6 +280,7 @@ async function handleStartMessage(message) {
   botState.start = message.valore;
 
   if (botState.start === true) {
+    reinjectContentScriptIntoEaTabs();
     if (!botState.xUtSid) {
       botState.xUtSid = await new Promise((resolve) => {
         chrome.storage.local.get(['xUtSid'], (res) => resolve(res.xUtSid || ""));

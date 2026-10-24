@@ -10,10 +10,12 @@
     "alarms",
     "declarativeNetRequest",
     "offscreen",
-    "nativeMessaging"
+    "nativeMessaging",
+    "scripting"
   ],
   "host_permissions": [
     "https://www.ea.com/*",
+    "https://*.ea.com/*",
     "https://utas.mob.v1.prd.futc-ext.gcp.ea.com/*",
     "https://*.data.ea.com/*",
     "http://127.0.0.1:3000/*",
@@ -40,7 +42,8 @@
   "content_scripts": [
     {
       "matches": [
-        "https://www.ea.com/*ea-sports-fc/ultimate-team/web-app/*"
+        "https://www.ea.com/*ea-sports-fc/ultimate-team/web-app*",
+        "https://*.ea.com/*ea-sports-fc/ultimate-team/web-app*"
       ],
       "js": ["content.js"],
       "run_at": "document_start"
@@ -50,7 +53,8 @@
     {
       "resources": ["pin-bridge.js"],
       "matches": [
-        "https://www.ea.com/*"
+        "https://www.ea.com/*",
+        "https://*.ea.com/*"
       ]
     }
   ],
