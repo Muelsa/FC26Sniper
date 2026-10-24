@@ -25,10 +25,12 @@ import {
 import {
   checkForGithubRelease,
   performNativeUpdate,
-  reloadExtensionAndAutoStart
+  reloadExtensionAndAutoStart,
+  getCurrentVersion,
+  compareSemver
 } from './src/services/updater-service.js';
 
-document.addEventListener('DOMContentLoaded', () => {
+function initApp() {
   initFormControls();
   initLogConsoleControls(() => ({
     targetMode: getSelectedTargetMode(),
@@ -146,6 +148,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // Gestione dell'aggiornamento automatico e invisibile
   const updateBadge = document.getElementById('updateBadge');
   const newVersionTag = document.getElementById('newVersionTag');
+  const versioneBadge = document.getElementById('versione');
+  const currentAppVersion = getCurrentVersion();
+  if (versioneBadge) {
+    versioneBadge.textContent = `v${currentAppVersion}`;
+  }
+
   const updateModal = document.getElementById('updateModal');
   const modalCurrentVersion = document.getElementById('modalCurrentVersion');
   const modalNewVersion = document.getElementById('modalNewVersion');
@@ -160,7 +168,16 @@ document.addEventListener('DOMContentLoaded', () => {
   let activeReleaseInfo = null;
 
   const showUpdateNotification = (info) => {
-    if (!info || !info.updateAvailable) return;
+    if (!info || !info.updateAvailable) {
+      if (updateBadge) updateBadge.classList.add('d-none');
+      return;
+    }
+    const currentVer = getCurrentVersion();
+    if (compareSemver(info.latestVersion, currentVer) <= 0) {
+      if (updateBadge) updateBadge.classList.add('d-none');
+      chrome.storage.local.remove(['updateInfo']);
+      return;
+    }
     activeReleaseInfo = info;
     if (newVersionTag) newVersionTag.textContent = `v${info.latestVersion}`;
     if (updateBadge) {
@@ -274,7 +291,10 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       console.log(`[Updater Test] Badge aggiornamento per v${fakeVersion} attivato.`);
     },
-    openModal: () => openUpdateModal()
+    openModal: () => openUpdateModal(),
+    testLog: (text = 'Test log di verifica UI') => {
+      logToScreen(text);
+    }
   };
 
   // Ripristino o controllo silente iniziale
@@ -312,6 +332,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Unico listener runtime.onMessage con dispatch per tipo di messaggio
   chrome.runtime.onMessage.addListener((message) => {
     if (!message || !message.tipo) return;
+    console.log('[UI Messaggio Ricevuto]:', message.tipo, message);
 
     switch (message.tipo) {
       case 'UPDATE_AVAILABLE':
@@ -379,4 +400,10 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
   });
-});
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initApp);
+} else {
+  initApp();
+}

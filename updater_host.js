@@ -191,6 +191,28 @@ async function handleUpdateAction(payload) {
     applyUpdateFiles(sourceDir, PROJECT_DIR);
     log('Aggiornamento file completato con successo!');
 
+    // Assicura che manifest.json e package.json siano allineati alla versione del tag scaricato
+    if (tag) {
+      const cleanTag = String(tag).trim().replace(/^v/i, '');
+      try {
+        const manifestPath = path.join(PROJECT_DIR, 'manifest.json');
+        if (fs.existsSync(manifestPath)) {
+          const manifestContent = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+          manifestContent.version = cleanTag;
+          fs.writeFileSync(manifestPath, JSON.stringify(manifestContent, null, 2), 'utf8');
+          log(`manifest.json sincronizzato alla versione v${cleanTag}`);
+        }
+        const pkgPath = path.join(PROJECT_DIR, 'package.json');
+        if (fs.existsSync(pkgPath)) {
+          const pkgContent = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+          pkgContent.version = cleanTag;
+          fs.writeFileSync(pkgPath, JSON.stringify(pkgContent, null, 2), 'utf8');
+        }
+      } catch (e) {
+        log('Avviso sincronizzazione versione post-update:', e.message);
+      }
+    }
+
     return {
       success: true,
       version: tag || 'nuova versione',
@@ -236,7 +258,7 @@ process.stdin.on('data', async (chunk) => {
 
     try {
       if (message.action === 'PING' || message.type === 'PING') {
-        let currentVer = '2.8.0';
+        let currentVer = '2.8.1';
         try {
           const manifest = JSON.parse(fs.readFileSync(path.join(PROJECT_DIR, 'manifest.json'), 'utf8'));
           currentVer = manifest.version || currentVer;

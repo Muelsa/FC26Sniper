@@ -30,10 +30,10 @@ export function compareSemver(v1, v2) {
 export function getCurrentVersion() {
   if (typeof chrome !== 'undefined' && chrome.runtime?.getManifest) {
     try {
-      return chrome.runtime.getManifest().version || '2.7.0';
+      return chrome.runtime.getManifest().version || '2.8.1';
     } catch (_) {}
   }
-  return '2.7.0';
+  return '2.8.1';
 }
 
 /**
@@ -131,6 +131,8 @@ export function reloadExtensionAndAutoStart(newVersion) {
     return;
   }
 
+  // Rimuoviamo il vecchio updateInfo per evitare badge residui al riavvio
+  chrome.storage?.local.remove(['updateInfo']);
   chrome.storage.local.set({
     pendingPostUpdateReopen: true,
     pendingAutoStartAfterUpdate: false,

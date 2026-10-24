@@ -1,18 +1,36 @@
 // Comunicazione IPC, PIN Telemetria, Offscreen Keep-Alive e Lifecycle Bot
 import { botState } from './state.js';
 
-// Invio messaggi broadcast sicuro: ignora "Could not establish connection. Receiving end does not exist"
-// quando la dashboard/scheda ricevente è momentaneamente chiusa, senza mascherare altri errori.
+// Invio messaggi broadcast sicuro: invia sia tramite runtime.sendMessage
+// sia esplicitamente a tutte le schede della dashboard (index.html) tramite tabs.sendMessage.
 export function sendMessageSafe(message, callback) {
+  // 1. Invio runtime standard (popup, offscreen, contesti interni)
   try {
     const res = chrome.runtime.sendMessage(message, (...args) => {
       void chrome.runtime.lastError;
       if (typeof callback === "function") callback(...args);
     });
     if (res && typeof res.catch === "function") res.catch(() => { });
-    return res;
   } catch (e) {
-    // Nessun ricevitore presente
+    // Nessun ricevitore runtime
+  }
+
+  // 2. Invio esplicito a tutte le schede aperte della Dashboard (index.html)
+  try {
+    if (chrome.tabs && chrome.tabs.query) {
+      chrome.tabs.query({}, (tabs) => {
+        if (chrome.runtime.lastError || !tabs) return;
+        for (const tab of tabs) {
+          if (tab.id && tab.url && tab.url.includes('index.html')) {
+            chrome.tabs.sendMessage(tab.id, message, () => {
+              void chrome.runtime.lastError;
+            });
+          }
+        }
+      });
+    }
+  } catch (e) {
+    // Gestione silenziosa errori tabs
   }
 }
 
