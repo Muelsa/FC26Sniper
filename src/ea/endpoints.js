@@ -7,5 +7,8 @@ export const AUCTIONHOUSE_URL = `${EA_BASE_URL}/auctionhouse`;
 export const ITEM_URL = `${EA_BASE_URL}/item`;
 export const WATCHLIST_URL = `${EA_BASE_URL}/watchlist`;
 export const DELETE_SOLD_URL = `${EA_BASE_URL}/trade/sold`;
+export const TRADEPILE_URL = `${EA_BASE_URL}/tradepile`;
+export const UNASSIGNED_URL = `${EA_BASE_URL}/purchased/items`;
 
 export const tradeBidUrl = (tradeId) => `${EA_BASE_URL}/trade/${tradeId}/bid`;
+export const watchlistDeleteUrl = (tradeId) => `${EA_BASE_URL}/watchlist?tradeId=${tradeId}`;

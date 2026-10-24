@@ -1,141 +1,349 @@
 <!DOCTYPE html>
-<html>
+<html lang="it" data-theme="dark">
 
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" href="ui.css">
     <title>FC Sniper & Trader</title>
 </head>
 
 <body>
-    <div class="px-3 pt-2 pb-1 border-bottom d-flex justify-content-between align-items-center bg-white">
-        <h5 class="m-0 fw-bold text-primary">FC Sniper & Trader</h5>
-        <span id="versione" class="badge bg-light text-secondary border">v2.7.5</span>
-    </div>
+    <!-- Topbar Sticky Header -->
+    <header class="app-topbar">
+        <div class="brand-group">
+            <div class="brand-logo" aria-hidden="true">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                </svg>
+            </div>
+            <div class="brand-title-wrap">
+                <h5 class="brand-title">
+                    FC Sniper &amp; Trader
+                    <span id="versione" class="version-badge">v2.8.0</span>
+                    <button type="button" id="updateBadge" class="update-badge d-none" title="Nuova versione disponibile! Clicca per aggiornare">
+                        <span class="update-pulse-dot" aria-hidden="true"></span>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                        <span>Aggiorna a <strong id="newVersionTag">v...</strong></span>
+                    </button>
+                </h5>
+                <span class="brand-subtitle">Automated FUT Market Companion</span>
+            </div>
+        </div>
 
-    <div class="container-fluid px-3 pt-2">
-        <!-- Barra di Stato in Evidenza -->
-        <div id="botStatusBar"
-            class="alert alert-secondary py-1 px-2 mb-2 d-flex align-items-center justify-content-between"
-            style="font-size: 0.78rem;">
-            <span><strong id="statusDot" class="text-secondary">●</strong> <span id="statusText"
-                    class="fw-semibold">Pronto</span></span>
+        <!-- Barra di Stato in Evidenza (Centrale) -->
+        <div id="botStatusBar" class="status-bar-pill" role="status" aria-live="polite">
+            <span class="status-bar-left">
+                <strong id="statusDot" class="text-secondary">●</strong>
+                <span id="statusText" class="fw-semibold">Pronto</span>
+            </span>
             <span id="statusSubtext" class="text-muted font-monospace">Nessuna operazione in corso</span>
         </div>
 
-        <div class="d-flex align-items-start" style="margin-top: 20px;">
+        <!-- Azioni Destra: Timer Sessione + Profilo EA + Toggle Tema -->
+        <div class="topbar-actions">
+            <div class="timer-pill" id="sessionTimerPill" title="Tempo trascorso dall'avvio del bot">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="10"></circle>
+                    <polyline points="12 6 12 12 16 14"></polyline>
+                </svg>
+                <span class="text-muted">Attivo da:</span>
+                <strong id="sessionTimer" class="font-monospace text-secondary">--:--:--</strong>
+            </div>
 
-            <div class="card">
-                <div class="card-body">
-                    <div class="form-floating">
-                        <input type="number" class="form-control" id="tentativi" placeholder="Inserisci un numero"
-                            min="0" style="width: 200px;">
-                        <label for="tentativi">Tentativi ricerca</label>
-                        <!-- Selettore Modalità Bersaglio -->
-                        <div class="mt-2 mb-2">
-                            <label class="form-label form-label-sm d-block mb-1 text-muted"
-                                style="font-size: 0.8rem;">Obiettivo:</label>
-                            <div class="btn-group btn-group-sm w-100" role="group" aria-label="Obiettivo">
-                                <input type="radio" class="btn-check" name="targetMode" id="targetFodder" value="fodder"
-                                    autocomplete="off" checked>
-                                <label class="btn btn-outline-primary" for="targetFodder">Fodder</label>
+            <div class="account-pill" title="Account EA Web App sincronizzato">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                    <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+                <span class="text-muted">Account:</span>
+                <strong id="eaAccountNameBadge" class="text-info font-monospace">In attesa di sync...</strong>
+            </div>
 
-                                <input type="radio" class="btn-check" name="targetMode" id="targetConsumables"
-                                    value="consumables" autocomplete="off">
-                                <label class="btn btn-outline-primary" for="targetConsumables">Consumabili</label>
+            <button type="button" id="themeToggleBtn" class="theme-toggle-btn" title="Cambia tema Chiaro / Scuro" aria-label="Cambia tema">
+                <!-- Icona Sole (visibile in Dark Mode) -->
+                <svg class="theme-icon-sun" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="12" r="5"></circle>
+                    <line x1="12" y1="1" x2="12" y2="3"></line>
+                    <line x1="12" y1="21" x2="12" y2="23"></line>
+                    <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                    <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                    <line x1="1" y1="12" x2="3" y2="12"></line>
+                    <line x1="21" y1="12" x2="23" y2="12"></line>
+                    <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                    <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+                </svg>
+                <!-- Icona Luna (visibile in Light Mode) -->
+                <svg class="theme-icon-moon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                </svg>
+            </button>
+        </div>
+    </header>
 
-                                <input type="radio" class="btn-check" name="targetMode" id="targetManagerLeague"
-                                    value="managerLeague" autocomplete="off">
-                                <label class="btn btn-outline-primary" for="targetManagerLeague">Campionati</label>
+    <!-- Bento Dashboard Shell -->
+    <main class="dashboard-shell">
+        <!-- Riga Superiore: 6 KPI Cards -->
+        <section class="kpi-grid" aria-label="Statistiche sessione">
+            <div class="kpi-card">
+                <div class="kpi-header">
+                    <span class="kpi-label">Crediti EA</span>
+                    <span class="kpi-icon emerald" aria-hidden="true">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="9"></circle>
+                            <path d="M14.8 9A2 2 0 0 0 13 8h-2a2 2 0 0 0 0 4h2a2 2 0 0 1 0 4h-2a2 2 0 0 1-1.8-1"></path>
+                            <path d="M12 6v2m0 8v2"></path>
+                        </svg>
+                    </span>
+                </div>
+                <strong id="crediti" class="kpi-value text-success font-monospace">-</strong>
+            </div>
 
-                                <input type="radio" class="btn-check" name="targetMode" id="targetManagers"
-                                    value="managers" autocomplete="off">
-                                <label class="btn btn-outline-primary" for="targetManagers">Allenatori</label>
+            <div class="kpi-card" title="Crediti attuali + valore Compra Ora di tutte le carte attualmente in vendita">
+                <div class="kpi-header">
+                    <span class="kpi-label">Proiezione</span>
+                    <span class="kpi-icon cyan" aria-hidden="true">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline>
+                            <polyline points="17 6 23 6 23 12"></polyline>
+                        </svg>
+                    </span>
+                </div>
+                <strong id="proiezioneCrediti" class="kpi-value text-info font-monospace">-</strong>
+            </div>
 
-                                <input type="radio" class="btn-check" name="targetMode" id="targetManual" value="manual"
-                                    autocomplete="off">
-                                <label class="btn btn-outline-secondary" for="targetManual">Manuale</label>
-                            </div>
+            <div class="kpi-card">
+                <div class="kpi-header">
+                    <span class="kpi-label">Acquistate</span>
+                    <span class="kpi-icon blue" aria-hidden="true">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+                            <line x1="3" y1="6" x2="21" y2="6"></line>
+                            <path d="M16 10a4 4 0 0 1-8 0"></path>
+                        </svg>
+                    </span>
+                </div>
+                <strong id="carteAcquistate" class="kpi-value text-primary font-monospace">0</strong>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-header">
+                    <span class="kpi-label">Vendute</span>
+                    <span class="kpi-icon emerald" aria-hidden="true">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path>
+                            <line x1="7" y1="7" x2="7.01" y2="7"></line>
+                        </svg>
+                    </span>
+                </div>
+                <strong id="carteVendute" class="kpi-value text-success font-monospace">0</strong>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-header">
+                    <span class="kpi-label">Tradepile</span>
+                    <span class="kpi-icon amber" aria-hidden="true">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <polygon points="12 2 2 7 12 12 22 7 12 2"></polygon>
+                            <polyline points="2 17 12 22 22 17"></polyline>
+                            <polyline points="2 12 12 17 22 12"></polyline>
+                        </svg>
+                    </span>
+                </div>
+                <strong id="tradepileCount" class="kpi-value text-warning font-monospace">-</strong>
+            </div>
+
+            <div class="kpi-card">
+                <div class="kpi-header">
+                    <span class="kpi-label">Tentativi Residui</span>
+                    <span class="kpi-icon slate" aria-hidden="true">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <circle cx="12" cy="12" r="6"></circle>
+                            <circle cx="12" cy="12" r="2"></circle>
+                        </svg>
+                    </span>
+                </div>
+                <strong id="tentativiRimasti" class="kpi-value text-secondary font-monospace">-</strong>
+            </div>
+        </section>
+
+        <!-- Area Operativa Principale: Configurazione a Sinistra + Terminale a Destra -->
+        <div class="workspace-grid">
+            <!-- Colonna Sinistra: Configurazione Bot -->
+            <aside class="bento-panel" aria-label="Configurazione Strategia e Parametri">
+                <!-- Passo 1: Obiettivo -->
+                <div class="panel-section">
+                    <div class="section-header">
+                        <h6 class="section-title">
+                            <span class="step-badge">1</span>
+                            Obiettivo Mercato
+                        </h6>
+                    </div>
+
+                    <div class="target-grid" role="group" aria-label="Obiettivo">
+                        <input type="radio" class="btn-check" name="targetMode" id="targetFodder" value="fodder" autocomplete="off" checked>
+                        <label class="target-tile" for="targetFodder">
+                            <span class="target-tile-top">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                                </svg>
+                                <span class="tile-mini-tag tag-all-modes">Snipe · Bid · Lazy</span>
+                            </span>
+                            <span class="target-tile-name">Fodder</span>
+                        </label>
+
+                        <input type="radio" class="btn-check" name="targetMode" id="targetConsumables" value="consumables" autocomplete="off">
+                        <label class="target-tile" for="targetConsumables">
+                            <span class="target-tile-top">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M10 2v7.31"></path>
+                                    <path d="M14 9.3V1.99"></path>
+                                    <path d="M8.5 2h7"></path>
+                                    <path d="M14 9.3a6.5 6.5 0 1 1-4 0"></path>
+                                </svg>
+                                <span class="tile-mini-tag tag-all-modes">Snipe · Bid · Lazy</span>
+                            </span>
+                            <span class="target-tile-name">Consumabili</span>
+                        </label>
+
+                        <input type="radio" class="btn-check" name="targetMode" id="targetManagerLeague" value="managerLeague" autocomplete="off">
+                        <label class="target-tile" for="targetManagerLeague">
+                            <span class="target-tile-top">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path>
+                                    <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path>
+                                    <path d="M4 22h16"></path>
+                                    <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path>
+                                    <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path>
+                                    <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path>
+                                </svg>
+                                <span class="tile-mini-tag tag-lazy-only">Solo Lazy</span>
+                            </span>
+                            <span class="target-tile-name">Campionati</span>
+                        </label>
+
+                        <input type="radio" class="btn-check" name="targetMode" id="targetManagers" value="managers" autocomplete="off">
+                        <label class="target-tile" for="targetManagers">
+                            <span class="target-tile-top">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path>
+                                    <circle cx="9" cy="7" r="4"></circle>
+                                    <path d="M22 21v-2a4 4 0 0 0-3-3.87"></path>
+                                    <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+                                </svg>
+                                <span class="tile-mini-tag tag-lazy-only">Solo Lazy</span>
+                            </span>
+                            <span class="target-tile-name">Allenatori</span>
+                        </label>
+
+                        <input type="radio" class="btn-check" name="targetMode" id="targetManual" value="manual" autocomplete="off">
+                        <label class="target-tile" for="targetManual">
+                            <span class="target-tile-top">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <line x1="4" y1="21" x2="4" y2="14"></line>
+                                    <line x1="4" y1="10" x2="4" y2="3"></line>
+                                    <line x1="12" y1="21" x2="12" y2="12"></line>
+                                    <line x1="12" y1="8" x2="12" y2="3"></line>
+                                    <line x1="20" y1="21" x2="20" y2="16"></line>
+                                    <line x1="20" y1="12" x2="20" y2="3"></line>
+                                    <line x1="1" y1="14" x2="7" y2="14"></line>
+                                    <line x1="9" y1="8" x2="15" y2="8"></line>
+                                    <line x1="17" y1="16" x2="23" y2="16"></line>
+                                </svg>
+                                <span class="tile-mini-tag tag-manual-modes">Snipe · Bid</span>
+                            </span>
+                            <span class="target-tile-name">Manuale</span>
+                        </label>
+                    </div>
+                    <input type="checkbox" id="switchFodder" class="d-none" checked>
+                </div>
+
+                <!-- Passo 2: Strategia -->
+                <div class="panel-section">
+                    <div class="section-header">
+                        <h6 class="section-title">
+                            <span class="step-badge">2</span>
+                            Strategia Operativa
+                        </h6>
+                    </div>
+
+                    <div class="strategy-group" role="group" aria-label="Strategia">
+                        <input type="radio" class="btn-check" name="strategyMode" id="modeSniping" value="sniping" autocomplete="off" checked>
+                        <label class="strategy-pill" id="labelModeSniping" for="modeSniping">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                            </svg>
+                            Sniping
+                        </label>
+
+                        <input type="radio" class="btn-check" name="strategyMode" id="modeBidding" value="bidding" autocomplete="off">
+                        <label class="strategy-pill" id="labelModeBidding" for="modeBidding">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="m14 13-7.5 7.5c-.83.83-2.17.83-3 0 0 0 0 0 0 0a2.12 2.12 0 0 1 0-3L11 10"></path>
+                                <path d="m16 16 6-6"></path>
+                                <path d="m8 8 6-6"></path>
+                                <path d="m9 7 8 8"></path>
+                                <path d="m21 11-8-8"></path>
+                            </svg>
+                            Bidding
+                        </label>
+
+                        <input type="radio" class="btn-check" name="strategyMode" id="modeLazy" value="lazy" autocomplete="off">
+                        <label class="strategy-pill" id="labelModeLazy" for="modeLazy">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <polyline points="12 6 12 12 16 14"></polyline>
+                            </svg>
+                            <span id="labelModeLazyText">Lazy</span>
+                        </label>
+                    </div>
+                </div>
+
+                <!-- Passo 3: Parametri Dinamici -->
+                <div class="panel-section">
+                    <div class="section-header">
+                        <h6 class="section-title">
+                            <span class="step-badge">3</span>
+                            Parametri Sessione
+                        </h6>
+                    </div>
+
+                    <!-- Tentativi Ricerca (usato in Sniping e Bidding) -->
+                    <div id="tentativiContainer" class="field-block">
+                        <label class="form-label" for="tentativi">Tentativi di ricerca</label>
+                        <input type="number" class="form-control" id="tentativi" placeholder="Inserisci numero ricerche (es. 100)" min="0">
+                    </div>
+
+                    <!-- Rating Fodder -->
+                    <div id="fodderRatingContainer" class="field-block">
+                        <label class="form-label">Rating Fodder OVR</label>
+                        <div class="rating-group" role="group" aria-label="Rating Fodder">
+                            <input type="radio" class="btn-check" name="fodderRating" id="rating84" value="84" autocomplete="off" checked>
+                            <label class="rating-pill" for="rating84">84</label>
+
+                            <input type="radio" class="btn-check" name="fodderRating" id="rating85" value="85" autocomplete="off">
+                            <label class="rating-pill" for="rating85">85</label>
+
+                            <input type="radio" class="btn-check" name="fodderRating" id="rating86" value="86" autocomplete="off">
+                            <label class="rating-pill" for="rating86">86</label>
+
+                            <input type="radio" class="btn-check" name="fodderRating" id="rating87" value="87" autocomplete="off">
+                            <label class="rating-pill" for="rating87">87</label>
+
+                            <input type="radio" class="btn-check" name="fodderRating" id="rating88" value="88" autocomplete="off">
+                            <label class="rating-pill" for="rating88">88</label>
                         </div>
-                        <input type="checkbox" id="switchFodder" class="d-none" checked>
+                    </div>
 
-                        <div class="mt-2 mb-2">
-                            <label class="form-label form-label-sm d-block mb-1 text-muted"
-                                style="font-size: 0.8rem;">Strategia:</label>
-                            <div class="btn-group btn-group-sm w-100" role="group" aria-label="Strategia">
-                                <input type="radio" class="btn-check" name="strategyMode" id="modeSniping"
-                                    value="sniping" autocomplete="off" checked>
-                                <label class="btn btn-outline-success" for="modeSniping">Sniping</label>
-
-                                <input type="radio" class="btn-check" name="strategyMode" id="modeBidding"
-                                    value="bidding" autocomplete="off">
-                                <label class="btn btn-outline-warning" for="modeBidding">Bidding</label>
-
-                                <input type="radio" class="btn-check d-none" name="strategyMode" id="modeLazy"
-                                    value="lazy" autocomplete="off">
-                                <label class="btn btn-outline-info d-none" id="labelModeLazy"
-                                    for="modeLazy">Lazy</label>
-                            </div>
-                        </div>
-                        <div id="biddingConfigContainer" class="mt-2 mb-2 d-none">
-                            <label for="minMargin" class="form-label form-label-sm text-muted mb-0"
-                                style="font-size: 0.8rem;">Margine min. netto:</label>
-                            <input type="number" class="form-control form-control-sm" id="minMargin" value="200"
-                                min="50" step="50" style="width: 200px;">
-                        </div>
-                        <div id="lazyConfigContainer" class="mt-2 mb-2 d-none">
-                            <div class="mb-2">
-                                <label for="targetTradepileSizeInput" class="form-label form-label-sm text-muted mb-0"
-                                    style="font-size: 0.8rem;">Target Carte in Vendita:</label>
-                                <input type="number" class="form-control form-control-sm" id="targetTradepileSizeInput"
-                                    value="50" min="5" max="100" step="5" style="width: 200px;">
-                            </div>
-                            <div class="mb-2">
-                                <label for="lazyMarkupPercentInput" class="form-label form-label-sm text-muted mb-0"
-                                    style="font-size: 0.8rem;">Ricarico Vendita (%):</label>
-                                <input type="number" class="form-control form-control-sm" id="lazyMarkupPercentInput"
-                                    value="10" min="5" max="50" step="1" style="width: 200px;">
-                            </div>
-                            <div class="mb-2">
-                                <label for="lazySleepMinutesInput" class="form-label form-label-sm text-muted mb-0"
-                                    style="font-size: 0.8rem;">Pausa Ciclo (minuti):</label>
-                                <input type="number" class="form-control form-control-sm" id="lazySleepMinutesInput"
-                                    value="63" min="10" max="180" step="1" style="width: 200px;">
-                            </div>
-                            <small class="text-muted d-block" style="font-size: 0.72rem; max-width: 200px;">
-                                Ciclo 63m: pulizia venduti, relist invenduti, restock al BIN live e heartbeat keep-alive
-                                ogni 7.5m.
-                            </small>
-                        </div>
-                        <div id="fodderRatingContainer" class="mt-2 mb-2">
-                            <label class="form-label form-label-sm d-block mb-1 text-muted"
-                                style="font-size: 0.8rem;">Rating Fodder:</label>
-                            <div class="btn-group btn-group-sm" role="group" aria-label="Rating Fodder">
-                                <input type="radio" class="btn-check" name="fodderRating" id="rating84" value="84"
-                                    autocomplete="off" checked>
-                                <label class="btn btn-outline-primary" for="rating84">84</label>
-
-                                <input type="radio" class="btn-check" name="fodderRating" id="rating85" value="85"
-                                    autocomplete="off">
-                                <label class="btn btn-outline-primary" for="rating85">85</label>
-
-                                <input type="radio" class="btn-check" name="fodderRating" id="rating86" value="86"
-                                    autocomplete="off">
-                                <label class="btn btn-outline-primary" for="rating86">86</label>
-
-                                <input type="radio" class="btn-check" name="fodderRating" id="rating87" value="87"
-                                    autocomplete="off">
-                                <label class="btn btn-outline-primary" for="rating87">87</label>
-
-                                <input type="radio" class="btn-check" name="fodderRating" id="rating88" value="88"
-                                    autocomplete="off">
-                                <label class="btn btn-outline-primary" for="rating88">88</label>
-                            </div>
-                        </div>
-                        <div id="consumablesConfigContainer" class="mt-2 mb-2 d-none">
-                            <label for="chemStyleSelect" class="form-label form-label-sm d-block mb-1 text-muted"
-                                style="font-size: 0.8rem;">Stile Intesa:</label>
-                            <select class="form-select form-select-sm mb-2" id="chemStyleSelect" style="width: 200px;">
+                    <!-- Configurazione Consumabili -->
+                    <div id="consumablesConfigContainer" class="field-block d-none">
+                        <div class="field-block">
+                            <label for="chemStyleSelect" class="form-label">Stile Intesa</label>
+                            <select class="form-select" id="chemStyleSelect">
                                 <option value="all">Tutti (Ombra + Cacciatore + Ancora + Motore)</option>
                                 <option value="268" selected>Ombra (Shadow)</option>
                                 <option value="266">Cacciatore (Hunter)</option>
@@ -143,152 +351,227 @@
                                 <option value="260">Motore (Engine)</option>
                                 <option value="267">Catalizzatore (Catalyst)</option>
                             </select>
+                        </div>
 
-                            <div id="snipeSpecificContainer">
-                                <div class="mb-2">
-                                    <label for="maxSnipePriceInput" class="form-label form-label-sm text-muted mb-0"
-                                        style="font-size: 0.8rem;">Max Compra Ora (Snipe):</label>
-                                    <input type="number" class="form-control form-control-sm" id="maxSnipePriceInput"
-                                        placeholder="Automatico (-15%)" min="200" step="100" style="width: 200px;">
-                                </div>
+                        <div id="snipeSpecificContainer">
+                            <div class="field-block">
+                                <label for="maxSnipePriceInput" class="form-label">Max Compra Ora (Snipe)</label>
+                                <input type="number" class="form-control" id="maxSnipePriceInput" placeholder="Automatico (-15%)" min="200" step="100">
+                            </div>
 
-                                <div class="form-check form-switch mb-1">
+                            <div class="switch-row">
+                                <label class="form-label m-0" for="autoBinCheck" style="cursor: pointer;">Auto-Discovery BIN Live</label>
+                                <div class="form-check">
                                     <input class="form-check-input" type="checkbox" id="autoBinCheck" checked>
-                                    <label class="form-check-label text-muted" for="autoBinCheck"
-                                        style="font-size: 0.8rem;">Auto-Discovery BIN</label>
                                 </div>
+                            </div>
 
-                                <div id="manualBinContainer" class="d-none">
-                                    <label for="manualBinInput" class="form-label form-label-sm text-muted mb-0"
-                                        style="font-size: 0.8rem;">BIN vendita forzato:</label>
-                                    <input type="number" class="form-control form-control-sm" id="manualBinInput"
-                                        placeholder="es. 4000" min="200" step="100" style="width: 200px;">
-                                </div>
+                            <div id="manualBinContainer" class="field-block d-none">
+                                <label for="manualBinInput" class="form-label">BIN vendita forzato</label>
+                                <input type="number" class="form-control" id="manualBinInput" placeholder="es. 4000" min="200" step="100">
                             </div>
                         </div>
-                        <div id="managersConfigContainer" class="mt-2 mb-2 d-none">
-                            <label for="managerNationSelect" class="form-label form-label-sm d-block mb-1 text-muted"
-                                style="font-size: 0.8rem;">Nazionalità Allenatore:</label>
-                            <select class="form-select form-select-sm mb-2" id="managerNationSelect" style="width: 200px;">
-                                <option value="18,34" selected>Francia + Olanda</option>
-                                <option value="18">Francia</option>
-                                <option value="34">Olanda</option>
-                                <option value="27">Italia</option>
-                                <option value="45">Spagna</option>
-                                <option value="21">Germania</option>
-                                <option value="14">Inghilterra</option>
-                                <option value="10">Brasile</option>
-                                <option value="38">Portogallo</option>
-                                <option value="52">Argentina</option>
-                            </select>
-                            <small class="text-muted d-block" style="font-size: 0.72rem; max-width: 200px;">
-                                Acquisto automatico a -15% dal Lowest BIN live. Vendita istantanea al Lowest BIN.
-                            </small>
-                        </div>
-                        <div id="manualConfigContainer" class="mt-2 mb-2 d-none">
-                            <div class="mb-2">
-                                <label for="manualPriceInput" id="manualPriceLabel" class="form-label form-label-sm text-muted mb-0"
-                                    style="font-size: 0.8rem;">Prezzo Max Offerta (Asta):</label>
-                                <input type="number" class="form-control form-control-sm" id="manualPriceInput"
-                                    placeholder="es. 1000 (obbligatorio)" min="150" step="50" style="width: 200px;">
-                                <small id="manualPriceHelp" class="text-muted d-block" style="font-size: 0.72rem; max-width: 220px;">
-                                    Tetto massimo crediti per le offerte manuali.
-                                </small>
+                    </div>
+
+                    <!-- Configurazione Allenatori -->
+                    <div id="managersConfigContainer" class="field-block d-none">
+                        <label for="managerNationSelect" class="form-label">Nazionalità Allenatore</label>
+                        <select class="form-select" id="managerNationSelect">
+                            <option value="18,34" selected>Francia + Olanda</option>
+                            <option value="18">Francia</option>
+                            <option value="34">Olanda</option>
+                            <option value="27">Italia</option>
+                            <option value="45">Spagna</option>
+                            <option value="21">Germania</option>
+                            <option value="14">Inghilterra</option>
+                            <option value="10">Brasile</option>
+                            <option value="38">Portogallo</option>
+                            <option value="52">Argentina</option>
+                        </select>
+                        <small class="helper-note">
+                            Acquisto automatico a -15% dal Lowest BIN live. Vendita istantanea al Lowest BIN.
+                        </small>
+                    </div>
+
+                    <!-- Configurazione Bidding -->
+                    <div id="biddingConfigContainer" class="field-block d-none">
+                        <label for="minMargin" class="form-label">Margine minimo netto (Crediti)</label>
+                        <input type="number" class="form-control" id="minMargin" value="200" min="50" step="50">
+                    </div>
+
+                    <!-- Configurazione Lazy Trading -->
+                    <div id="lazyConfigContainer" class="field-block d-none">
+                        <div class="field-grid-3" id="lazyFieldsGrid">
+                            <div>
+                                <label for="targetTradepileSizeInput" class="form-label">Target Carte</label>
+                                <input type="number" class="form-control" id="targetTradepileSizeInput" value="50" min="5" max="100" step="5">
+                            </div>
+                            <div id="lazyMarkupBlock">
+                                <label for="lazyMarkupPercentInput" class="form-label">Ricarico (%)</label>
+                                <input type="number" class="form-control" id="lazyMarkupPercentInput" value="10" min="5" max="50" step="1">
+                            </div>
+                            <div>
+                                <label for="lazySleepMinutesInput" class="form-label">Pausa (min)</label>
+                                <input type="number" class="form-control" id="lazySleepMinutesInput" value="63" min="10" max="180" step="1">
                             </div>
                         </div>
-                        <button type="button" class="btn btn-primary" style="margin-top: 5px;"
-                            id="startBtn">Start</button>
-                        <button type="button" class="btn btn-danger" style="margin-top: 5px;" id="stopBtn">Stop</button>
-                        <button class="btn btn-secondary" data-bs-toggle="collapse" href="#logCollapse" role="button"
-                            aria-expanded="false" aria-controls="logCollapse" style="margin-top: 5px;">
-                            Log
+                        <small id="lazyConfigHelp" class="helper-note">
+                            Ciclo 63m: pulizia venduti, relist invenduti, restock al BIN live e heartbeat keep-alive ogni 7.5m.
+                        </small>
+                    </div>
+
+                    <!-- Configurazione Manuale -->
+                    <div id="manualConfigContainer" class="field-block d-none">
+                        <label for="manualPriceInput" id="manualPriceLabel" class="form-label">Prezzo Max Offerta (Asta):</label>
+                        <input type="number" class="form-control" id="manualPriceInput" placeholder="es. 1000 (obbligatorio)" min="150" step="50">
+                        <small id="manualPriceHelp" class="helper-note">
+                            Tetto massimo crediti per le offerte manuali.
+                        </small>
+                    </div>
+                </div>
+
+                <!-- Barra Azioni Primaria: Start / Stop -->
+                <div class="panel-section">
+                    <div class="action-bar">
+                        <button type="button" class="btn btn-start" id="startBtn">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                                <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                            </svg>
+                            Avvia Sessione
+                        </button>
+                        <button type="button" class="btn btn-stop" id="stopBtn">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+                                <rect x="5" y="5" width="14" height="14" rx="2"></rect>
+                            </svg>
+                            Stop
                         </button>
                     </div>
                 </div>
-            </div>
-            <div class="ms-3 flex-grow-1">
-                <div class="status-pill mb-2">
-                    <div class="d-flex justify-content-between align-items-center mb-1">
-                        <span class="text-muted" style="font-size: 0.8rem;">Crediti EA:</span>
-                        <strong id="crediti" class="text-success font-monospace" style="font-size: 0.95rem;">-</strong>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center mb-1">
-                        <span class="text-muted" style="font-size: 0.8rem;">Proiezione Crediti:</span>
-                        <strong id="proiezioneCrediti" class="text-info font-monospace" style="font-size: 0.85rem;" title="Crediti attuali + valore Compra Ora di tutte le carte attualmente in vendita">-</strong>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center mb-1">
-                        <span class="text-muted" style="font-size: 0.8rem;">Carte Acquistate:</span>
-                        <strong id="carteAcquistate" class="text-primary font-monospace"
-                            style="font-size: 0.95rem;">0</strong>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center mb-1">
-                        <span class="text-muted" style="font-size: 0.8rem;">Carte Vendute:</span>
-                        <strong id="carteVendute" class="text-success font-monospace"
-                            style="font-size: 0.95rem;">0</strong>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center mb-1">
-                        <span class="text-muted" style="font-size: 0.8rem;">Lista Trasferimenti:</span>
-                        <strong id="tradepileCount" class="text-warning font-monospace"
-                            style="font-size: 0.85rem;">-</strong>
-                    </div>
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span class="text-muted" style="font-size: 0.8rem;">Tentativi Residui:</span>
-                        <strong id="tentativiRimasti" class="text-secondary font-monospace"
-                            style="font-size: 0.85rem;">-</strong>
-                    </div>
-                </div>
-                <div class="mt-2">
-                    <label for="telegramChatIdInput" class="form-label form-label-sm text-muted mb-1"
-                        style="font-size: 0.8rem;">Chat ID Telegram (notifiche fine ciclo):</label>
-                    <div class="input-group input-group-sm" style="max-width: 260px;">
-                        <input type="text" class="form-control form-control-sm" id="telegramChatIdInput"
-                            placeholder="Es. 123456789">
-                        <button class="btn btn-outline-info" type="button" id="testTelegramBtn" title="Invia un messaggio di test">Test</button>
-                    </div>
-                    <div id="telegramTestFeedback" class="form-text" style="font-size: 0.72rem; min-height: 1rem;"></div>
-                    <div class="mt-1" style="font-size: 0.72rem;">
-                        <span class="text-muted">Account Web App:</span>
-                        <strong id="eaAccountNameBadge" class="text-info font-monospace ms-1">In attesa di sync...</strong>
-                    </div>
-                </div>
-            </div>
 
+                <!-- Sezione Collassabile: Notifiche Telegram -->
+                <div class="panel-section">
+                    <button type="button" class="telegram-toggle-header" data-bs-toggle="collapse" data-bs-target="#telegramCollapse" aria-expanded="false" aria-controls="telegramCollapse">
+                        <span class="d-flex align-items-center gap-2">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-info">
+                                <line x1="22" y1="2" x2="11" y2="13"></line>
+                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                            </svg>
+                            <span>Notifiche Telegram (Fine Ciclo)</span>
+                        </span>
+                        <span id="telegramStatusBadge" class="tile-mini-tag">Configura</span>
+                    </button>
+
+                    <div class="collapse" id="telegramCollapse">
+                        <div class="telegram-input-row">
+                            <input type="text" class="form-control" id="telegramChatIdInput" placeholder="Chat ID (es. 123456789)">
+                            <button class="btn btn-test-telegram" type="button" id="testTelegramBtn" title="Invia un messaggio di test">Test</button>
+                        </div>
+                        <div id="telegramTestFeedback" class="form-text"></div>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- Colonna Destra: Terminale Log Interattivo -->
+            <section class="collapse show" id="logCollapse" aria-label="Console Eventi Live">
+                <div class="log-container">
+                    <div class="log-header">
+                        <div class="log-toolbar-left">
+                            <div role="group" id="logFilterGroup" aria-label="Filtri categoria log">
+                                <button type="button" class="btn active text-white" data-filter="all">Tutti</button>
+                                <button type="button" class="btn" data-filter="trade">Acquisti &amp; Vendite</button>
+                                <button type="button" class="btn" data-filter="sleep">Stato &amp; Pause</button>
+                                <button type="button" class="btn" data-filter="warn">Avvisi</button>
+                            </div>
+                            <input type="search" id="logSearchInput" class="log-search-input" placeholder="Cerca nei log..." aria-label="Filtra testo nei log">
+                        </div>
+
+                        <div class="log-toolbar-right">
+                            <span id="logCount" class="text-muted font-monospace" style="font-size: 0.72rem;">0 eventi</span>
+                            <button type="button" class="btn btn-terminal-action" id="downloadLogBtn" title="Scarica tutti i log in formato testo (.txt)">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                                    <polyline points="7 10 12 15 17 10"></polyline>
+                                    <line x1="12" y1="15" x2="12" y2="3"></line>
+                                </svg>
+                                Esporta
+                            </button>
+                            <button type="button" class="btn btn-terminal-action" id="clearLogBtn" title="Pulisci console">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                </svg>
+                                Pulisci
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="logConsole" class="log-console">
+                        <div class="log-row" data-category="info">
+                            <span class="log-time">--:--:--</span>
+                            <span class="log-tag tag-info">INFO</span>
+                            <span class="log-msg text-muted">Console pronta. Configura i parametri e premi Avvia Sessione.</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
         </div>
+    </main>
 
-        <!-- Terminale Log Interattivo Formattato -->
-        <div class="collapse show" id="logCollapse" style="margin-top: 15px; margin-bottom: 15px;">
-            <div class="log-container">
-                <div class="log-header">
-                    <div class="btn-group btn-group-sm" role="group" id="logFilterGroup">
-                        <button type="button" class="btn btn-dark active py-0 px-2 text-white border-secondary"
-                            style="font-size: 0.72rem;" data-filter="all">Tutti</button>
-                        <button type="button" class="btn btn-dark py-0 px-2 text-success border-secondary"
-                            style="font-size: 0.72rem;" data-filter="trade">Acquisti & Vendite</button>
-                        <button type="button" class="btn btn-dark py-0 px-2 text-warning border-secondary"
-                            style="font-size: 0.72rem;" data-filter="sleep">Stato & Pause</button>
-                        <button type="button" class="btn btn-dark py-0 px-2 text-danger border-secondary"
-                            style="font-size: 0.72rem;" data-filter="warn">Avvisi</button>
+    <!-- Modal di Aggiornamento Software (Cross-Platform) -->
+    <div id="updateModal" class="update-modal-backdrop d-none" role="dialog" aria-modal="true" aria-labelledby="updateModalTitle">
+        <div class="update-modal-card">
+            <div class="update-modal-header">
+                <div class="d-flex align-items-center gap-2">
+                    <span class="update-icon-glow">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                            <polyline points="7 10 12 15 17 10"></polyline>
+                            <line x1="12" y1="15" x2="12" y2="3"></line>
+                        </svg>
+                    </span>
+                    <h6 class="m-0 fw-bold" id="updateModalTitle">Nuovo Aggiornamento Disponibile</h6>
+                </div>
+                <button type="button" class="btn-close-modal" id="closeUpdateModalBtn" aria-label="Chiudi">&times;</button>
+            </div>
+            <div class="update-modal-body">
+                <div class="version-compare-row">
+                    <div class="version-box current">
+                        <span class="label">Versione Attuale</span>
+                        <strong id="modalCurrentVersion">v2.8.0</strong>
                     </div>
-                    <div class="d-flex align-items-center gap-2">
-                        <span id="logCount" class="text-muted font-monospace" style="font-size: 0.7rem;">0 eventi</span>
-                        <button type="button" class="btn btn-outline-info py-0 px-2 text-white" id="downloadLogBtn"
-                            style="font-size: 0.72rem;" title="Scarica tutti i log in formato testo (.txt)">Scarica Log</button>
-                        <button type="button" class="btn btn-outline-secondary py-0 px-2 text-white" id="clearLogBtn"
-                            style="font-size: 0.72rem;" title="Pulisci console">Pulisci</button>
+                    <span class="version-arrow">➜</span>
+                    <div class="version-box next">
+                        <span class="label">Nuova Release</span>
+                        <strong id="modalNewVersion">v...</strong>
                     </div>
                 </div>
-                <div id="logConsole" class="log-console">
-                    <div class="log-row">
-                        <span class="log-time">--:--:--</span>
-                        <span class="log-tag tag-info">INFO</span>
-                        <span class="log-msg text-muted">Console pronta. Configura i parametri e premi Start.</span>
-                    </div>
+
+                <div class="changelog-container">
+                    <span class="changelog-title">Novità della release:</span>
+                    <div class="changelog-content" id="modalChangelog">Caricamento note di rilascio...</div>
                 </div>
+
+                <div id="updateProgressContainer" class="d-none">
+                    <div class="progress-bar-wrap">
+                        <div class="progress-bar-fill indeterminate"></div>
+                    </div>
+                    <span id="updateProgressText" class="update-status-msg text-info font-monospace">Download release in corso...</span>
+                </div>
+                <div id="updateErrorFeedback" class="form-text text-danger d-none"></div>
+            </div>
+            <div class="update-modal-footer">
+                <button type="button" class="btn btn-secondary btn-sm" id="cancelUpdateBtn">Annulla</button>
+                <button type="button" class="btn btn-start btn-sm" id="confirmUpdateBtn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                    Installa e Riavvia Bot
+                </button>
             </div>
         </div>
     </div>
 
-    <script src="ui.js"></script>
+    <script type="module" src="ui.js"></script>
 </body>
 
 </html>

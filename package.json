@@ -1,0 +1,19 @@
+{
+  "name": "fc26-sniper",
+  "version": "2.8.0",
+  "description": "FC Sniper & Trader — Automated FUT Market Companion",
+  "main": "fc26.js",
+  "scripts": {
+    "setup": "node setup_native_host.js",
+    "server": "node telemetry-server.js",
+    "check": "for f in fc26.js ui.js updater_host.js setup_native_host.js src/**/*.js; do node --check \"$f\" || exit 1; done"
+  },
+  "keywords": [
+    "ea-fc",
+    "sniper",
+    "trader",
+    "chrome-extension"
+  ],
+  "author": "Muelsa",
+  "license": "ISC"
+}

@@ -35,6 +35,15 @@ export const TOP_MANAGER_NATIONS = {
   "52": { id: 52, name: "Argentina", defaultGuess: 1000 }
 };
 
+export const NATION_NAMES = {
+  1: "Danimarca", 10: "Brasile", 14: "Inghilterra", 18: "Francia",
+  21: "Germania", 27: "Italia", 34: "Paesi Bassi", 36: "Irlanda del Nord",
+  38: "Portogallo", 42: "Scozia", 45: "Spagna", 46: "Svezia",
+  52: "Argentina", 54: "Belgio", 55: "Croazia", 57: "Polonia",
+  59: "Svizzera", 60: "Turchia", 95: "USA", 136: "Uruguay",
+  143: "Norvegia", 148: "Colombia"
+};
+
 // Chiave sintetica usata in cyclePrices/cache per un target allenatore per nazione
 export function managerTargetKey(natId) {
   return `manager_nat_${natId}`;

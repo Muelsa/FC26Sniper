@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "FC Sniper by SaDizz",
-  "version": "2.7.5",
+  "version": "2.8.0",
   "description": "Snipe like a bomber!",
   "permissions": [
     "webRequest",
@@ -9,7 +9,8 @@
     "tabs",
     "alarms",
     "declarativeNetRequest",
-    "offscreen"
+    "offscreen",
+    "nativeMessaging"
   ],
   "host_permissions": [
     "https://www.ea.com/*",
@@ -17,9 +18,12 @@
     "https://*.data.ea.com/*",
     "http://127.0.0.1:3000/*",
     "http://localhost:3000/*",
+    "https://api.github.com/*",
+    "https://github.com/*",
     "https://www.futwiz.com/*",
     "https://api.telegram.org/*"
   ],
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3UN/c2NjFpDjcthQampRNYLoO0OLrWWzP7qayQDR9QY9kyEJRAVfPOLljq3CsItZfaRJCa/8RGgcHnAfdnT+igLRqc+n96N3sr7GyBSDkTfohfPjt1ptAlcpoCe0y8ruDxg5UIz3RyFrClE4iQw6x0OnS6jhBUVHjIakCiDsFnTjk+1kspKGs+G0KcUb3RWqvlLvImejqisov2+xcTXlImyt/pCLSXqqyRoEWXrOWRHwrKusBcbYFNK64V2TXM07vFfvb+Yw0ae7qCG5va+WV4Tyavi/kFy9t0avmKtPxWUlD84Z5Plyvn7Ip9/6CBzAAg4prVAh6j4TkncGYLrEoQIDAQAB",
   "declarative_net_request": {
     "rule_resources": [
       {
