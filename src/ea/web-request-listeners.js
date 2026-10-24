@@ -101,21 +101,40 @@ export function registerWebRequestListeners() {
       try {
         if (details.url.includes("pinEvents") && details.requestBody?.raw) {
           const decoder = new TextDecoder("utf-8");
-          const postedString = decoder.decode(details.requestBody.raw[0].bytes);
+          let postedString = "";
+          for (const chunk of details.requestBody.raw) {
+            if (chunk.bytes) {
+              postedString += decoder.decode(chunk.bytes, { stream: true });
+            }
+          }
+          if (!postedString) return;
           const pinData = JSON.parse(postedString);
           console.log("[EA PIN Telemetry Intercettata]", pinData);
-          const evCount = pinData.events?.length || 1;
-          const types = (pinData.events || []).map(e => e.type || e.pgid || e.core?.en).filter(Boolean).slice(0, 3).join(", ");
-          sendMessageSafe({
-            tipo: 'LOG',
-            valore: `[PIN TELEMETRY] Inviati a EA ${evCount} eventi (${types || 'telemetria'}) | stepCounter: ${pinData.stepCounter || pinData.custom?.step || 'OK'}`
-          });
+          const now = Date.now();
+          botState.lastWebRequestPinAt = now;
+          if (now - (botState.lastPinAckAt || 0) > 1200) {
+            const evCount = pinData.events?.length || 1;
+            const types = (pinData.events || []).map(e => e.type || e.pgid || e.core?.en).filter(Boolean).slice(0, 3).join(", ");
+            sendMessageSafe({
+              tipo: 'LOG',
+              valore: `[PIN TELEMETRY] Inviati a EA ${evCount} eventi (${types || 'telemetria'}) | stepCounter: ${pinData.stepCounter || pinData.custom?.step || 'OK'}`
+            });
+          }
         }
       } catch (err) {
         // Ignora errori di parsing su payload parziali
       }
     },
-    { urls: ["*://*.data.ea.com/*", "*://pin-river.data.ea.com/*", "*://pin-river.ea.com/*", "https://pin-river.data.ea.com/*"] },
+    {
+      urls: [
+        "*://*.data.ea.com/*",
+        "*://pin-river.data.ea.com/*",
+        "*://pin-river.ea.com/*",
+        "https://pin-river.data.ea.com/*",
+        "*://*.ea.com/*pinEvents*",
+        "*://*.data.ea.com/*pinEvents*"
+      ]
+    },
     ["requestBody"]
   );
 }

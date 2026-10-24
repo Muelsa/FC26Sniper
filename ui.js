@@ -284,7 +284,7 @@ function initApp() {
         });
       });
     },
-    simulateUpdateAlert: (fakeVersion = '2.8.2', notes = 'Miglioramenti UI Bento Grid e ottimizzazioni performance.') => {
+    simulateUpdateAlert: (fakeVersion = '2.8.3', notes = 'Miglioramenti UI Bento Grid e ottimizzazioni performance.') => {
       showUpdateNotification({
         updateAvailable: true,
         currentVersion: getCurrentVersion(),

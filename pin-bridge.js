@@ -5,6 +5,10 @@
 (function () {
   "use strict";
 
+  if (typeof window.__FC_SNIPER_BRIDGE_CLEANUP__ === "function") {
+    try { window.__FC_SNIPER_BRIDGE_CLEANUP__(); } catch (_) {}
+  }
+
   const ORIGIN = window.location.origin;
 
   function logBridge(msg, extra = null) {
@@ -191,24 +195,21 @@
   let pinBusy = false;
 
   const jitter = (min, max) => Math.floor(min + Math.random() * (max - min));
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
   let currentView = "";
-  let lastViewChangeAt = 0;
+  let currentContext = ""; // "market" | "targets" | "tradepile" | "hub" | ""
+  let lastSearchPinAt = 0;
   let lastActivityAt = 0;
+  let localStepCounter = 0;
 
-  // Emette un page_view solo se diverso dalla vista corrente o mai nello stesso tick
-  function emitPageView(pgid, force = false) {
+  function emitPageView(pgid) {
     const pin = getPinService();
     if (!pin) return false;
-    const now = Date.now();
-    if (!force && currentView === pgid && now - lastViewChangeAt < 50) return true; // no doppie page_view nello stesso tick
-    if (!force && currentView === pgid) return true; // deduplica view ripetute
     try {
       pin.sendData("page_view", { type: "menu", pgid });
       currentView = pgid;
-      lastViewChangeAt = now;
-      lastActivityAt = now;
+      lastActivityAt = Date.now();
+      localStepCounter++;
       return true;
     } catch (e) {
       logBridge("[FC Sniper PinBridge] Errore sendData:", String(e));
@@ -216,95 +217,148 @@
     }
   }
 
-  // Hub - Transfers -> destinazione, con delay jittered 300-900ms tra i due step
-  async function navigateTo(pgid) {
-    if (currentView !== "Hub - Transfers" && currentView !== pgid) {
-      emitPageView("Hub - Transfers");
-      await sleep(jitter(300, 900));
+  function getPinStepCounter() {
+    const pin = getPinService();
+    if (pin && (pin.stepCounter !== undefined || pin._stepCounter !== undefined || pin.custom?.step !== undefined)) {
+      return pin.stepCounter ?? pin._stepCounter ?? pin.custom?.step;
     }
-    emitPageView(pgid);
+    return localStepCounter || "OK";
   }
 
-  async function processPinEvent(type, payload) {
+  function processPinEvent(type) {
+    const sentEvents = [];
     switch (type) {
-      case "TRIGGER_PIN_SEARCH":
-        await navigateTo("Transfer Market Results - List View");
-        break;
+      case "TRIGGER_PIN_SEARCH": {
+        const now = Date.now();
+        if (now - lastSearchPinAt < 350) {
+          return { status: "throttled", events: [], stepCounter: getPinStepCounter() };
+        }
+        lastSearchPinAt = now;
 
-      case "TRIGGER_PIN_WATCHLIST":
-        await navigateTo("Transfer Targets - List View");
-        break;
+        // Se non siamo già nel flusso di ricerca mercato, transitiamo da Hub - Transfers
+        if (currentContext !== "market" && currentView !== "Hub - Transfers") {
+          if (emitPageView("Hub - Transfers")) sentEvents.push("Hub - Transfers");
+        }
+        // Passaggio dalla schermata filtri di ricerca (esattamente come Back -> Search nella Web App)
+        if (currentView !== "Transfer Market Search") {
+          if (emitPageView("Transfer Market Search")) sentEvents.push("Transfer Market Search");
+        }
+        // Apertura risultati di ricerca
+        if (emitPageView("Transfer Market Results - List View")) {
+          sentEvents.push("Transfer Market Results - List View");
+          currentContext = "market";
+        }
+        return {
+          status: sentEvents.length > 0 ? "ok" : "no_pin_service",
+          events: sentEvents,
+          stepCounter: getPinStepCounter()
+        };
+      }
 
-      case "TRIGGER_PIN_SELL":
-        // SELL mappato sulla Transfer List (listaggio da lista trasferimenti)
-        await navigateTo("Transfer List - List View");
-        break;
+      case "TRIGGER_PIN_WATCHLIST": {
+        if (currentContext !== "targets" && currentView !== "Hub - Transfers") {
+          if (emitPageView("Hub - Transfers")) sentEvents.push("Hub - Transfers");
+        }
+        if (emitPageView("Transfer Targets - List View")) {
+          sentEvents.push("Transfer Targets - List View");
+          currentContext = "targets";
+        }
+        return {
+          status: sentEvents.length > 0 ? "ok" : "no_pin_service",
+          events: sentEvents,
+          stepCounter: getPinStepCounter()
+        };
+      }
+
+      case "TRIGGER_PIN_SELL": {
+        // Se non siamo già su una lista/dettaglio valido (mercato, watchlist o tradepile), apriamo la Transfer List
+        if (!currentContext) {
+          if (currentView !== "Hub - Transfers") {
+            if (emitPageView("Hub - Transfers")) sentEvents.push("Hub - Transfers");
+          }
+          if (emitPageView("Transfer List - List View")) {
+            sentEvents.push("Transfer List - List View");
+            currentContext = "tradepile";
+          }
+        }
+        if (emitPageView("Item - Detail View")) {
+          sentEvents.push("Item - Detail View");
+        }
+        return {
+          status: sentEvents.length > 0 ? "ok" : "no_pin_service",
+          events: sentEvents,
+          stepCounter: getPinStepCounter()
+        };
+      }
 
       case "TRIGGER_PIN_BUY_NOW":
       case "TRIGGER_PIN_BID": {
-        // Sequenza umana: apertura dettaglio -> breve lettura -> conferma
-        await navigateTo("Item - Detail View");
-        await sleep(jitter(350, 950));
-        emitPageView("Item - Detail View", true); // conferma azione sulla stessa vista (forzata, tick diverso)
-        lastActivityAt = Date.now();
-        break;
+        if (emitPageView("Item - Detail View")) {
+          sentEvents.push("Item - Detail View");
+        }
+        return {
+          status: sentEvents.length > 0 ? "ok" : "no_pin_service",
+          events: sentEvents,
+          stepCounter: getPinStepCounter()
+        };
       }
 
       case "REQUEST_TOKEN_REFRESH":
         performNativeWebAppKeepAlive(true);
         extractAndSendToken();
-        break;
+        return { status: "refresh_ok", events: [], stepCounter: getPinStepCounter() };
 
       case "REQUEST_USER_INFO":
         extractAndSendToken();
-        break;
+        return { status: "user_ok", events: [], stepCounter: getPinStepCounter() };
 
       default:
-        break;
+        return { status: "ignored", events: [], stepCounter: getPinStepCounter() };
     }
   }
 
-  async function drainQueue() {
+  function drainQueue() {
     if (pinBusy) return;
     pinBusy = true;
     while (pinQueue.length > 0) {
       const job = pinQueue.shift();
-      let status = "ok";
-      let detail = "";
+      let res = { status: "ok", detail: "", events: [], stepCounter: "OK" };
       try {
-        await processPinEvent(job.type, job.payload);
+        const out = processPinEvent(job.type, job.payload);
+        if (out) res = Object.assign(res, out);
       } catch (e) {
-        status = "error";
-        detail = String(e).slice(0, 200);
+        res.status = "error";
+        res.detail = String(e).slice(0, 200);
       }
-      ack(job.requestId, status, detail);
+      ack(job.requestId, res.status, res.detail, res.events, res.stepCounter);
     }
     pinBusy = false;
   }
 
   function enqueuePinEvent(requestId, type, payload) {
     if (pinQueue.length >= PIN_QUEUE_MAX) {
-      ack(requestId, "dropped_queue_full", "");
+      ack(requestId, "dropped_queue_full", "", [], "OK");
       return;
     }
     pinQueue.push({ requestId, type, payload });
     drainQueue();
   }
 
-  function ack(requestId, status, detail) {
+  function ack(requestId, status, detail, events = [], stepCounter = "OK") {
     try {
       window.postMessage({
         origin: "PIN_BRIDGE_ACK",
         requestId,
         status,
-        detail: detail || ""
+        detail: detail || "",
+        events: Array.isArray(events) ? events : [],
+        stepCounter: stepCounter !== undefined && stepCounter !== null ? String(stepCounter) : "OK"
       }, ORIGIN);
     } catch (e) {}
   }
 
   // --- Keep-alive nativo EA ---
   // Solo se c'è stata attività recente (ultimi 15 min), con finestra jittered 8-12 minuti.
-  // Niente eventi mouse sintetici.
   let lastNativeKeepAlive = 0;
   let nextKeepAliveInterval = 0;
 
@@ -312,7 +366,6 @@
     const now = Date.now();
 
     if (!force) {
-      // Senza attività recente l'utente è inattivo: non simulare sessione viva
       if (now - lastActivityAt > 15 * 60 * 1000) return;
       if (now - lastNativeKeepAlive < nextKeepAliveInterval) return;
     }
@@ -338,9 +391,7 @@
     }
   }
 
-  // Scheduler: controlla ogni minuto; la funzione decide se agire
-  // (solo attività recente + intervallo jittered 8-12 min, mai 8 minuti esatti)
-  setInterval(() => performNativeWebAppKeepAlive(false), 60000);
+  const keepAliveTimer = setInterval(() => performNativeWebAppKeepAlive(false), 60000);
 
   const ALLOWED_TYPES = new Set([
     "TRIGGER_PIN_SEARCH",
@@ -352,8 +403,7 @@
     "REQUEST_USER_INFO"
   ]);
 
-  // Ascolta messaggi inoltrati da content.js
-  window.addEventListener("message", (event) => {
+  const onWindowMessage = (event) => {
     if (event.source !== window) return;
     if (event.origin !== ORIGIN) return;
     const data = event.data;
@@ -361,10 +411,18 @@
 
     const { requestId, type, payload } = data;
     if (typeof requestId !== "string" || typeof type !== "string" || !ALLOWED_TYPES.has(type)) {
-      return; // ignora richieste sconosciute/malformate
+      return;
     }
 
     const safePayload = (payload && typeof payload === "object" && !Array.isArray(payload)) ? payload : {};
     enqueuePinEvent(requestId, type, safePayload);
-  });
+  };
+
+  window.addEventListener("message", onWindowMessage);
+
+  window.__FC_SNIPER_BRIDGE_CLEANUP__ = () => {
+    try { clearInterval(timer); } catch (_) {}
+    try { clearInterval(keepAliveTimer); } catch (_) {}
+    try { window.removeEventListener("message", onWindowMessage); } catch (_) {}
+  };
 })();
