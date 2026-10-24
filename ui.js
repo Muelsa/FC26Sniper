@@ -184,7 +184,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="20 6 9 17 4 12"></polyline>
         </svg>
-        Installa e Riavvia Bot
+        Installa e Ricarica
       `;
     }
     if (updateModal) updateModal.classList.remove('d-none');
@@ -224,7 +224,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
       if (updateProgressText) {
         updateProgressText.className = 'update-status-msg text-success font-monospace';
-        updateProgressText.textContent = 'Aggiornamento completato! Ricaricamento estensione e riavvio automatico...';
+        updateProgressText.textContent = 'Aggiornamento completato! Ricaricamento estensione...';
       }
 
       setTimeout(() => {
@@ -278,23 +278,18 @@ document.addEventListener('DOMContentLoaded', () => {
   };
 
   // Ripristino o controllo silente iniziale
-  chrome.storage?.local.get(['updateInfo', 'pendingAutoStartAfterUpdate', 'updatedVersion'], (res) => {
+  chrome.storage?.local.get(['updateInfo', 'pendingPostUpdateReopen', 'pendingAutoStartAfterUpdate', 'updatedVersion'], (res) => {
     // 1. Notifica eventuale release salvata
     if (res?.updateInfo?.updateAvailable) {
       showUpdateNotification(res.updateInfo);
     }
 
     // 2. Controllo se questo avvio è il risultato di un aggiornamento appena completato
-    if (res?.pendingAutoStartAfterUpdate) {
-      chrome.storage.local.remove(['pendingAutoStartAfterUpdate']);
+    if (res?.pendingPostUpdateReopen || res?.pendingAutoStartAfterUpdate) {
+      chrome.storage.local.remove(['pendingPostUpdateReopen', 'pendingAutoStartAfterUpdate']);
       const verText = res.updatedVersion ? `v${res.updatedVersion}` : '';
-      logToScreen(`[AGGIORNAMENTO] 🎉 Bot aggiornato con successo a ${verText}! Riavvio automatico della sessione...`);
-      setStatusBar('text-success', 'Aggiornato', `Sessione riavviata (${verText})`);
-      setTimeout(() => {
-        if (DOM.startBtn && !DOM.startBtn.disabled) {
-          DOM.startBtn.click();
-        }
-      }, 1000);
+      logToScreen(`[AGGIORNAMENTO] 🎉 Bot aggiornato con successo a ${verText}! Seleziona una modalità e premi Avvia quando desideri.`);
+      setStatusBar('text-success', 'Aggiornato', `Pronto (${verText})`);
     }
   });
 
