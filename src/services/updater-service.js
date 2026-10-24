@@ -30,10 +30,10 @@ export function compareSemver(v1, v2) {
 export function getCurrentVersion() {
   if (typeof chrome !== 'undefined' && chrome.runtime?.getManifest) {
     try {
-      return chrome.runtime.getManifest().version || '2.8.0';
+      return chrome.runtime.getManifest().version || '2.7.0';
     } catch (_) {}
   }
-  return '2.8.0';
+  return '2.7.0';
 }
 
 /**
@@ -123,7 +123,7 @@ export function performNativeUpdate(zipUrl, tag) {
 }
 
 /**
- * Ricarica a caldo l'estensione Chrome e programma l'avvio automatico
+ * Ricarica a caldo l'estensione Chrome e predispone la riapertura della Dashboard
  */
 export function reloadExtensionAndAutoStart(newVersion) {
   if (typeof chrome === 'undefined' || !chrome.runtime?.reload) {
@@ -132,7 +132,8 @@ export function reloadExtensionAndAutoStart(newVersion) {
   }
 
   chrome.storage.local.set({
-    pendingAutoStartAfterUpdate: true,
+    pendingPostUpdateReopen: true,
+    pendingAutoStartAfterUpdate: false,
     updatedVersion: newVersion || '',
     updatedAt: Date.now()
   }, () => {

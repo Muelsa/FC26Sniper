@@ -90,7 +90,38 @@ setPostPauseMaintenance(async () => {
 
 // 3. Listener per azione estensione (apre la dashboard in una nuova scheda)
 chrome.action.onClicked.addListener(() => {
-  chrome.tabs.create({ url: "index.html" });
+  chrome.tabs.create({ url: chrome.runtime.getURL("index.html") });
+});
+
+// 3b. Riapertura automatica e invisibile della Dashboard post-aggiornamento
+let isReopeningPostUpdate = false;
+function checkPendingPostUpdateReopen() {
+  if (isReopeningPostUpdate) return;
+  chrome.storage?.local.get(['pendingPostUpdateReopen', 'pendingAutoStartAfterUpdate'], (res) => {
+    const shouldReopen = res?.pendingPostUpdateReopen || res?.pendingAutoStartAfterUpdate;
+    if (shouldReopen && !isReopeningPostUpdate) {
+      isReopeningPostUpdate = true;
+      const targetUrl = chrome.runtime.getURL("index.html");
+      chrome.tabs.query({}, (tabs) => {
+        const extId = chrome.runtime.id;
+        const existingTab = tabs?.find(t => t.url && t.url.includes(extId) && t.url.includes('index.html'));
+        if (existingTab && existingTab.id) {
+          chrome.tabs.update(existingTab.id, { active: true });
+          setTimeout(() => { isReopeningPostUpdate = false; }, 2000);
+        } else {
+          chrome.tabs.create({ url: targetUrl, active: true }, () => {
+            setTimeout(() => { isReopeningPostUpdate = false; }, 2000);
+          });
+        }
+      });
+    }
+  });
+}
+
+// Controllo sia all'avvio del Service Worker sia all'evento onInstalled
+checkPendingPostUpdateReopen();
+chrome.runtime.onInstalled?.addListener(() => {
+  checkPendingPostUpdateReopen();
 });
 
 // 4. Keep-alive MV3: porta long-lived dal content script
