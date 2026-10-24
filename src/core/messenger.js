@@ -70,8 +70,8 @@ export async function triggerPinEvent(type, payload = {}) {
 
     try {
       chrome.tabs.query({}, (tabs) => {
-        const eaTabs = (tabs || []).filter(t => t.url && t.url.includes("ea.com"));
-        if (chrome.runtime.lastError || !eaTabs || eaTabs.length === 0) {
+        let allEaTabs = (tabs || []).filter(t => t.url && t.url.includes("ea.com"));
+        if (chrome.runtime.lastError || !allEaTabs || allEaTabs.length === 0) {
           const now = Date.now();
           if (now - lastNoTabWarn > 45000) {
             lastNoTabWarn = now;
@@ -84,8 +84,8 @@ export async function triggerPinEvent(type, payload = {}) {
           return finish();
         }
 
-        const activeEaTabs = eaTabs.filter(t => !t.discarded);
-        if (activeEaTabs.length === 0 && eaTabs.length > 0) {
+        const activeEaTabs = allEaTabs.filter(t => !t.discarded);
+        if (activeEaTabs.length === 0 && allEaTabs.length > 0) {
           const now = Date.now();
           if (now - lastNoTabWarn > 45000) {
             lastNoTabWarn = now;
@@ -95,6 +95,12 @@ export async function triggerPinEvent(type, payload = {}) {
             });
           }
         }
+
+        // Seleziona la singola scheda Web App di riferimento (priorità: attiva e non sospesa) per evitare duplicati x2 / x3
+        let targetTabs = allEaTabs.filter(t => t.url && (t.url.includes("web-app") || t.url.includes("ultimate-team")));
+        if (targetTabs.length === 0) targetTabs = allEaTabs;
+        const chosenTab = targetTabs.find(t => t.active && !t.discarded) || targetTabs.find(t => !t.discarded) || targetTabs[0];
+        const eaTabs = chosenTab ? [chosenTab] : [];
 
         let pending = eaTabs.length;
         const requestId = 'pin_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);

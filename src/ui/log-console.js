@@ -94,7 +94,12 @@ export function classifyLogMessage(raw) {
     return { category: 'sleep', tag: 'PAUSA', text: clean };
   }
 
-  // 5. Avvisi ed Errori / 461 / Captcha / Limiti
+  // 5. Telemetria PIN (deve precedere il check errori per non catturare i numeri di stepCounter come 429, 458, 461)
+  if (/pin\s*telemetry|telemetr/i.test(text)) {
+    return { category: 'status', tag: 'TELEMETRIA', text: clean };
+  }
+
+  // 6. Avvisi ed Errori / 461 / Captcha / Limiti
   if (/errore|461|401|429|458|captcha|soft-ban|fallit|attenzione/i.test(text)) {
     let tag = 'AVVISO';
     if (/461/i.test(text)) tag = '461 PRESA';
@@ -102,11 +107,6 @@ export function classifyLogMessage(raw) {
     else if (/401/i.test(text)) tag = 'AUTH 401';
     else if (/soft-ban|429/i.test(text)) tag = 'RATE LIMIT';
     return { category: 'warn', tag, text: clean };
-  }
-
-  // 6. Telemetria PIN
-  if (/pin\s*telemetry|telemetr/i.test(text)) {
-    return { category: 'status', tag: 'TELEMETRIA', text: clean };
   }
 
   // 7. Stato, Target, Configurazione e Cicli
