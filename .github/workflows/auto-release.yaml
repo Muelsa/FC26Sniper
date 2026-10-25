@@ -35,10 +35,7 @@ jobs:
         with:
           tag_name: ${{ steps.generate_tag.outputs.tag }}
           name: "Release ${{ steps.generate_tag.outputs.tag }}"
-          body: |
-            Release automatica generata a seguito del merge dal branch `beta` al branch `main`.
-            - **Pull Request:** #${{ github.event.pull_request.number }}
-            - **Merge effettuato da:** ${{ github.actor }}
+          body: ${{ github.event.pull_request.body }}
           draft: false
           prerelease: false
         env:
