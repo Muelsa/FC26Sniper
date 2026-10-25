@@ -463,10 +463,14 @@ export async function checkAndProcessWatchlistForLazy(cyclePrices = {}) {
           let tierTag = "";
           if (item.itemData?.itemType === "player") {
             const assetId = item.itemData?.assetId || item.itemData?.resourceId;
+            const cardRating = item.itemData?.rating;
             let floor = cyclePrices?.playerPriceMap?.get(String(assetId))?.basePrice;
             if (!floor && tracked?.basePrice) floor = tracked.basePrice;
             if (!floor) floor = await getFodderPriceForItem(item.itemData);
-            if (!floor) floor = cyclePrices?.benchmarkFloor || cyclePrices?.floorBin;
+            const isSameRatingAsCycle = cardRating && cyclePrices?.rating && String(cardRating) === String(cyclePrices.rating);
+            if (!floor && isSameRatingAsCycle) {
+              floor = cyclePrices?.benchmarkFloor || cyclePrices?.floorBin;
+            }
             if (floor && floor > 0) {
               const tiered = getTieredSellPrice(floor, null, false);
               sellPrice = tiered.price;

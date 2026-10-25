@@ -238,11 +238,17 @@ export async function checkAndRelistExpiredItems(cachedPrices = {}, preloadedAuc
       if (a.itemData?.itemType === "player") {
         if (botState.targetMode === "fodder") {
           const assetId = a.itemData?.assetId || a.itemData?.resourceId;
+          const cardRating = a.itemData?.rating;
           const pInfo = cachedPrices?.playerPriceMap?.get(String(assetId));
-          cardName = pInfo?.name || `Calciatore (${a.itemData?.rating || 'N/D'})`;
+          cardName = pInfo?.name || `Calciatore (${cardRating || 'N/D'})`;
           let fodderPrice = pInfo?.basePrice;
-          if (!fodderPrice && cachedPrices?.benchmarkFloor) fodderPrice = cachedPrices.benchmarkFloor;
-          if (!fodderPrice) fodderPrice = await getFodderPriceForItem(a.itemData);
+          const isSameRatingAsCycle = cardRating && cachedPrices?.rating && String(cardRating) === String(cachedPrices.rating);
+          if (!fodderPrice && isSameRatingAsCycle && cachedPrices?.benchmarkFloor) {
+            fodderPrice = cachedPrices.benchmarkFloor;
+          }
+          if (!fodderPrice) {
+            fodderPrice = await getFodderPriceForItem(a.itemData);
+          }
           if (fodderPrice > 0) {
             const tiered = getTieredSellPrice(fodderPrice, null, false);
             newSellPrice = tiered.price;
@@ -375,10 +381,17 @@ export async function processUnassignedItems(cachedPrices = {}) {
         if (item.itemType === "player") {
           if (botState.targetMode === "fodder") {
             const assetId = item.assetId || item.resourceId;
-            cardName = `Calciatore (${item.rating || 'N/D'})`;
-            let fodderPrice = cachedPrices?.playerPriceMap?.get(String(assetId))?.basePrice;
-            if (!fodderPrice && cachedPrices?.benchmarkFloor) fodderPrice = cachedPrices.benchmarkFloor;
-            if (!fodderPrice) fodderPrice = await getFodderPriceForItem(item);
+            const cardRating = item.rating;
+            const pInfo = cachedPrices?.playerPriceMap?.get(String(assetId));
+            cardName = pInfo?.name || `Calciatore (${cardRating || 'N/D'})`;
+            let fodderPrice = pInfo?.basePrice;
+            const isSameRatingAsCycle = cardRating && cachedPrices?.rating && String(cardRating) === String(cachedPrices.rating);
+            if (!fodderPrice && isSameRatingAsCycle && cachedPrices?.benchmarkFloor) {
+              fodderPrice = cachedPrices.benchmarkFloor;
+            }
+            if (!fodderPrice) {
+              fodderPrice = await getFodderPriceForItem(item);
+            }
             if (fodderPrice > 0) {
               const tiered = getTieredSellPrice(fodderPrice, null, false);
               sellPrice = tiered.price;
@@ -518,9 +531,16 @@ export async function listUnlistedTradepileItems(cachedPrices = {}) {
       if (item.itemType === "player") {
         if (botState.targetMode === "fodder") {
           const assetId = item.assetId || item.resourceId;
-          let fodderPrice = cachedPrices?.playerPriceMap?.get(String(assetId))?.basePrice;
-          if (!fodderPrice && cachedPrices?.benchmarkFloor) fodderPrice = cachedPrices.benchmarkFloor;
-          if (!fodderPrice) fodderPrice = await getFodderPriceForItem(item);
+          const cardRating = item.rating;
+          const pInfo = cachedPrices?.playerPriceMap?.get(String(assetId));
+          let fodderPrice = pInfo?.basePrice;
+          const isSameRatingAsCycle = cardRating && cachedPrices?.rating && String(cardRating) === String(cachedPrices.rating);
+          if (!fodderPrice && isSameRatingAsCycle && cachedPrices?.benchmarkFloor) {
+            fodderPrice = cachedPrices.benchmarkFloor;
+          }
+          if (!fodderPrice) {
+            fodderPrice = await getFodderPriceForItem(item);
+          }
           if (fodderPrice > 0) {
             const tiered = getTieredSellPrice(fodderPrice, null, false);
             sellPrice = tiered.price;

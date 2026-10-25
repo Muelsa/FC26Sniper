@@ -20,7 +20,7 @@
             <div class="brand-title-wrap">
                 <h5 class="brand-title">
                     FC Sniper &amp; Trader
-                    <span id="versione" class="version-badge">v2.8.4</span>
+                    <span id="versione" class="version-badge">v2.8.5</span>
                     <button type="button" id="updateBadge" class="update-badge d-none" title="Nuova versione disponibile! Clicca per aggiornare">
                         <span class="update-pulse-dot" aria-hidden="true"></span>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -448,25 +448,47 @@
                     </div>
                 </div>
 
-                <!-- Sezione Collassabile: Notifiche Telegram -->
+                <!-- Sezione Collassabile: Impostazioni Bot (Telegram + Manutenzione) -->
                 <div class="panel-section">
-                    <button type="button" class="telegram-toggle-header" data-bs-toggle="collapse" data-bs-target="#telegramCollapse" aria-expanded="false" aria-controls="telegramCollapse">
+                    <button type="button" class="telegram-toggle-header" data-bs-toggle="collapse" data-bs-target="#botSettingsCollapse" aria-expanded="false" aria-controls="botSettingsCollapse">
                         <span class="d-flex align-items-center gap-2">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-info">
-                                <line x1="22" y1="2" x2="11" y2="13"></line>
-                                <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                             </svg>
-                            <span>Notifiche Telegram (Fine Ciclo)</span>
+                            <span>Impostazioni Bot</span>
                         </span>
                         <span id="telegramStatusBadge" class="tile-mini-tag">Configura</span>
                     </button>
 
-                    <div class="collapse" id="telegramCollapse">
+                    <div class="collapse" id="botSettingsCollapse">
+                        <!-- Notifiche Telegram -->
+                        <span class="settings-group-label">Notifiche Telegram (Fine Ciclo)</span>
                         <div class="telegram-input-row">
                             <input type="text" class="form-control" id="telegramChatIdInput" placeholder="Chat ID (es. 123456789)">
                             <button class="btn btn-test-telegram" type="button" id="testTelegramBtn" title="Invia un messaggio di test">Test</button>
                         </div>
                         <div id="telegramTestFeedback" class="form-text"></div>
+
+                        <!-- Manutenzione & Sessione -->
+                        <span class="settings-group-label">Manutenzione &amp; Sessione</span>
+                        <div class="settings-actions-grid">
+                            <button type="button" class="btn btn-settings-action" id="clearCacheBtn" title="Cancella i prezzi salvati: al prossimo avvio il bot li ricalcola dal mercato live">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="3 6 5 6 21 6"></polyline>
+                                    <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                </svg>
+                                Svuota Cache Prezzi
+                            </button>
+                            <button type="button" class="btn btn-settings-action" id="reloadWebAppBtn" title="Ricarica la scheda della Web App EA e sincronizza un nuovo token">
+                                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polyline points="23 4 23 10 17 10"></polyline>
+                                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+                                </svg>
+                                Riavvia Web App
+                            </button>
+                        </div>
+                        <div id="settingsActionFeedback" class="form-text"></div>
                     </div>
                 </div>
             </aside>
@@ -537,7 +559,7 @@
                 <div class="version-compare-row">
                     <div class="version-box current">
                         <span class="label">Versione Attuale</span>
-                        <strong id="modalCurrentVersion">v2.8.4</strong>
+                        <strong id="modalCurrentVersion">v2.8.5</strong>
                     </div>
                     <span class="version-arrow">➜</span>
                     <div class="version-box next">

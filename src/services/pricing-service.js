@@ -65,7 +65,7 @@ export function getTieredSellPrice(floorBin, customMarkup = null, isConsumable =
 }
 
 // Floor di mercato (lowest BIN) per qualsiasi item: allenatore (natId), modificatore campionato (leagueId) o stile intesa.
-// Ritorna { floor, name, key }. Usa cache di ciclo (cachedPrices), poi cache 15min, poi discovery live.
+// Ritorna { floor, name, key }. Usa cache di ciclo (cachedPrices), poi cache 10min, poi discovery live.
 export async function resolveConsumableFloor(itemOrAuction, cachedPrices = {}, fallbackStyle = null) {
   const mgr = detectManager(itemOrAuction);
   if (mgr) {
@@ -101,7 +101,7 @@ export async function discoverCustomLowestBin(searchFilterParams, displayName, c
     return manualBinOverride;
   }
 
-  const CACHE_TTL_MS = 15 * 60 * 1000;
+  const CACHE_TTL_MS = 10 * 60 * 1000;
   if (!forceRefresh && cacheKey && consumableBinCache.has(String(cacheKey))) {
     const cached = consumableBinCache.get(String(cacheKey));
     if (Date.now() - cached.timestamp < CACHE_TTL_MS) {
