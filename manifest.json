@@ -1,11 +1,7 @@
 {
   "manifest_version": 3,
   "name": "FC Sniper by SaDizz",
-<<<<<<< Updated upstream
-  "version": "2.8.3",
-=======
   "version": "2.8.4",
->>>>>>> Stashed changes
   "description": "Snipe like a bomber!",
   "permissions": [
     "webRequest",

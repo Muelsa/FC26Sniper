@@ -3,15 +3,7 @@
 let currentFilter = 'all';
 let currentSearchQuery = '';
 let totalLogEvents = 0;
-const MAX_LOG_RECORDS = 1000;
 const allLogRecords = [];
-
-let lastLoggedText = '';
-let lastLoggedTag = '';
-let lastLoggedTime = 0;
-let lastLoggedCount = 1;
-let lastLogRowElement = null;
-let lastRecordRef = null;
 
 export function setStatusBar(dotClass, text, subtext) {
   const statusDot = document.getElementById('statusDot');
@@ -164,24 +156,6 @@ export function logToScreen(message) {
   const timeStr = now.toTimeString().split(' ')[0];
   const { category, tag, text } = classifyLogMessage(message);
 
-  if (text && text === lastLoggedText && tag === lastLoggedTag && (now.getTime() - lastLoggedTime < 5000)) {
-    lastLoggedCount++;
-    const countSuffix = ` (x${lastLoggedCount})`;
-    if (lastLogRowElement) {
-      const msgSpan = lastLogRowElement.querySelector('.log-msg');
-      if (msgSpan) msgSpan.textContent = text + countSuffix;
-    }
-    if (lastRecordRef) {
-      lastRecordRef.text = text + countSuffix;
-    }
-    return;
-  }
-
-  lastLoggedText = text;
-  lastLoggedTag = tag;
-  lastLoggedTime = now.getTime();
-  lastLoggedCount = 1;
-
   const record = {
     timestamp: timeStr,
     iso: now.toISOString(),
@@ -190,11 +164,7 @@ export function logToScreen(message) {
     text,
     raw: String(message || '').trim()
   };
-  lastRecordRef = record;
   allLogRecords.push(record);
-  if (allLogRecords.length > MAX_LOG_RECORDS) {
-    allLogRecords.splice(0, allLogRecords.length - MAX_LOG_RECORDS);
-  }
 
   updateBotStatusBar(category, tag, text);
 
@@ -203,7 +173,6 @@ export function logToScreen(message) {
   const row = document.createElement('div');
   row.className = `log-row filter-${category}`;
   row.dataset.category = category;
-  lastLogRowElement = row;
 
   if (!rowMatchesFilter(category, `${timeStr} ${tag} ${text}`)) {
     row.style.display = 'none';
@@ -230,10 +199,6 @@ export function logToScreen(message) {
   totalLogEvents++;
   if (logCount) {
     logCount.textContent = `${totalLogEvents} eventi`;
-  }
-
-  while (logConsole.childElementCount > 250) {
-    logConsole.removeChild(logConsole.firstElementChild);
   }
 
   if (wasAtBottom) {
@@ -281,18 +246,13 @@ export function initLogConsoleControls(getContextInfo = () => ({})) {
       const timeStr = `${pad(now.getHours())}-${pad(now.getMinutes())}-${pad(now.getSeconds())}`;
 
       const info = getContextInfo() || {};
-<<<<<<< Updated upstream
-      const verText = document.getElementById('versione')?.textContent?.trim() || 'v2.8.3';
-=======
       const verText = document.getElementById('versione')?.textContent?.trim() || 'v2.8.4';
->>>>>>> Stashed changes
       const targetMode = info.targetMode || 'N/D';
       const strategyMode = info.strategyMode || 'N/D';
       const creditiVal = document.getElementById('crediti')?.textContent?.trim() || 'N/D';
       const proiezioneVal = document.getElementById('proiezioneCrediti')?.textContent?.trim() || 'N/D';
       const carteVal = document.getElementById('carteAcquistate')?.textContent?.trim() || '0';
       const tentativiVal = document.getElementById('tentativi')?.value || 'N/D';
-      const truncated = totalLogEvents > allLogRecords.length;
 
       let content = `=================================================================\n`;
       content += `  FC Sniper & Trader - Report Log Sessione\n`;
@@ -300,10 +260,7 @@ export function initLogConsoleControls(getContextInfo = () => ({})) {
       content += `  Modalità: ${String(targetMode).toUpperCase()} | Strategia: ${String(strategyMode).toUpperCase()}\n`;
       content += `  Crediti: ${creditiVal} (Proiezione: ${proiezioneVal}) | Carte Acquistate: ${carteVal} | Tentativi: ${tentativiVal}\n`;
       content += `  Totale Eventi Registrati: ${totalLogEvents}\n`;
-      content += `  Eventi Inclusi nel Report: ${allLogRecords.length} (buffer max ${MAX_LOG_RECORDS})\n`;
-      if (truncated) {
-        content += `  NOTA: Report troncato — i ${totalLogEvents - allLogRecords.length} eventi più vecchi non sono inclusi.\n`;
-      }
+      content += `  Eventi Inclusi nel Report: ${allLogRecords.length}\n`;
       content += `=================================================================\n\n`;
 
       if (allLogRecords.length > 0) {

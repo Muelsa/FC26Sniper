@@ -136,6 +136,15 @@ export async function handleCaptchaDetected(context = "") {
     tipo: 'LOG',
     valore: '[ATTENZIONE - CAPTCHA RILEVATO] Verifica richiesta nella Web App. Bot arrestato.'
   });
+  try {
+    const { sendCycleReport } = await import('../services/telegram-service.js');
+    await sendCycleReport(botState.strategyMode || 'lazy', {
+      acquistate: botState.carteAcquistate,
+      vendute: botState.carteVendute,
+      crediti: botState.crediti,
+      stato: `CAPTCHA 458 rilevato${ctxStr} (Verifica richiesta)`
+    });
+  } catch (_) {}
   await stopBot(`CAPTCHA 458 rilevato${ctxStr}`);
 }
 

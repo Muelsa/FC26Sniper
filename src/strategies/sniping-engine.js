@@ -217,10 +217,12 @@ export async function sendFodderResearchRequest() {
             .filter(a => !isTradeAttempted(a.tradeId))
             .sort((a, b) => (b.expires || 0) - (a.expires || 0));
 
+          let boughtPrice = 0;
           for (const auction of auctions) {
             if (botState.start !== true) break;
             const bought = await sendBuyNowRequest(auction.tradeId, auction.buyNowPrice, auction.itemData?.id);
             if (bought) {
+              boughtPrice = auction.buyNowPrice;
               break;
             }
           }
@@ -228,6 +230,9 @@ export async function sendFodderResearchRequest() {
           if (botState.idCarteAcquistate.length > 0) {
             await sendToTransferList();
             await sellFodder(next.price);
+            const netProfit = Math.floor(next.price * 0.95) - boughtPrice;
+            const profitText = boughtPrice > 0 ? ` (Acquisto: ${boughtPrice} cr | Vendita: ${next.price} cr | Profitto netto: +${netProfit} cr)` : ` (Vendita: ${next.price} cr)`;
+            sendMessageSafe({ tipo: 'LOG', valore: `[FODDER SNIPED] Carta trasferita e messa in vendita a ${next.price} cr${profitText}` });
             botState.crediti = await getCrediti();
             sendMessageSafe({ tipo: 'CREDITI', valore: botState.crediti });
             await sleep(getRandomGaussian(1.5, 0.2, 1.2, 2.0) * 1000);
@@ -359,7 +364,21 @@ export async function sendConsumableResearchRequest() {
             const bought = await sendBuyNowRequest(targetAuction.tradeId, targetAuction.buyNowPrice, targetAuction.itemData?.id);
             if (bought) {
               await sendToTransferList();
-              await sellSingleItem(targetAuction.itemData?.id, target.marketPrice);
+              const listed = await sellSingleItem(targetAuction.itemData?.id, target.marketPrice);
+              const buyPrice = targetAuction.buyNowPrice;
+              const sellPrice = target.marketPrice;
+              const netProfit = Math.floor(sellPrice * 0.95) - buyPrice;
+              if (listed) {
+                sendMessageSafe({
+                  tipo: 'LOG',
+                  valore: `[CONSUMABILE ACQUISTATO] ${target.name} acquistato a ${buyPrice} cr e messo in vendita a ${sellPrice} cr (Profitto netto stimato: +${netProfit} cr)`
+                });
+              } else {
+                sendMessageSafe({
+                  tipo: 'LOG',
+                  valore: `[CONSUMABILE ACQUISTATO] ${target.name} acquistato a ${buyPrice} cr. Spostato in lista trasferimenti (Prezzo target: ${sellPrice} cr, Profitto netto: +${netProfit} cr)`
+                });
+              }
               botState.crediti = await getCrediti();
               sendMessageSafe({ tipo: 'CREDITI', valore: botState.crediti });
               await sleep(getRandomGaussian(1.5, 0.2, 1.2, 2.0) * 1000);

@@ -299,11 +299,7 @@ function initApp() {
         });
       });
     },
-<<<<<<< Updated upstream
-    simulateUpdateAlert: (fakeVersion = '2.8.3', notes = 'Miglioramenti UI Bento Grid e ottimizzazioni performance.') => {
-=======
     simulateUpdateAlert: (fakeVersion = '2.8.5', notes = 'Miglioramenti UI Bento Grid e ottimizzazioni performance.') => {
->>>>>>> Stashed changes
       showUpdateNotification({
         updateAvailable: true,
         currentVersion: getCurrentVersion(),

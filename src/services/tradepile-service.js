@@ -1,6 +1,6 @@
 // Gestione completa della Lista Trasferimenti e della pila Non Assegnati (Fase 3 Refactor)
 import { botState } from '../core/state.js';
-import { sendMessageSafe } from '../core/messenger.js';
+import { sendMessageSafe, triggerPinEvent } from '../core/messenger.js';
 import { reportTelemetry } from '../core/telemetry.js';
 import { handle401Error } from '../ea/error-handlers.js';
 import { DELETE_SOLD_URL, TRADEPILE_URL, UNASSIGNED_URL } from '../ea/endpoints.js';
@@ -24,6 +24,7 @@ export async function getTradepileInfo() {
   });
 
   try {
+    await triggerPinEvent("TRIGGER_PIN_TRADEPILE");
     const res = await fetch(tradepileUrl, { method: "GET", headers });
     if (!res.ok) {
       if (res.status === 401) await handle401Error("Get Tradepile Info");
@@ -186,6 +187,7 @@ export async function checkAndRelistExpiredItems(cachedPrices = {}, preloadedAuc
         "x-ut-sid": botState.xUtSid
       });
 
+      await triggerPinEvent("TRIGGER_PIN_TRADEPILE");
       const res = await fetch(tradepileUrl, { method: "GET", headers });
       if (!res.ok) {
         if (res.status === 401) await handle401Error("Tradepile Check");
@@ -270,6 +272,7 @@ export async function checkAndRelistExpiredItems(cachedPrices = {}, preloadedAuc
         newSellPrice = a.buyNowPrice;
       }
 
+      await triggerPinEvent("TRIGGER_PIN_TRADEPILE");
       const success = await sellSingleItem(itemId, newSellPrice);
       if (Date.now() < botState.listingRestrictedUntil) break;
       if (success) {
@@ -329,6 +332,7 @@ export async function processUnassignedItems(cachedPrices = {}) {
   });
 
   try {
+    await triggerPinEvent("TRIGGER_PIN_UNASSIGNED");
     const res = await fetch(unassignedUrl, { method: "GET", headers });
     if (!res.ok) {
       if (res.status === 401) await handle401Error("Process Unassigned");
@@ -357,6 +361,7 @@ export async function processUnassignedItems(cachedPrices = {}) {
       if (!itemId) continue;
 
       // 1. Sposta l'oggetto da Non Assegnati alla Tradepile
+      await triggerPinEvent("TRIGGER_PIN_UNASSIGNED");
       const moved = await moveSingleItemToTrade(itemId);
       if (moved) {
         movedCount++;
@@ -452,6 +457,7 @@ export async function listUnlistedTradepileItems(cachedPrices = {}) {
   });
 
   try {
+    await triggerPinEvent("TRIGGER_PIN_TRADEPILE");
     const res = await fetch(tradepileUrl, { method: "GET", headers });
     if (!res.ok) {
       if (res.status === 401) await handle401Error("List Unlisted Tradepile");
@@ -518,13 +524,17 @@ export async function listUnlistedTradepileItems(cachedPrices = {}) {
           if (fodderPrice > 0) {
             const tiered = getTieredSellPrice(fodderPrice, null, false);
             sellPrice = tiered.price;
+            await triggerPinEvent("TRIGGER_PIN_TRADEPILE");
             const success = await sellSingleItem(itemId, sellPrice);
             if (Date.now() < botState.listingRestrictedUntil) break;
             if (success) {
               listedCount++;
+              const buyPrice = (item.lastSalePrice && Number(item.lastSalePrice) > 0) ? Number(item.lastSalePrice) : null;
+              const netProfit = buyPrice ? (Math.floor(sellPrice * 0.95) - buyPrice) : null;
+              const profitText = buyPrice ? ` (Acquisto: ${buyPrice.toLocaleString('it-IT')} cr, Vendita: ${sellPrice.toLocaleString('it-IT')} cr, Profitto netto: +${netProfit.toLocaleString('it-IT')} cr)` : '';
               sendMessageSafe({
                 tipo: 'LOG',
-                valore: `[VENDITA RECUPERATA] Calciatore (Rating ${item.rating || 'N/D'}) messo in vendita a ${sellPrice} crediti (Tier ${tiered.tier}: +${tiered.markup}%)`
+                valore: `[VENDITA RECUPERATA] Calciatore (Rating ${item.rating || 'N/D'}) messo in vendita a ${sellPrice} crediti (Tier ${tiered.tier}: +${tiered.markup}%)${profitText}`
               });
               await waitAfterListing(listedCount, unlisted.length);
             } else {
@@ -538,13 +548,17 @@ export async function listUnlistedTradepileItems(cachedPrices = {}) {
         if (floor && floor > 0) {
           const tiered = getTieredSellPrice(floor, null, true);
           sellPrice = tiered.price;
+          await triggerPinEvent("TRIGGER_PIN_TRADEPILE");
           const success = await sellSingleItem(itemId, sellPrice);
           if (Date.now() < botState.listingRestrictedUntil) break;
           if (success) {
             listedCount++;
+            const buyPrice = (item.lastSalePrice && Number(item.lastSalePrice) > 0) ? Number(item.lastSalePrice) : null;
+            const netProfit = buyPrice ? (Math.floor(sellPrice * 0.95) - buyPrice) : null;
+            const profitText = buyPrice ? ` (Acquisto: ${buyPrice.toLocaleString('it-IT')} cr, Vendita: ${sellPrice.toLocaleString('it-IT')} cr, Profitto netto: +${netProfit.toLocaleString('it-IT')} cr)` : '';
             sendMessageSafe({
               tipo: 'LOG',
-              valore: `[VENDITA RECUPERATA] ${name} messa in vendita a ${sellPrice} crediti (Tier ${tiered.tier}: +${tiered.markup}%)`
+              valore: `[VENDITA RECUPERATA] ${name} messa in vendita a ${sellPrice} crediti (Tier ${tiered.tier}: +${tiered.markup}%)${profitText}`
             });
             await waitAfterListing(listedCount, unlisted.length);
           } else {
@@ -555,13 +569,17 @@ export async function listUnlistedTradepileItems(cachedPrices = {}) {
         const { floor, name } = await resolveConsumableFloor(item, cachedPrices);
         if (floor && floor > 0) {
           sellPrice = floor;
+          await triggerPinEvent("TRIGGER_PIN_TRADEPILE");
           const success = await sellSingleItem(itemId, sellPrice);
           if (Date.now() < botState.listingRestrictedUntil) break;
           if (success) {
             listedCount++;
+            const buyPrice = (item.lastSalePrice && Number(item.lastSalePrice) > 0) ? Number(item.lastSalePrice) : null;
+            const netProfit = buyPrice ? (Math.floor(sellPrice * 0.95) - buyPrice) : null;
+            const profitText = buyPrice ? ` (Acquisto: ${buyPrice.toLocaleString('it-IT')} cr, Vendita: ${sellPrice.toLocaleString('it-IT')} cr, Profitto netto: +${netProfit.toLocaleString('it-IT')} cr)` : '';
             sendMessageSafe({
               tipo: 'LOG',
-              valore: `[VENDITA RECUPERATA] ${name} messa in vendita al Lowest BIN live (${sellPrice} crediti)!`
+              valore: `[VENDITA RECUPERATA] ${name} messa in vendita al Lowest BIN live (${sellPrice} crediti)${profitText}!`
             });
             await waitAfterListing(listedCount, unlisted.length);
           } else {
