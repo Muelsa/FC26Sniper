@@ -1,10 +1,8 @@
 // Comunicazione IPC, PIN Telemetria, Offscreen Keep-Alive e Lifecycle Bot
 import { botState } from './state.js';
 
-// Invio messaggi broadcast sicuro: invia sia tramite runtime.sendMessage
-// sia esplicitamente a tutte le schede della dashboard (index.html) tramite tabs.sendMessage.
+// Invio messaggi broadcast sicuro: invia tramite runtime.sendMessage a tutte le finestre dell'estensione (dashboard index.html, popup, offscreen).
 export function sendMessageSafe(message, callback) {
-  // 1. Invio runtime standard (popup, offscreen, contesti interni)
   try {
     const res = chrome.runtime.sendMessage(message, (...args) => {
       void chrome.runtime.lastError;
@@ -12,25 +10,7 @@ export function sendMessageSafe(message, callback) {
     });
     if (res && typeof res.catch === "function") res.catch(() => { });
   } catch (e) {
-    // Nessun ricevitore runtime
-  }
-
-  // 2. Invio esplicito a tutte le schede aperte della Dashboard (index.html)
-  try {
-    if (chrome.tabs && chrome.tabs.query) {
-      chrome.tabs.query({}, (tabs) => {
-        if (chrome.runtime.lastError || !tabs) return;
-        for (const tab of tabs) {
-          if (tab.id && tab.url && tab.url.includes('index.html')) {
-            chrome.tabs.sendMessage(tab.id, message, () => {
-              void chrome.runtime.lastError;
-            });
-          }
-        }
-      });
-    }
-  } catch (e) {
-    // Gestione silenziosa errori tabs
+    // Nessun ricevitore runtime attivo
   }
 }
 

@@ -109,17 +109,8 @@ export function registerWebRequestListeners() {
           }
           if (!postedString) return;
           const pinData = JSON.parse(postedString);
-          console.log("[EA PIN Telemetry Intercettata]", pinData);
-          const now = Date.now();
-          botState.lastWebRequestPinAt = now;
-          if (now - (botState.lastPinAckAt || 0) > 1200) {
-            const evCount = pinData.events?.length || 1;
-            const types = (pinData.events || []).map(e => e.type || e.pgid || e.core?.en).filter(Boolean).slice(0, 3).join(", ");
-            sendMessageSafe({
-              tipo: 'LOG',
-              valore: `[PIN TELEMETRY] Inviati a EA ${evCount} eventi (${types || 'telemetria'}) | stepCounter: ${pinData.stepCounter || pinData.custom?.step || 'OK'}`
-            });
-          }
+          console.log("[EA PIN Telemetry Intercettata HTTP Flush]", pinData);
+          botState.lastWebRequestPinAt = Date.now();
         }
       } catch (err) {
         // Ignora errori di parsing su payload parziali

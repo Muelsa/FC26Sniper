@@ -674,16 +674,16 @@ export async function runLazyTopUpStep(ctx) {
               sellLogMsg = `a ${tiered.price} (Tier ${tiered.tier}: +${tiered.markup}%)`;
             }
             const listed = await sellSingleItem(candItemId, targetSellPrice);
+            const netEst = Math.floor(targetSellPrice * 0.95) - candidate.buyNowPrice;
             if (listed) {
-              const netEst = Math.floor(targetSellPrice * 0.95) - candidate.buyNowPrice;
               sendMessageSafe({
                 tipo: 'LOG',
-                valore: `[${topUpTag}] Acquistata carta (${target.name}) a ${candidate.buyNowPrice} e listata ${sellLogMsg} (Netto stimato: +${netEst} cr) [${topUpBought}/${topUpTarget}]`
+                valore: `[${topUpTag}] Acquistata carta (${target.name}) a ${candidate.buyNowPrice} cr e messa in vendita ${sellLogMsg} (Profitto netto: +${netEst.toLocaleString('it-IT')} cr) [${topUpBought}/${topUpTarget}]`
               });
             } else {
               sendMessageSafe({
                 tipo: 'LOG',
-                valore: `[${topUpTag}] Acquistata carta (${target.name}) a ${candidate.buyNowPrice}. Spostata in lista trasferimenti [${topUpBought}/${topUpTarget}].`
+                valore: `[${topUpTag}] Acquistata carta (${target.name}) a ${candidate.buyNowPrice} cr. Spostata in lista trasferimenti (Prezzo target: ${targetSellPrice} cr, Profitto netto: +${netEst.toLocaleString('it-IT')} cr) [${topUpBought}/${topUpTarget}].`
               });
             }
 
@@ -935,6 +935,7 @@ export async function runLazyTradingEngine() {
   const bidActionTag = isFodder ? "LAZY FODDER BIDDING" : (botState.targetMode === "managerLeague" ? "LAZY CAMPIONATI BIDDING" : (botState.targetMode === "managers" ? "LAZY ALLENATORI BIDDING" : "LAZY BIDDING"));
   const topUpTag = isFodder ? "LAZY FODDER TOP-UP" : (botState.targetMode === "managerLeague" ? "LAZY CAMPIONATI TOP-UP" : (botState.targetMode === "managers" ? "LAZY ALLENATORI TOP-UP" : "LAZY TOP-UP"));
   let cycle = 1;
+  let lastReportCycle = 0;
   let consecutiveSoftBansInSession = 0;
   let sessionActiveStartTime = Date.now();
   let requiresSoftBanProbe = false;
@@ -1103,10 +1104,11 @@ export async function runLazyTradingEngine() {
       await sendCycleReport('lazy', {
         acquistate: botState.carteAcquistate,
         vendute: botState.carteVendute,
-        inVendita: finalPile.active,
+        inVendita: { active: finalPile.active, total: finalPile.total },
         crediti: botState.crediti,
         stato: cycleStatus
       });
+      lastReportCycle = cycle;
 
       const projLogText = proj && proj.activeCount > 0 ? ` | Proiezione crediti posseduti: ${proj.display} cr (valore in vendita: +${proj.sommaVendite.toLocaleString('it-IT')} cr)` : '';
       sendMessageSafe({
@@ -1142,6 +1144,7 @@ export async function runLazyTradingEngine() {
       await sendCycleReport('lazy', {
         acquistate: botState.carteAcquistate,
         vendute: botState.carteVendute,
+        inVendita: ctx?.finalPile ? { active: ctx.finalPile.active, total: ctx.finalPile.total } : null,
         crediti: botState.crediti,
         stato: `Errore ciclo: ${cycleErr?.message || cycleErr}`
       });
@@ -1153,6 +1156,19 @@ export async function runLazyTradingEngine() {
     }
 
     cycle++;
+  }
+
+  if (lastReportCycle < cycle) {
+    try {
+      const finalPile = await getTradepileInfo();
+      await sendCycleReport('lazy', {
+        acquistate: botState.carteAcquistate,
+        vendute: botState.carteVendute,
+        inVendita: { active: finalPile.active, total: finalPile.total },
+        crediti: botState.crediti,
+        stato: "Interrotto manualmente dall'utente"
+      });
+    } catch (_) {}
   }
 
   sendMessageSafe({

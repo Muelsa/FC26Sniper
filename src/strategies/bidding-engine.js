@@ -438,7 +438,7 @@ export async function runMassBiddingEngine() {
       }
 
       const url = buildUrl(minBidBumps[attempt]);
-      triggerPinEvent("TRIGGER_PIN_SEARCH");
+      await triggerPinEvent("TRIGGER_PIN_SEARCH");
 
       const headers = new Headers({
         "Accept": "*/*",

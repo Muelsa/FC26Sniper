@@ -208,14 +208,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const now = Date.now();
     if (message.status === 'ok' && Array.isArray(message.events) && message.events.length > 0) {
       botState.lastPinAckAt = now;
-      if (now - (botState.lastWebRequestPinAt || 0) > 1500) {
-        const evCount = message.events.length;
-        const types = message.events.join(", ");
-        sendMessageSafe({
-          tipo: 'LOG',
-          valore: `[PIN TELEMETRY] Inviati a EA ${evCount} eventi (${types}) | stepCounter: ${message.stepCounter || 'OK'}`
-        });
-      }
+      const evCount = message.events.length;
+      const types = message.events.join(", ");
+      sendMessageSafe({
+        tipo: 'LOG',
+        valore: `[PIN TELEMETRY] Inviati a EA ${evCount} eventi (${types}) | stepCounter: ${message.stepCounter || 'OK'}`
+      });
     } else if (message.status === 'no_pin_service') {
       if (!botState.lastNoPinServiceWarn || now - botState.lastNoPinServiceWarn > 45000) {
         botState.lastNoPinServiceWarn = now;
@@ -232,17 +230,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.tipo === 'TELEGRAM_TEST') {
     (async () => {
       let { personaName } = await getUserProfile();
-
       if (!personaName) {
-        await triggerPinEvent("REQUEST_USER_INFO");
-        for (let i = 0; i < 10; i++) {
-          await sleep(200);
-          const refreshed = await getUserProfile();
-          if (refreshed.personaName) {
-            personaName = refreshed.personaName;
-            break;
-          }
-        }
+        triggerPinEvent("REQUEST_USER_INFO").catch(() => {});
       }
 
       let testText = "✅ <b>FC Sniper Bot</b>: Test di connessione riuscito!\n";
@@ -258,8 +247,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         }
       } catch (_) {}
 
-      testText += "Le notifiche di fine ciclo sono configurate correttamente.";
-      return sendTelegramMessage(testText, message.chatId);
+      testText += "Le notifiche Telegram sono configurate correttamente.";
+      const res = await sendTelegramMessage(testText, message.chatId);
+      if (res && res.success) {
+        sendMessageSafe({
+          tipo: 'LOG',
+          valore: '[TELEGRAM] Messaggio di test inviato con successo alla chat!'
+        });
+      } else {
+        sendMessageSafe({
+          tipo: 'LOG',
+          valore: `[TELEGRAM ERRORE] Test fallito: ${res?.error || 'Verifica il Chat ID o avvia il bot su Telegram'}`
+        });
+      }
+      return res;
     })().then((result) => {
       sendResponse?.(result);
     }).catch((err) => {
@@ -427,6 +428,16 @@ async function handleStartMessage(message) {
       await stopBot("Ciclo ricerche terminato");
     }
   } else {
+    if (botState.strategyMode === "sniping" || botState.strategyMode === "bidding") {
+      try {
+        await sendCycleReport(botState.strategyMode, {
+          acquistate: botState.carteAcquistate,
+          vendute: botState.carteVendute,
+          crediti: botState.crediti,
+          stato: "Interrotto manualmente dall'utente"
+        });
+      } catch (_) {}
+    }
     await clearSoldItem();
     await stopOffscreenDocument();
   }

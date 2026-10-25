@@ -2,6 +2,12 @@
 (function () {
   "use strict";
 
+  // Idempotenza rigorosa: impedisce doppie registrazioni di listener o script in caso di re-iniezione a caldo
+  if (window.__FC_SNIPER_CONTENT_INJECTED__) {
+    return;
+  }
+  window.__FC_SNIPER_CONTENT_INJECTED__ = true;
+
   // --- Protocollo PIN condiviso con fc26.js (lavorazione parallela) ---
   // SW  -> content.js : chrome.tabs.sendMessage { scope:'PIN_BRIDGE', requestId, type, payload }
   // content.js -> page: window.postMessage { origin:'FC_SNIPER_EXTENSION', requestId, type, payload } (targetOrigin = location.origin)
@@ -14,14 +20,18 @@
     "TRIGGER_PIN_BUY_NOW",
     "TRIGGER_PIN_BID",
     "TRIGGER_PIN_WATCHLIST",
+    "TRIGGER_PIN_TRADEPILE",
+    "TRIGGER_PIN_UNASSIGNED",
     "TRIGGER_PIN_SELL",
     "REQUEST_TOKEN_REFRESH",
     "REQUEST_USER_INFO"
   ]);
 
   function injectBridgeScript() {
+    if (document.getElementById("fc-sniper-pin-bridge") || window.__FC_SNIPER_BRIDGE_LOADED__) return;
     try {
       const script = document.createElement("script");
+      script.id = "fc-sniper-pin-bridge";
       script.src = chrome.runtime.getURL("pin-bridge.js");
       script.onload = () => script.remove();
       (document.head || document.documentElement).appendChild(script);
@@ -34,6 +44,8 @@
 
   // Deduplica token consecutivi prima di TOKEN_SYNC (mai loggare token o prefissi)
   let lastToken = null;
+  let lastUserKey = null;
+  const forwardedAcks = new Set();
   let kaTimer = null;
 
   // Messaggi provenienti dal MAIN world (pin-bridge.js)
@@ -72,6 +84,10 @@
 
     if (data.origin === "PIN_BRIDGE_USER") {
       const { personaName, clubName } = data;
+      const userKey = `${personaName || ''}::${clubName || ''}`;
+      if (!personaName && !clubName) return;
+      if (userKey === lastUserKey) return; // deduplica profilo
+      lastUserKey = userKey;
       try {
         chrome.runtime.sendMessage({
           tipo: "USER_SYNC",
@@ -84,6 +100,12 @@
 
     if (data.origin === "PIN_BRIDGE_ACK") {
       if (typeof data.requestId !== "string" || typeof data.status !== "string") return;
+      if (forwardedAcks.has(data.requestId)) return; // deduplica ACK per requestId
+      forwardedAcks.add(data.requestId);
+      if (forwardedAcks.size > 200) {
+        const first = forwardedAcks.values().next().value;
+        forwardedAcks.delete(first);
+      }
       try {
         chrome.runtime.sendMessage({
           tipo: "PIN_BRIDGE_ACK",

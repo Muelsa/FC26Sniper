@@ -257,7 +257,22 @@ function initApp() {
       if (updateProgressContainer) updateProgressContainer.classList.add('d-none');
       if (updateErrorFeedback) {
         updateErrorFeedback.classList.remove('d-none');
-        updateErrorFeedback.textContent = `Errore durante l'aggiornamento: ${err.message || err}`;
+        const rawMsg = err.message || String(err);
+        if (rawMsg.includes('Specified native messaging host not found') || rawMsg.includes('Native host not found')) {
+          updateErrorFeedback.innerHTML = `
+            <div style="font-size: 0.85rem; line-height: 1.4; color: #ff6b6b; margin-top: 6px;">
+              <strong>⚠️ Auto-Updater non ancora abilitato su Windows:</strong><br>
+              Per abilitare gli aggiornamenti automatici futuri, fai semplicemente <strong>doppio clic sul file <code>setup_windows.bat</code></strong> presente nella cartella del bot.<br>
+              <div style="margin-top: 8px;">
+                <a href="${activeReleaseInfo?.zipUrl || '#'}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-info btn-xs" style="text-decoration: none; padding: 4px 10px; font-size: 0.8rem; border-radius: 4px; border: 1px solid #00d2ff; color: #00d2ff; display: inline-block;">
+                  📥 Scarica ZIP manualmente (${activeReleaseInfo?.tag || activeReleaseInfo?.latestVersion || 'Release'})
+                </a>
+              </div>
+            </div>
+          `;
+        } else {
+          updateErrorFeedback.textContent = `Errore durante l'aggiornamento: ${rawMsg}`;
+        }
       }
       confirmUpdateBtn.removeAttribute('disabled');
       cancelUpdateBtn?.removeAttribute('disabled');
@@ -284,7 +299,7 @@ function initApp() {
         });
       });
     },
-    simulateUpdateAlert: (fakeVersion = '2.8.3', notes = 'Miglioramenti UI Bento Grid e ottimizzazioni performance.') => {
+    simulateUpdateAlert: (fakeVersion = '2.8.5', notes = 'Miglioramenti UI Bento Grid e ottimizzazioni performance.') => {
       showUpdateNotification({
         updateAvailable: true,
         currentVersion: getCurrentVersion(),

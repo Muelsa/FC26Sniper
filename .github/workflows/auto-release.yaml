@@ -1,0 +1,45 @@
+name: Auto Release on Merge from Beta
+
+on:
+  pull_request:
+    types:
+      - closed
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  create-release:
+    if: github.event.pull_request.merged == true && github.head_ref == 'beta'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del codice
+        uses: actions/checkout@v4
+
+      - name: Estrai la versione dal manifest.json
+        id: generate_tag
+        run: |
+          # Legge il campo "version" dal file manifest.json
+          VERSION=$(jq -r '.version' manifest.json)
+          
+          TAG_NAME="$VERSION"
+          
+          echo "Versione trovata: $TAG_NAME"
+          echo "tag=$TAG_NAME" >> $GITHUB_OUTPUT
+
+      - name: Crea la GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.generate_tag.outputs.tag }}
+          name: "Release ${{ steps.generate_tag.outputs.tag }}"
+          body: |
+            Release automatica generata a seguito del merge dal branch `beta` al branch `main`.
+            - **Pull Request:** #${{ github.event.pull_request.number }}
+            - **Merge effettuato da:** ${{ github.actor }}
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

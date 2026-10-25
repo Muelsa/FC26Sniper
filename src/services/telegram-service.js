@@ -2,6 +2,7 @@
 // (lazy, sniping o bidding) con carte acquistate, carte vendute e crediti posseduti.
 
 import { getTelegramChatId, getUserProfile, getTradepileStatus } from '../core/storage.js';
+import { sendMessageSafe } from '../core/messenger.js';
 
 // Frammenti del bot token predefinito (reidratati a runtime per non esporre il pattern regex a scanner di repository come GitGuardian)
 const _T_PARTS = [
@@ -28,13 +29,19 @@ let lastSendTimestamp = 0;
  */
 export async function sendTelegramMessage(text, targetChatId = null) {
   try {
-    const chatId = (targetChatId || await getTelegramChatId()).trim();
+    const rawChatId = (targetChatId !== null && targetChatId !== undefined && String(targetChatId).trim() !== '')
+      ? targetChatId
+      : await getTelegramChatId();
+    const chatId = String(rawChatId || '').trim();
+
     if (!chatId) {
-      return { success: false, error: 'Chat ID non inserito' };
+      console.warn('[Telegram] Nessun Chat ID configurato. Salto invio messaggio.');
+      return { success: false, error: 'Chat ID non inserito. Configuralo nelle impostazioni Telegram della dashboard.' };
     }
 
     const botToken = getBotToken();
     if (!botToken || botToken.length < 15) {
+      console.warn('[Telegram] Token Bot Telegram non valido.');
       return { success: false, error: 'Token Bot Telegram non configurato' };
     }
 
@@ -67,19 +74,28 @@ export async function sendTelegramMessage(text, targetChatId = null) {
         const parsed = JSON.parse(body);
         if (parsed.description) desc = parsed.description;
       } catch (_) {}
+      sendMessageSafe({
+        tipo: 'LOG',
+        valore: `[TELEGRAM ERRORE] Invio fallito (${response.status}): ${desc}`
+      });
       return { success: false, error: desc };
     }
+    console.log('[Telegram] Messaggio inviato con successo!');
     return { success: true };
   } catch (e) {
     console.warn('[Telegram] Errore invio messaggio:', e);
+    sendMessageSafe({
+      tipo: 'LOG',
+      valore: `[TELEGRAM ERRORE] Errore di connessione: ${e?.message || e}`
+    });
     return { success: false, error: e?.message || 'Errore di connessione' };
   }
 }
 
 /**
- * Report di fine ciclo: carte acquistate, carte vendute, carte in vendita, crediti posseduti e stato operativo.
+ * Report di fine ciclo: carte acquistate, carte vendute, carte in vendita e in lista trasferimenti, crediti posseduti e stato operativo.
  * @param {string} strategy - "lazy" | "sniping" | "bidding"
- * @param {{acquistate: number, vendute: number|null, inVendita?: number|null, crediti: number, stato?: string}} data
+ * @param {{acquistate: number, vendute: number|null, inVendita?: number|string|{active?: number, total?: number}|null, crediti: number, stato?: string}} data
  */
 export async function sendCycleReport(strategy, { acquistate, vendute, inVendita, crediti, stato = "OK" }) {
   const label = strategy === 'lazy' ? 'Lazy Trading' : strategy === 'bidding' ? 'Bidding' : 'Sniping';
@@ -107,23 +123,59 @@ export async function sendCycleReport(strategy, { acquistate, vendute, inVendita
     text += `💰 Carte vendute: <b>${vendute}</b>\n`;
   }
 
-  // Carte attualmente in vendita (recupera il valore già presente sulla UI / storage se non passato)
-  let inVenditaDisplay = inVendita;
-  if (inVenditaDisplay === null || inVenditaDisplay === undefined) {
+  // Carte attualmente in vendita e totale in lista trasferimenti (Tradepile)
+  let inVenditaDisplay = null;
+  if (inVendita && typeof inVendita === 'object') {
+    const act = inVendita.active ?? inVendita.attive ?? 0;
+    const tot = inVendita.total ?? inVendita.totali;
+    if (tot !== undefined && tot !== null) {
+      inVenditaDisplay = `${act} attive (${tot} in Tradepile)`;
+    } else {
+      inVenditaDisplay = `${act}`;
+    }
+  } else if (typeof inVendita === 'string' && inVendita.trim() !== '') {
+    inVenditaDisplay = inVendita.trim().replace(/\s*tot\)/i, ' in Tradepile)');
+  } else if (typeof inVendita === 'number') {
     try {
-      const { tradepileCount, tradepileActive } = await getTradepileStatus();
+      const { tradepileTotal } = await getTradepileStatus();
+      if (tradepileTotal !== null && tradepileTotal !== undefined) {
+        inVenditaDisplay = `${inVendita} attive (${tradepileTotal} in Tradepile)`;
+      } else {
+        inVenditaDisplay = `${inVendita}`;
+      }
+    } catch (_) {
+      inVenditaDisplay = `${inVendita}`;
+    }
+  }
+
+  // Fallback se inVendita non è stato fornito o non formattato
+  if (!inVenditaDisplay) {
+    try {
+      const { tradepileCount, tradepileActive, tradepileTotal } = await getTradepileStatus();
       if (tradepileCount && tradepileCount !== '-') {
-        inVenditaDisplay = tradepileCount;
+        inVenditaDisplay = tradepileCount.replace(/\s*tot\)/i, ' in Tradepile)');
       } else if (tradepileActive !== null && tradepileActive !== undefined) {
-        inVenditaDisplay = tradepileActive;
+        if (tradepileTotal !== null && tradepileTotal !== undefined) {
+          inVenditaDisplay = `${tradepileActive} attive (${tradepileTotal} in Tradepile)`;
+        } else {
+          inVenditaDisplay = `${tradepileActive}`;
+        }
       }
     } catch (_) {}
   }
+
   if (inVenditaDisplay !== null && inVenditaDisplay !== undefined) {
     text += `📦 In vendita: <b>${inVenditaDisplay}</b>\n`;
   }
 
   text += `💳 Crediti posseduti: <b>${typeof crediti === 'number' ? crediti.toLocaleString('it-IT') : crediti}</b>`;
 
-  return sendTelegramMessage(text);
+  const res = await sendTelegramMessage(text);
+  if (res && res.success) {
+    sendMessageSafe({
+      tipo: 'LOG',
+      valore: `[TELEGRAM] Report di fine ciclo inviato con successo alla chat!`
+    });
+  }
+  return res;
 }

@@ -197,18 +197,39 @@
   const jitter = (min, max) => Math.floor(min + Math.random() * (max - min));
 
   let currentView = "";
-  let currentContext = ""; // "market" | "targets" | "tradepile" | "hub" | ""
+  let currentContext = ""; // "market" | "targets" | "tradepile" | "unassigned" | "hub" | ""
   let lastSearchPinAt = 0;
+  let lastWatchlistPinAt = 0;
+  let lastTradepilePinAt = 0;
+  let lastUnassignedPinAt = 0;
+  let lastSellPinAt = 0;
+  let lastBidBuyPinAt = 0;
+  let lastPageViewAt = 0;
+  let lastPageViewPgid = "";
   let lastActivityAt = 0;
   let localStepCounter = 0;
+  const processedRequestIds = new Set();
 
-  function emitPageView(pgid) {
+  const sleepMs = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  function emitPageView(pgid, force = false) {
     const pin = getPinService();
     if (!pin) return false;
+    const now = Date.now();
+    // Coerenza macchina a stati EA: non inviare mai due page_view consecutive con lo stesso identico pgid
+    // (nella Web App reale un evento page_view scatta solo al cambio effettivo di schermata/vista)
+    if (!force && currentView === pgid) {
+      return false;
+    }
+    if (!force && lastPageViewPgid === pgid && (now - lastPageViewAt < 500)) {
+      return false;
+    }
     try {
       pin.sendData("page_view", { type: "menu", pgid });
       currentView = pgid;
-      lastActivityAt = Date.now();
+      lastPageViewPgid = pgid;
+      lastPageViewAt = Date.now();
+      lastActivityAt = lastPageViewAt;
       localStepCounter++;
       return true;
     } catch (e) {
@@ -217,75 +238,163 @@
     }
   }
 
+  async function emitPageViewSequence(pgids) {
+    const sentEvents = [];
+    for (let i = 0; i < pgids.length; i++) {
+      const pgid = pgids[i];
+      if (!pgid || currentView === pgid) continue;
+      if (sentEvents.length > 0) {
+        // Micro-delay umano tra transizioni consecutive (evita timestamp identici al ms nel batch PIN)
+        await sleepMs(jitter(35, 75));
+      }
+      if (emitPageView(pgid)) {
+        sentEvents.push(pgid);
+      }
+    }
+    return sentEvents;
+  }
+
   function getPinStepCounter() {
     const pin = getPinService();
-    if (pin && (pin.stepCounter !== undefined || pin._stepCounter !== undefined || pin.custom?.step !== undefined)) {
-      return pin.stepCounter ?? pin._stepCounter ?? pin.custom?.step;
+    if (pin) {
+      const nativeStep = pin.count ?? pin.step ?? pin.stepCounter ?? pin._stepCounter ?? pin.custom?.step;
+      if (nativeStep !== undefined && nativeStep !== null) {
+        return nativeStep;
+      }
     }
     return localStepCounter || "OK";
   }
 
-  function processPinEvent(type) {
-    const sentEvents = [];
+  async function processPinEvent(type) {
+    const pin = getPinService();
+    if (!pin && type !== "REQUEST_TOKEN_REFRESH" && type !== "REQUEST_USER_INFO") {
+      return { status: "no_pin_service", events: [], stepCounter: getPinStepCounter() };
+    }
+
     switch (type) {
       case "TRIGGER_PIN_SEARCH": {
         const now = Date.now();
-        if (now - lastSearchPinAt < 350) {
+        if (now - lastSearchPinAt < 300) {
           return { status: "throttled", events: [], stepCounter: getPinStepCounter() };
         }
         lastSearchPinAt = now;
 
+        const seq = [];
         // Se non siamo già nel flusso di ricerca mercato, transitiamo da Hub - Transfers
         if (currentContext !== "market" && currentView !== "Hub - Transfers") {
-          if (emitPageView("Hub - Transfers")) sentEvents.push("Hub - Transfers");
+          seq.push("Hub - Transfers");
         }
         // Passaggio dalla schermata filtri di ricerca (esattamente come Back -> Search nella Web App)
         if (currentView !== "Transfer Market Search") {
-          if (emitPageView("Transfer Market Search")) sentEvents.push("Transfer Market Search");
+          seq.push("Transfer Market Search");
         }
         // Apertura risultati di ricerca
-        if (emitPageView("Transfer Market Results - List View")) {
-          sentEvents.push("Transfer Market Results - List View");
-          currentContext = "market";
-        }
+        seq.push("Transfer Market Results - List View");
+
+        const sentEvents = await emitPageViewSequence(seq);
+        currentContext = "market";
         return {
-          status: sentEvents.length > 0 ? "ok" : "no_pin_service",
+          status: sentEvents.length > 0 ? "ok" : "already_on_view",
           events: sentEvents,
           stepCounter: getPinStepCounter()
         };
       }
 
       case "TRIGGER_PIN_WATCHLIST": {
+        const now = Date.now();
+        if (now - lastWatchlistPinAt < 350) {
+          return { status: "throttled", events: [], stepCounter: getPinStepCounter() };
+        }
+        lastWatchlistPinAt = now;
+
+        const seq = [];
         if (currentContext !== "targets" && currentView !== "Hub - Transfers") {
-          if (emitPageView("Hub - Transfers")) sentEvents.push("Hub - Transfers");
+          seq.push("Hub - Transfers");
         }
-        if (emitPageView("Transfer Targets - List View")) {
-          sentEvents.push("Transfer Targets - List View");
-          currentContext = "targets";
+        if (currentView !== "Transfer Targets - List View") {
+          seq.push("Transfer Targets - List View");
         }
+
+        const sentEvents = await emitPageViewSequence(seq);
+        currentContext = "targets";
         return {
-          status: sentEvents.length > 0 ? "ok" : "no_pin_service",
+          status: sentEvents.length > 0 ? "ok" : "already_on_view",
+          events: sentEvents,
+          stepCounter: getPinStepCounter()
+        };
+      }
+
+      case "TRIGGER_PIN_TRADEPILE": {
+        const now = Date.now();
+        if (now - lastTradepilePinAt < 350) {
+          return { status: "throttled", events: [], stepCounter: getPinStepCounter() };
+        }
+        lastTradepilePinAt = now;
+
+        const seq = [];
+        if (currentContext !== "tradepile" && currentView !== "Hub - Transfers") {
+          seq.push("Hub - Transfers");
+        }
+        if (currentView !== "Transfer List - List View") {
+          seq.push("Transfer List - List View");
+        }
+
+        const sentEvents = await emitPageViewSequence(seq);
+        currentContext = "tradepile";
+        return {
+          status: sentEvents.length > 0 ? "ok" : "already_on_view",
+          events: sentEvents,
+          stepCounter: getPinStepCounter()
+        };
+      }
+
+      case "TRIGGER_PIN_UNASSIGNED": {
+        const now = Date.now();
+        if (now - lastUnassignedPinAt < 350) {
+          return { status: "throttled", events: [], stepCounter: getPinStepCounter() };
+        }
+        lastUnassignedPinAt = now;
+
+        const seq = [];
+        if (currentContext !== "unassigned" && currentView !== "Hub - Transfers") {
+          seq.push("Hub - Transfers");
+        }
+        if (currentView !== "Unassigned Items - List View") {
+          seq.push("Unassigned Items - List View");
+        }
+
+        const sentEvents = await emitPageViewSequence(seq);
+        currentContext = "unassigned";
+        return {
+          status: sentEvents.length > 0 ? "ok" : "already_on_view",
           events: sentEvents,
           stepCounter: getPinStepCounter()
         };
       }
 
       case "TRIGGER_PIN_SELL": {
-        // Se non siamo già su una lista/dettaglio valido (mercato, watchlist o tradepile), apriamo la Transfer List
+        const now = Date.now();
+        if (now - lastSellPinAt < 250) {
+          return { status: "throttled", events: [], stepCounter: getPinStepCounter() };
+        }
+        lastSellPinAt = now;
+
+        const seq = [];
+        // Se non siamo già su una lista/dettaglio valido (mercato, watchlist, tradepile o unassigned), apriamo la Transfer List
         if (!currentContext) {
           if (currentView !== "Hub - Transfers") {
-            if (emitPageView("Hub - Transfers")) sentEvents.push("Hub - Transfers");
+            seq.push("Hub - Transfers");
           }
-          if (emitPageView("Transfer List - List View")) {
-            sentEvents.push("Transfer List - List View");
-            currentContext = "tradepile";
-          }
+          seq.push("Transfer List - List View");
+          currentContext = "tradepile";
         }
-        if (emitPageView("Item - Detail View")) {
-          sentEvents.push("Item - Detail View");
+        if (currentView !== "Item - Detail View") {
+          seq.push("Item - Detail View");
         }
+
+        const sentEvents = await emitPageViewSequence(seq);
         return {
-          status: sentEvents.length > 0 ? "ok" : "no_pin_service",
+          status: sentEvents.length > 0 ? "ok" : "already_on_view",
           events: sentEvents,
           stepCounter: getPinStepCounter()
         };
@@ -293,11 +402,27 @@
 
       case "TRIGGER_PIN_BUY_NOW":
       case "TRIGGER_PIN_BID": {
-        if (emitPageView("Item - Detail View")) {
-          sentEvents.push("Item - Detail View");
+        const now = Date.now();
+        if (now - lastBidBuyPinAt < 250) {
+          return { status: "throttled", events: [], stepCounter: getPinStepCounter() };
         }
+        lastBidBuyPinAt = now;
+
+        const seq = [];
+        if (!currentContext) {
+          if (currentView !== "Hub - Transfers") {
+            seq.push("Hub - Transfers");
+          }
+          seq.push("Transfer Market Results - List View");
+          currentContext = "market";
+        }
+        if (currentView !== "Item - Detail View") {
+          seq.push("Item - Detail View");
+        }
+
+        const sentEvents = await emitPageViewSequence(seq);
         return {
-          status: sentEvents.length > 0 ? "ok" : "no_pin_service",
+          status: sentEvents.length > 0 ? "ok" : "already_on_view",
           events: sentEvents,
           stepCounter: getPinStepCounter()
         };
@@ -317,14 +442,14 @@
     }
   }
 
-  function drainQueue() {
+  async function drainQueue() {
     if (pinBusy) return;
     pinBusy = true;
     while (pinQueue.length > 0) {
       const job = pinQueue.shift();
       let res = { status: "ok", detail: "", events: [], stepCounter: "OK" };
       try {
-        const out = processPinEvent(job.type, job.payload);
+        const out = await processPinEvent(job.type, job.payload);
         if (out) res = Object.assign(res, out);
       } catch (e) {
         res.status = "error";
@@ -336,6 +461,16 @@
   }
 
   function enqueuePinEvent(requestId, type, payload) {
+    if (typeof requestId === "string" && requestId) {
+      if (processedRequestIds.has(requestId)) {
+        return; // Già ricevuto ed elaborato, non eseguire due volte
+      }
+      processedRequestIds.add(requestId);
+      if (processedRequestIds.size > 300) {
+        const first = processedRequestIds.values().next().value;
+        processedRequestIds.delete(first);
+      }
+    }
     if (pinQueue.length >= PIN_QUEUE_MAX) {
       ack(requestId, "dropped_queue_full", "", [], "OK");
       return;
@@ -398,6 +533,8 @@
     "TRIGGER_PIN_BUY_NOW",
     "TRIGGER_PIN_BID",
     "TRIGGER_PIN_WATCHLIST",
+    "TRIGGER_PIN_TRADEPILE",
+    "TRIGGER_PIN_UNASSIGNED",
     "TRIGGER_PIN_SELL",
     "REQUEST_TOKEN_REFRESH",
     "REQUEST_USER_INFO"
@@ -420,9 +557,11 @@
 
   window.addEventListener("message", onWindowMessage);
 
+  window.__FC_SNIPER_BRIDGE_LOADED__ = true;
   window.__FC_SNIPER_BRIDGE_CLEANUP__ = () => {
     try { clearInterval(timer); } catch (_) {}
     try { clearInterval(keepAliveTimer); } catch (_) {}
     try { window.removeEventListener("message", onWindowMessage); } catch (_) {}
+    delete window.__FC_SNIPER_BRIDGE_LOADED__;
   };
 })();

@@ -71,14 +71,38 @@ export async function reconcileWatchlistOnStartup() {
         if (bidState === "highest") {
           recoveredWon++;
           const { sellPrice, tierTag } = await resolveItemSellPrice(item, tracked);
+          const buyPrice = item.currentBid || tracked?.bidAmount || 'N/D';
 
           await moveSingleItemToTrade(itemId);
           await sleep(getRandomGaussian(1.0, 0.2, 0.8, 1.3) * 1000);
+
+          const numBuyPrice = typeof buyPrice === 'number' ? buyPrice : Number(buyPrice);
+          const numSellPrice = typeof sellPrice === 'number' ? sellPrice : Number(sellPrice);
+          const netProfit = (!isNaN(numBuyPrice) && !isNaN(numSellPrice) && numSellPrice > 0)
+            ? (Math.floor(numSellPrice * 0.95) - numBuyPrice)
+            : null;
+          const profitText = netProfit !== null ? ` (Profitto netto: +${netProfit.toLocaleString('it-IT')} cr)` : '';
+
           if (sellPrice > 0) {
             console.log(`[FC Sniper Reconciliation] Rilevata carta vinta (Trade: ${tradeId}). Sposto a lista trasferimenti a ${sellPrice}${tierTag}...`);
-            await sellSingleItem(itemId, sellPrice);
+            const listed = await sellSingleItem(itemId, sellPrice);
+            if (listed) {
+              sendMessageSafe({
+                tipo: 'LOG',
+                valore: `[ASTA VINTA RECUPERATA] Carta vinta a ${buyPrice} cr! Messa in vendita a ${sellPrice} cr${tierTag}${profitText}.`
+              });
+            } else {
+              sendMessageSafe({
+                tipo: 'LOG',
+                valore: `[ASTA VINTA RECUPERATA] Carta vinta a ${buyPrice} cr! Spostata in lista trasferimenti (Prezzo target: ${sellPrice} cr${profitText}).`
+              });
+            }
           } else {
             console.warn(`[FC Sniper Reconciliation] Rilevata carta vinta (Trade: ${tradeId}), ma prezzo sconosciuto. Spostata a tradepile senza listare.`);
+            sendMessageSafe({
+              tipo: 'LOG',
+              valore: `[ASTA VINTA RECUPERATA] Carta vinta a ${buyPrice} cr! Spostata in lista trasferimenti.`
+            });
           }
           await removeStoredPendingBid(tradeId);
           delete storedBids[String(tradeId)];
@@ -209,12 +233,19 @@ export async function resolveWatchlist() {
           await sleep(getRandomGaussian(1.0, 0.2, 0.8, 1.3) * 1000);
 
           const itemDisplayName = getItemDisplayName(item, tracked);
+          const numBuyPrice = typeof buyPrice === 'number' ? buyPrice : Number(buyPrice);
+          const numSellPrice = typeof sellPrice === 'number' ? sellPrice : Number(sellPrice);
+          const netProfit = (!isNaN(numBuyPrice) && !isNaN(numSellPrice) && numSellPrice > 0)
+            ? (Math.floor(numSellPrice * 0.95) - numBuyPrice)
+            : null;
+          const profitText = netProfit !== null ? ` (Profitto netto: +${netProfit.toLocaleString('it-IT')} cr)` : '';
+
           if (sellPrice && sellPrice > 0) {
             const listed = await sellSingleItem(itemId, sellPrice);
             if (listed) {
-              sendMessageSafe({ tipo: 'LOG', valore: `[ASTA VINTA] ${itemDisplayName} vinta a ${buyPrice} cr! Messa in vendita a ${sellPrice} cr${tierTag}.` });
+              sendMessageSafe({ tipo: 'LOG', valore: `[ASTA VINTA] ${itemDisplayName} vinta a ${buyPrice} cr! Messa in vendita a ${sellPrice} cr${tierTag}${profitText}.` });
             } else {
-              sendMessageSafe({ tipo: 'LOG', valore: `[ASTA VINTA] ${itemDisplayName} vinta a ${buyPrice} cr! Spostata in lista trasferimenti.` });
+              sendMessageSafe({ tipo: 'LOG', valore: `[ASTA VINTA] ${itemDisplayName} vinta a ${buyPrice} cr! Spostata in lista trasferimenti (Prezzo target: ${sellPrice} cr${profitText}).` });
             }
           } else {
             sendMessageSafe({ tipo: 'LOG', valore: `[ASTA VINTA] ${itemDisplayName} vinta a ${buyPrice} cr! Spostata in lista trasferimenti.` });
@@ -459,17 +490,31 @@ export async function checkAndProcessWatchlistForLazy(cyclePrices = {}) {
           const moved = await moveSingleItemToTrade(itemId);
           await sleep(getRandomGaussian(1.0, 0.2, 0.8, 1.4) * 1000);
 
+          const numBuyPrice = typeof buyPrice === 'number' ? buyPrice : Number(buyPrice);
+          const numSellPrice = typeof sellPrice === 'number' ? sellPrice : Number(sellPrice);
+          const netProfit = (!isNaN(numBuyPrice) && !isNaN(numSellPrice) && numSellPrice > 0)
+            ? (Math.floor(numSellPrice * 0.95) - numBuyPrice)
+            : null;
+          const profitText = netProfit !== null ? ` (Profitto netto: +${netProfit.toLocaleString('it-IT')} cr)` : '';
+
           if (moved && sellPrice && sellPrice > 0) {
-            await sellSingleItem(itemId, sellPrice);
+            const listed = await sellSingleItem(itemId, sellPrice);
             await sleep(getRandomGaussian(1.0, 0.2, 0.8, 1.4) * 1000);
             recoveredWon++;
             botState.carteAcquistate += 1;
             sendMessageSafe({ tipo: 'CARTA_ACQUISTATA', valore: botState.carteAcquistate });
             try { chrome.storage.local.set({ carteAcquistate: botState.carteAcquistate }); } catch (_) { }
-            sendMessageSafe({
-              tipo: 'LOG',
-              valore: `[ASTA VINTA RISCATTATA] Asta vinta a ${buyPrice} crediti! Spostata in Tradepile e messa in vendita a ${sellPrice}${tierTag}.`
-            });
+            if (listed) {
+              sendMessageSafe({
+                tipo: 'LOG',
+                valore: `[ASTA VINTA RISCATTATA] Asta vinta a ${buyPrice} cr! Spostata in Tradepile e messa in vendita a ${sellPrice} cr${tierTag}${profitText}.`
+              });
+            } else {
+              sendMessageSafe({
+                tipo: 'LOG',
+                valore: `[ASTA VINTA RISCATTATA] Asta vinta a ${buyPrice} cr! Spostata in Tradepile (Prezzo target: ${sellPrice} cr${profitText}).`
+              });
+            }
           }
 
           await removeStoredPendingBid(tradeId);
