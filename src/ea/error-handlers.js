@@ -12,6 +12,35 @@ export function setPostPauseMaintenance(fn) {
   defaultPostPauseMaintenance = fn;
 }
 
+// Ricarica la scheda della Web App EA e (opzionale) attende un nuovo X-UT-SID diverso da previousToken.
+// Usata dal recupero automatico 401 e dal pulsante manuale "Riavvia Web App" della dashboard.
+// Ritorna { found: boolean, tokenSynced: boolean }.
+export async function reloadWebAppTab({ previousToken = botState.xUtSid, waitForToken = true, maxWaitSeconds = 35 } = {}) {
+  try {
+    const tabs = await chrome.tabs.query({});
+    // Reload limitato alla sola Web App (non tutte le tab ea.com)
+    const eaTabs = (tabs || []).filter(t => t.url && t.url.includes("ea-sports-fc/ultimate-team/web-app"));
+    if (eaTabs.length === 0) return { found: false, tokenSynced: false };
+
+    for (const tab of eaTabs) {
+      chrome.tabs.reload(tab.id);
+    }
+    if (!waitForToken) return { found: true, tokenSynced: false };
+
+    // Attesa per l'avvio della Web App e l'intercettazione del nuovo token (polling con jitter)
+    for (let i = 0; i < maxWaitSeconds; i++) {
+      await sleep(getRandomGaussian(1.0, 0.15, 0.8, 1.3) * 1000);
+      if (botState.xUtSid && botState.xUtSid !== previousToken) {
+        return { found: true, tokenSynced: true };
+      }
+    }
+    return { found: true, tokenSynced: false };
+  } catch (reloadErr) {
+    console.warn("[FC Sniper] Errore durante reload Web App:", reloadErr);
+    return { found: false, tokenSynced: false, error: reloadErr?.message || String(reloadErr) };
+  }
+}
+
 // Gestione centralizzata errore 401 (Sessione scaduta / Unauthorized - con tentativo di recupero token)
 export async function handle401Error(context = "") {
   if (recovery401Promise) return recovery401Promise;
@@ -46,33 +75,18 @@ export async function doRecover401(context = "") {
   // 2. Se a caldo non si rinnova (sessione JWT Web App scaduta oltre 2.5-3 ore),
   // tentiamo il reload automatico della scheda Web App: grazie ai cookie di sessione EA (SSO/remid),
   // la Web App si riavvia autenticata e genera immediatamente un nuovo X-UT-SID valido!
-  try {
-    const tabs = await chrome.tabs.query({});
-    // Reload limitato alla sola Web App (non tutte le tab ea.com)
-    const eaTabs = (tabs || []).filter(t => t.url && t.url.includes("ea-sports-fc/ultimate-team/web-app"));
-    if (eaTabs.length > 0) {
-      sendMessageSafe({
-        tipo: 'LOG',
-        valore: `[AVVISO 401] Token non rinnovabile a caldo. Ricarico la scheda Web App per rigenerare la sessione via SSO EA...`
-      });
-      for (const tab of eaTabs) {
-        chrome.tabs.reload(tab.id);
-      }
-      // Attesa fino a 35 secondi per l'avvio della Web App e l'intercettazione del nuovo token (polling con jitter)
-      for (let i = 0; i < 35; i++) {
-        await sleep(getRandomGaussian(1.0, 0.15, 0.8, 1.3) * 1000);
-        if (botState.xUtSid && botState.xUtSid !== currentToken) {
-          botState.consecutive401Errors = 0;
-          sendMessageSafe({
-            tipo: 'LOG',
-            valore: `[RECUPERO 401 RIUSCITO] Web App ricaricata e nuova sessione catturata (${botState.xUtSid.substring(0, 10)}...). Bot ripristinato!`
-          });
-          return true;
-        }
-      }
-    }
-  } catch (reloadErr) {
-    console.warn("[FC Sniper 401] Errore durante reload Web App:", reloadErr);
+  sendMessageSafe({
+    tipo: 'LOG',
+    valore: `[AVVISO 401] Token non rinnovabile a caldo. Ricarico la scheda Web App per rigenerare la sessione via SSO EA...`
+  });
+  const reloadResult = await reloadWebAppTab({ previousToken: currentToken });
+  if (reloadResult.tokenSynced) {
+    botState.consecutive401Errors = 0;
+    sendMessageSafe({
+      tipo: 'LOG',
+      valore: `[RECUPERO 401 RIUSCITO] Web App ricaricata e nuova sessione catturata (${botState.xUtSid.substring(0, 10)}...). Bot ripristinato!`
+    });
+    return true;
   }
 
   // Se il token è ancora lo stesso o la sessione EA è definitivamente chiusa:

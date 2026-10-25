@@ -141,3 +141,39 @@ export async function removeStoredPendingBid(tradeId) {
   delete bids[String(tradeId)];
   await chrome.storage.local.set({ pendingBids: bids });
 }
+
+// Svuota tutte le cache dei prezzi: al successivo avvio il bot ricalcola i prezzi dal mercato live.
+// Non tocca attemptedTradeIds (anti-duplicato aste) né il tracciamento delle offerte pendenti.
+export async function clearAllPriceCaches() {
+  const cachedCount = consumableBinCache.size;
+  const fodderCount = botState.listaFodder.length;
+
+  consumableBinCache.clear();
+  botState.listaFodder = [];
+  botState.indexFodder = 0;
+
+  for (const data of activeBids.values()) {
+    if (data && typeof data === 'object') {
+      delete data.basePrice;
+      delete data.sellPrice;
+    }
+  }
+
+  let pendingCount = 0;
+  try {
+    const bids = await getStoredPendingBids();
+    for (const tid of Object.keys(bids)) {
+      const entry = bids[tid];
+      if (entry && typeof entry === 'object' && (entry.basePrice !== undefined || entry.sellPrice !== undefined)) {
+        delete entry.basePrice;
+        delete entry.sellPrice;
+        pendingCount++;
+      }
+    }
+    if (pendingCount > 0) await chrome.storage.local.set({ pendingBids: bids });
+  } catch (e) {
+    console.warn('[FC Sniper Cache] Errore pulizia prezzi offerte pendenti:', e);
+  }
+
+  return { cachedCount, fodderCount, pendingCount };
+}

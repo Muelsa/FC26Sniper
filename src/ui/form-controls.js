@@ -32,6 +32,9 @@ export function initDomReferences() {
   DOM.telegramChatIdInput = document.getElementById('telegramChatIdInput');
   DOM.testTelegramBtn = document.getElementById('testTelegramBtn');
   DOM.telegramTestFeedback = document.getElementById('telegramTestFeedback');
+  DOM.clearCacheBtn = document.getElementById('clearCacheBtn');
+  DOM.reloadWebAppBtn = document.getElementById('reloadWebAppBtn');
+  DOM.settingsActionFeedback = document.getElementById('settingsActionFeedback');
   DOM.modeLazy = document.getElementById('modeLazy');
   DOM.labelModeLazy = document.getElementById('labelModeLazy') || document.querySelector('label[for="modeLazy"]');
   DOM.snipeSpecificContainer = document.getElementById('snipeSpecificContainer');
@@ -346,6 +349,7 @@ export const setControlsDisabled = (disabled) => {
   if (DOM.lazyMarkupPercentInput) disabled ? DOM.lazyMarkupPercentInput.setAttribute('disabled', 'true') : DOM.lazyMarkupPercentInput.removeAttribute('disabled');
   if (DOM.lazySleepMinutesInput) disabled ? DOM.lazySleepMinutesInput.setAttribute('disabled', 'true') : DOM.lazySleepMinutesInput.removeAttribute('disabled');
   if (DOM.managerNationSelect) disabled ? DOM.managerNationSelect.setAttribute('disabled', 'true') : DOM.managerNationSelect.removeAttribute('disabled');
+  if (DOM.clearCacheBtn) disabled ? DOM.clearCacheBtn.setAttribute('disabled', 'true') : DOM.clearCacheBtn.removeAttribute('disabled');
 };
 
 let pendingSettings = {};
@@ -576,6 +580,53 @@ export function initFormControls() {
     };
     DOM.telegramChatIdInput.addEventListener('input', saveChatId);
     DOM.telegramChatIdInput.addEventListener('change', saveChatId);
+  }
+
+  const showSettingsFeedback = (cls, text) => {
+    if (!DOM.settingsActionFeedback) return;
+    DOM.settingsActionFeedback.className = `form-text ${cls}`;
+    DOM.settingsActionFeedback.textContent = text;
+  };
+
+  if (DOM.clearCacheBtn) {
+    DOM.clearCacheBtn.addEventListener('click', () => {
+      DOM.clearCacheBtn.setAttribute('disabled', 'true');
+      showSettingsFeedback('text-muted', 'Svuotamento cache prezzi in corso...');
+      chrome.runtime.sendMessage({ tipo: 'CLEAR_PRICE_CACHE' }, (response) => {
+        DOM.clearCacheBtn?.removeAttribute('disabled');
+        if (chrome.runtime.lastError) {
+          showSettingsFeedback('text-danger', 'Errore comunicazione: ' + chrome.runtime.lastError.message);
+          return;
+        }
+        if (response && response.ok) {
+          showSettingsFeedback('text-success', '✅ Cache svuotata. Al prossimo avvio i prezzi verranno ricalcolati.');
+        } else {
+          showSettingsFeedback('text-danger', '❌ ' + (response?.error || 'Impossibile svuotare la cache.'));
+        }
+      });
+    });
+  }
+
+  if (DOM.reloadWebAppBtn) {
+    DOM.reloadWebAppBtn.addEventListener('click', () => {
+      DOM.reloadWebAppBtn.setAttribute('disabled', 'true');
+      showSettingsFeedback('text-muted', 'Riavvio Web App in corso (attesa nuovo token fino a 35s)...');
+      chrome.runtime.sendMessage({ tipo: 'RELOAD_WEBAPP' }, (response) => {
+        DOM.reloadWebAppBtn?.removeAttribute('disabled');
+        if (chrome.runtime.lastError) {
+          showSettingsFeedback('text-danger', 'Errore comunicazione: ' + chrome.runtime.lastError.message);
+          return;
+        }
+        if (response && response.ok) {
+          showSettingsFeedback(
+            response.tokenSynced ? 'text-success' : 'text-warning',
+            response.tokenSynced ? '✅ Web App ricaricata e token sincronizzato.' : '⚠️ Web App ricaricata, ma nessun nuovo token rilevato. Controlla il login.'
+          );
+        } else {
+          showSettingsFeedback('text-danger', '❌ ' + (response?.error || 'Riavvio non riuscito.'));
+        }
+      });
+    });
   }
 
   if (DOM.testTelegramBtn && DOM.telegramChatIdInput) {

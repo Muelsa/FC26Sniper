@@ -1,6 +1,6 @@
 // Entrypoint Background Service Worker — FC Sniper Orchestrator
 import { installGlobalRateLimiter } from './src/core/rate-limiter.js';
-import { botState, restoreInitialStateFromStorage } from './src/core/state.js';
+import { botState, restoreInitialStateFromStorage, clearAllPriceCaches } from './src/core/state.js';
 import {
   sendMessageSafe,
   triggerPinEvent,
@@ -10,7 +10,7 @@ import {
   stopBot
 } from './src/core/messenger.js';
 import { registerWebRequestListeners } from './src/ea/web-request-listeners.js';
-import { setPostPauseMaintenance } from './src/ea/error-handlers.js';
+import { setPostPauseMaintenance, reloadWebAppTab } from './src/ea/error-handlers.js';
 import { getCrediti } from './src/ea/market-api.js';
 import {
   getNumeroTentativi,
@@ -227,6 +227,51 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return false;
   }
 
+  if (message.tipo === 'CLEAR_PRICE_CACHE') {
+    if (botState.start === true) {
+      sendResponse?.({ ok: false, error: 'Ferma il bot prima di svuotare la cache prezzi.' });
+      return false;
+    }
+    clearAllPriceCaches().then((res) => {
+      sendMessageSafe({
+        tipo: 'LOG',
+        valore: `[CACHE PREZZI] Cache svuotata (${res.cachedCount} Lowest BIN, ${res.fodderCount} prezzi fodder, ${res.pendingCount} offerte pendenti). Al prossimo avvio i prezzi verranno ricalcolati dal mercato live.`
+      });
+      sendResponse?.({ ok: true, ...res });
+    }).catch((err) => {
+      sendResponse?.({ ok: false, error: err?.message || String(err) });
+    });
+    return true;
+  }
+
+  if (message.tipo === 'RELOAD_WEBAPP') {
+    sendMessageSafe({ tipo: 'LOG', valore: '[WEB APP] Riavvio manuale della scheda Web App in corso...' });
+    reloadWebAppTab().then((res) => {
+      if (!res.found) {
+        const error = res.error || 'Nessuna scheda Web App EA aperta in Chrome.';
+        sendMessageSafe({ tipo: 'LOG', valore: `[WEB APP] Riavvio non eseguito: ${error}` });
+        sendResponse?.({ ok: false, error });
+        return;
+      }
+      if (res.tokenSynced) {
+        botState.consecutive401Errors = 0;
+        sendMessageSafe({
+          tipo: 'LOG',
+          valore: `[WEB APP] Scheda ricaricata e nuovo token EA sincronizzato (${botState.xUtSid.substring(0, 10)}...).`
+        });
+      } else {
+        sendMessageSafe({
+          tipo: 'LOG',
+          valore: '[WEB APP] Scheda ricaricata, ma nessun nuovo token rilevato entro 35s. Effettua il login nella Web App se richiesto.'
+        });
+      }
+      sendResponse?.({ ok: true, tokenSynced: res.tokenSynced });
+    }).catch((err) => {
+      sendResponse?.({ ok: false, error: err?.message || String(err) });
+    });
+    return true;
+  }
+
   if (message.tipo === 'TELEGRAM_TEST') {
     (async () => {
       let { personaName } = await getUserProfile();
@@ -409,6 +454,9 @@ async function handleStartMessage(message) {
           await runManualSnipingLoop();
         }
       }
+
+      // Stop manuale o arresto per CAPTCHA: il report Telegram è già stato inviato altrove
+      if (botState.start !== true) return;
 
       sendMessageSafe({ tipo: 'LOG', valore: 'Ricerca terminata\n' });
       sendMessageSafe({ tipo: 'TENTATIVI_RIMASTI', valore: "" });
