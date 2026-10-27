@@ -264,7 +264,6 @@ export async function buildManagersLazyTargets(cycle, minNetProfit = 200) {
         meta: meta
       };
 
-      const estProfit = Math.floor(floor * 0.95) - maxBuyAllowed;
       sendMessageSafe({
         tipo: 'LOG',
         valore: `[PREZZI CICLO #${cycle}] Allenatore ${meta.name} -> Lowest BIN: ${floor} cr | Prezzo Max Acquisto (-15%): <= ${maxBuyAllowed} cr (Profitto netto stimato: +${estProfit} cr) | Vendita Istantanea: ${floor} cr`
