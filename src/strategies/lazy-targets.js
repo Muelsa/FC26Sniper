@@ -207,7 +207,7 @@ export async function buildManagerLeagueLazyTargets(cycle, markup, minNetProfit)
         url.searchParams.set("micr", String(micr));
         return url;
       },
-      bidDataBase: { playStyleId: null, leagueId: lgId, amount: Number(lgId), name: `Modificatore ${pi.meta.name}`, isConsumable: true }
+      bidDataBase: { playStyleId: null, leagueId: lgId, amount: Number(lgId), name: `Modificatore ${pi.meta.name}`, isConsumable: true, basePrice: pi.floorBin, sellPrice: pi.sellPrice }
     };
   });
 
@@ -228,7 +228,7 @@ export async function buildManagerLeagueLazyTargets(cycle, markup, minNetProfit)
   };
 }
 
-export async function buildManagersLazyTargets(cycle) {
+export async function buildManagersLazyTargets(cycle, minNetProfit = 200) {
   const selectedNats = (botState.managerNation || "18,34").split(",").map(s => s.trim()).filter(Boolean);
   const managerKeys = selectedNats.map(managerTargetKey);
 
@@ -247,10 +247,11 @@ export async function buildManagersLazyTargets(cycle) {
     if (floor && floor > 0) {
       const maxBuyAllowed = roundDownToStep(floor * 0.85);
 
-      if (maxBuyAllowed < 150) {
+      const estProfit = Math.floor(floor * 0.95) - maxBuyAllowed;
+      if (maxBuyAllowed < 150 || estProfit < minNetProfit) {
         sendMessageSafe({
           tipo: 'LOG',
-          valore: `[GUARD-RAIL] Allenatore ${meta.name} (Floor: ${floor} cr): prezzo max d'acquisto a -15% (${maxBuyAllowed} cr) inferiore al minimo di mercato (150 cr). Nazione esclusa in questo ciclo!`
+          valore: `[GUARD-RAIL NETTO MINIMO] Allenatore ${meta.name} (Floor: ${floor} cr): profitto netto stimato (+${estProfit} cr) inferiore al minimo richiesto (+${minNetProfit} cr). Nazione esclusa!`
         });
         continue;
       }
@@ -414,7 +415,7 @@ export async function buildConsumablesLazyTargets(cycle, markup, minNetProfit) {
         url.searchParams.set("micr", String(micr));
         return url;
       },
-      bidDataBase: { playStyleId: sId, name: pi.meta.name, isConsumable: true }
+      bidDataBase: { playStyleId: sId, name: pi.meta.name, isConsumable: true, basePrice: pi.floorBin, sellPrice: pi.sellPrice }
     };
   });
 
@@ -445,7 +446,7 @@ export async function buildLazyCycleTargets(cycle) {
   } else if (botState.targetMode === "managerLeague") {
     return await buildManagerLeagueLazyTargets(cycle, markup, minNetProfit);
   } else if (botState.targetMode === "managers") {
-    return await buildManagersLazyTargets(cycle);
+    return await buildManagersLazyTargets(cycle, minNetProfit);
   } else {
     return await buildConsumablesLazyTargets(cycle, markup, minNetProfit);
   }

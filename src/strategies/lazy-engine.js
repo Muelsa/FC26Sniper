@@ -332,8 +332,9 @@ export async function runLazyBiddingStep(ctx) {
           const minNextBid = calculateNextBid(auction.startingBid, auction.currentBid);
           if (minNextBid > target.maxBid) continue;
 
+          const isLowValue = !target.strongBase || target.strongBase < 1000;
           const strongBidTarget = roundUpToStep(target.strongBase * 0.70);
-          const nextBid = target.isManagerTarget
+          const nextBid = (target.isManagerTarget || isLowValue)
             ? minNextBid
             : Math.min(target.maxBid, Math.max(minNextBid, strongBidTarget));
 
