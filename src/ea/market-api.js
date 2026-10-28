@@ -84,6 +84,7 @@ export async function sendBuyNowRequest(tradeId, buyNowPrice, itemId) {
       const data = await response.json();
       botState.carteAcquistate += 1;
       botState.idCarteAcquistate.push(itemId);
+      botState.consecutive461InBidding = 0;
       sendMessageSafe({ tipo: 'LOG', valore: `[ACQUISTO RIUSCITO] Carta acquistata al prezzo di ${buyNowPrice} crediti!` });
       sendMessageSafe({ tipo: 'CARTA_ACQUISTATA', valore: botState.carteAcquistate });
       try { chrome.storage.local.set({ carteAcquistate: botState.carteAcquistate }); } catch (_) { }

@@ -332,8 +332,9 @@ export async function runLazyBiddingStep(ctx) {
           const minNextBid = calculateNextBid(auction.startingBid, auction.currentBid);
           if (minNextBid > target.maxBid) continue;
 
+          const isLowValue = !target.strongBase || target.strongBase < 1000;
           const strongBidTarget = roundUpToStep(target.strongBase * 0.70);
-          const nextBid = target.isManagerTarget
+          const nextBid = (target.isManagerTarget || isLowValue)
             ? minNextBid
             : Math.min(target.maxBid, Math.max(minNextBid, strongBidTarget));
 
@@ -414,10 +415,10 @@ export async function runLazyBiddingStep(ctx) {
                 botState.consecutive461InBidding++;
                 bidPriceOffset++;
                 if (botState.consecutive461InBidding >= 3) {
-                  console.log(`[${bidActionTag}] Rilevate ${botState.consecutive461InBidding} aste contese o rifiutate (461). Concludo Step 1 e passo a Compra Ora.`);
+                  console.log(`[${bidActionTag}] Rilevate ${botState.consecutive461InBidding} aste contese o rifiutate (461). Concludo Step 1 e verifico con Compra Ora.`);
                   sendMessageSafe({
                     tipo: 'LOG',
-                    valore: `[${bidActionTag}] Mercato aste molto conteso o blocco temporaneo (3 errori 461 consecutivi). Concludo le offerte all'asta e passo direttamente a Compra Ora.`
+                    valore: `[${bidActionTag}] Rilevati 3 errori 461 consecutivi sulle aste. Concludo le offerte all'asta e passo direttamente a Compra Ora per verificare lo stato dell'account...`
                   });
                   await resolveWatchlist();
                   stopBiddingDueTo461 = true;
@@ -493,7 +494,7 @@ export async function runLazyBiddingStep(ctx) {
   }
 
   // Risoluzione e difesa completa di tutte le aste attive prima di procedere allo Step 2
-  if (activeBids.size > 0 && botState.start === true && !botState.marketRestricted && !ctx.earlyExitRateLimit) {
+  if (activeBids.size > 0 && botState.start === true && !botState.marketRestricted && !ctx.earlyExitRateLimit && !stopBiddingDueTo461) {
     sendMessageSafe({
       tipo: 'LOG',
       valore: `[${bidTag}] Monitoraggio e risoluzione di tutte le offerte attive (${activeBids.size} in corso)...`
@@ -650,13 +651,41 @@ export async function runLazyTopUpStep(ctx) {
 
           markTradeAttempted(candidate.tradeId);
 
+          if (ctx.requiresSoftBanProbe) {
+            sendMessageSafe({
+              tipo: 'LOG',
+              valore: `[SONDA ANTI-BAN] Verifica preliminare permessi acquisto Compra Ora dopo la pausa di riposo (1 solo acquisto test)...`
+            });
+          }
+
           const buySuccess = await sendBuyNowRequest(candidate.tradeId, candidate.buyNowPrice, candidate.itemData?.id);
+
+          if (ctx.requiresSoftBanProbe) {
+            if (!buySuccess && (botState.lastBuyNowErrorStatus === 461 || botState.lastBuyNowErrorStatus === 478)) {
+              sendMessageSafe({
+                tipo: 'LOG',
+                valore: `[SONDA ANTI-BAN] L'acquisto di test Compra Ora ha ricevuto 461 (Soft-ban EA ancora attivo). Rientro in pausa senza insistere.`
+              });
+              botState.marketRestricted = true;
+              stopTopUpDueTo461 = true;
+              break;
+            } else if (buySuccess) {
+              ctx.requiresSoftBanProbe = false;
+              sendMessageSafe({
+                tipo: 'LOG',
+                valore: `[SONDA ANTI-BAN] Test superato con successo! Permessi di acquisto ripristinati da EA.`
+              });
+            }
+          }
+
           if (buySuccess) {
             topUpBought++;
             consecutive461InTopUp = 0;
+            botState.consecutive461InBidding = 0;
             wonInThisCycle++;
             botState.carteVinteCiclo++;
             ctx.consecutive512InCycle = 0;
+            ctx.requiresSoftBanProbe = false;
             if (typeof botState.crediti === 'number') botState.crediti = Math.max(0, botState.crediti - candidate.buyNowPrice);
 
             const candItemId = candidate.itemData?.id;
@@ -704,12 +733,18 @@ export async function runLazyTopUpStep(ctx) {
                 minPriceOffset++;
                 const nextMinBump = minBidBumps[(styleTopUpCount + minPriceOffset) % minBidBumps.length];
 
-                if (consecutive461InTopUp >= 3) {
-                  console.log(`[${topUpTag}] Rilevati ${consecutive461InTopUp} tentativi di Compra Ora rifiutati/anticipati (461). Concludo Step 2.`);
+                const isSoftBanTriggered = (botState.consecutive461InBidding >= 3 && consecutive461InTopUp >= 1) || consecutive461InTopUp >= 3;
+
+                if (isSoftBanTriggered) {
+                  const errorCountReason = botState.consecutive461InBidding >= 3
+                    ? `4 errori 461 consecutivi (3 su aste + 1 su Compra Ora)`
+                    : `3 tentativi consecutivi di Compra Ora rifiutati (461)`;
+                  console.log(`[${topUpTag}] Rilevato Soft-Ban EA: ${errorCountReason}. Concludo Step 2 e avvio pausa silenziata.`);
                   sendMessageSafe({
                     tipo: 'LOG',
-                    valore: `[${topUpTag}] Rilevati 3 tentativi consecutivi di Compra Ora rifiutati/anticipati (461). Concludo gli acquisti per prevenire soft-ban e passo alla pausa di riposo.`
+                    valore: `[${topUpTag}] Rilevato Soft-Ban EA (${errorCountReason}). Attivazione pausa rigenerativa silenziata (keep-alive di sessione attivo per evitare disconnessioni)...`
                   });
+                  botState.marketRestricted = true;
                   stopTopUpDueTo461 = true;
                   ctx.requiresSoftBanProbe = true;
                   break;
@@ -947,6 +982,7 @@ export async function runLazyTradingEngine() {
       let earlyExitRateLimit = false;
       let isMacroPause = false;
       botState.marketRestricted = false;
+      botState.consecutive461InBidding = 0;
 
       sendMessageSafe({
         tipo: 'LOG',
@@ -1048,9 +1084,11 @@ export async function runLazyTradingEngine() {
             wonInThisCycle = topUpResult.wonInThisCycle;
           }
 
-          await processUnassignedItems(cyclePrices);
-          await sleep(1000);
-          await listUnlistedTradepileItems(cyclePrices);
+          if (!botState.marketRestricted) {
+            await processUnassignedItems(cyclePrices);
+            await sleep(1000);
+            await listUnlistedTradepileItems(cyclePrices);
+          }
         }
       } else if (cycleTarget === 0) {
         if (isListingBlocked) {
@@ -1081,10 +1119,12 @@ export async function runLazyTradingEngine() {
         }
       }
 
-      await sleep(2000);
-      await clearSoldItem(cyclePrices);
-      await processUnassignedItems(cyclePrices);
-      await listUnlistedTradepileItems(cyclePrices);
+      if (!botState.marketRestricted) {
+        await sleep(2000);
+        await clearSoldItem(cyclePrices);
+        await processUnassignedItems(cyclePrices);
+        await listUnlistedTradepileItems(cyclePrices);
+      }
       const finalPile = await getTradepileInfo();
       botState.crediti = await getCrediti();
       sendMessageSafe({ tipo: 'CREDITI', valore: botState.crediti });
@@ -1132,6 +1172,7 @@ export async function runLazyTradingEngine() {
           requiresSoftBanProbe = true;
         }
         botState.marketRestricted = false;
+        botState.consecutive461InBidding = 0;
         reportTelemetry('CYCLE_START', `Avvio Ciclo #${cycle + 1}`, { cycle: cycle + 1, crediti: botState.crediti });
         sendMessageSafe({
           tipo: 'LOG',

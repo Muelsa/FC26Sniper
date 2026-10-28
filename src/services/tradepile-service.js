@@ -150,6 +150,19 @@ export async function clearSoldItem(cachedPrices = {}, options = {}) {
         });
         reportTelemetry('SOLD_ITEMS_CLEARED', `Pulite ${soldItems.length} carte vendute dalla Tradepile`, { count: soldItems.length });
         await sleep(getRandomGaussian(0.8, 0.1, 0.6, 1.0) * 1000);
+
+        // Aggiorna subito crediti posseduti e proiezione UI non appena incassate le carte
+        try {
+          const freshCrediti = await getCrediti();
+          if (typeof freshCrediti === 'number' && freshCrediti >= 0) {
+            botState.crediti = freshCrediti;
+            sendMessageSafe({ tipo: 'CREDITI', valore: freshCrediti });
+            const remainingAuctions = auctions.filter(a => !soldItems.some(s => s.tradeId === a.tradeId));
+            await calculateAndPublishProiezioneCrediti(freshCrediti, remainingAuctions);
+          }
+        } catch (crErr) {
+          console.warn("[FC Sniper] Errore aggiornamento crediti post incasso:", crErr);
+        }
       } else if (response.status === 410) {
         console.log('[FC Sniper] Carte vendute già rimosse (410 Gone allineato).');
       } else if (response.status === 401) {
@@ -296,9 +309,9 @@ export async function checkAndRelistExpiredItems(cachedPrices = {}, preloadedAuc
           });
         }
 
-        // Pausa anti-burst ogni 8 carte per non saturare la soglia di 20-25 req/min di EA su auctionhouse
-        if (relistedCount % 8 === 0 && relistedCount < expiredUnsold.length) {
-          const pauseSec = Math.round(getRandomGaussian(6.5, 0.5, 5.5, 8.0));
+        // Pausa anti-burst ogni 6 carte (12-15s) e delay rilassato 3-5s (media 4s) tra ogni listing
+        if (relistedCount % 6 === 0 && relistedCount < expiredUnsold.length) {
+          const pauseSec = Math.round(getRandomGaussian(13.5, 1.2, 11.0, 16.0));
           console.log(`[FC Sniper Relist] Pausa anti-burst di ${pauseSec}s dopo ${relistedCount} carte rimesse in vendita.`);
           sendMessageSafe({
             tipo: 'LOG',
@@ -306,10 +319,10 @@ export async function checkAndRelistExpiredItems(cachedPrices = {}, preloadedAuc
           });
           await sleep(pauseSec * 1000);
         } else {
-          await sleep(getRandomGaussian(1.8, 0.2, 1.5, 2.2) * 1000);
+          await sleep(getRandomGaussian(4.0, 0.5, 3.0, 5.0) * 1000);
         }
       } else {
-        await sleep(getRandomGaussian(1.8, 0.2, 1.5, 2.2) * 1000);
+        await sleep(getRandomGaussian(4.0, 0.5, 3.0, 5.0) * 1000);
       }
     }
 
@@ -431,7 +444,7 @@ export async function processUnassignedItems(cachedPrices = {}) {
               tipo: 'LOG',
               valore: `[NON ASSEGNATI] ${cardName} spostata in lista trasferimenti (sarà messa in vendita dal recupero Tradepile).`
             });
-            await sleep(getRandomGaussian(1.8, 0.2, 1.5, 2.2) * 1000);
+            await sleep(getRandomGaussian(4.0, 0.5, 3.0, 5.0) * 1000);
           }
         } else {
           await sleep(getRandomGaussian(1.0, 0.2, 0.8, 1.3) * 1000);
@@ -509,8 +522,8 @@ export async function listUnlistedTradepileItems(cachedPrices = {}) {
 
     let listedCount = 0;
     const waitAfterListing = async (count, total) => {
-      if (count % 8 === 0 && count < total) {
-        const pauseSec = Math.round(getRandomGaussian(6.5, 0.5, 5.5, 8.0));
+      if (count % 6 === 0 && count < total) {
+        const pauseSec = Math.round(getRandomGaussian(13.5, 1.2, 11.0, 16.0));
         console.log(`[FC Sniper Listing] Pausa anti-burst di ${pauseSec}s dopo ${count} carte messe in vendita.`);
         sendMessageSafe({
           tipo: 'LOG',
@@ -518,7 +531,7 @@ export async function listUnlistedTradepileItems(cachedPrices = {}) {
         });
         await sleep(pauseSec * 1000);
       } else {
-        await sleep(getRandomGaussian(1.8, 0.2, 1.5, 2.2) * 1000);
+        await sleep(getRandomGaussian(4.0, 0.5, 3.0, 5.0) * 1000);
       }
     };
 
@@ -558,7 +571,7 @@ export async function listUnlistedTradepileItems(cachedPrices = {}) {
               });
               await waitAfterListing(listedCount, unlisted.length);
             } else {
-              await sleep(getRandomGaussian(1.8, 0.2, 1.5, 2.2) * 1000);
+              await sleep(getRandomGaussian(4.0, 0.5, 3.0, 5.0) * 1000);
             }
           }
         }
@@ -582,7 +595,7 @@ export async function listUnlistedTradepileItems(cachedPrices = {}) {
             });
             await waitAfterListing(listedCount, unlisted.length);
           } else {
-            await sleep(getRandomGaussian(1.8, 0.2, 1.5, 2.2) * 1000);
+            await sleep(getRandomGaussian(4.0, 0.5, 3.0, 5.0) * 1000);
           }
         }
       } else if (item.itemType === "manager") {
@@ -603,7 +616,7 @@ export async function listUnlistedTradepileItems(cachedPrices = {}) {
             });
             await waitAfterListing(listedCount, unlisted.length);
           } else {
-            await sleep(getRandomGaussian(1.8, 0.2, 1.5, 2.2) * 1000);
+            await sleep(getRandomGaussian(4.0, 0.5, 3.0, 5.0) * 1000);
           }
         }
       }

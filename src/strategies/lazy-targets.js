@@ -19,6 +19,13 @@ import {
 import { detectManagerLeague } from '../services/item-classifier.js';
 import { roundDownToStep, roundUpToStep, sleep, getRandomGaussian } from '../core/utils.js';
 
+export function getFodderLazyMinProfit(price, defaultMinProfit = 200) {
+  if (price > 30000) return Math.max(1500, defaultMinProfit);
+  if (price > 20000) return Math.max(1000, defaultMinProfit);
+  if (price > 10000) return Math.max(500, defaultMinProfit);
+  return defaultMinProfit;
+}
+
 export async function buildFodderLazyTargets(cycle, markup, minNetProfit) {
   botState.listaFodder = [];
   botState.indexFodder = 0;
@@ -50,7 +57,8 @@ export async function buildFodderLazyTargets(cycle, markup, minNetProfit) {
     const pTierB = roundUpToStep(pPrice * (1 + (markup / 100)));
     const pTierC = roundUpToStep(pPrice * 1.15);
     const minNet = Math.floor(pTierA * 0.95);
-    const maxBuy = roundDownToStep(minNet - minNetProfit);
+    const targetMinProfit = getFodderLazyMinProfit(pPrice, minNetProfit);
+    const maxBuy = roundDownToStep(minNet - targetMinProfit);
 
     const pInfo = {
       name: f.name || "",
@@ -86,7 +94,7 @@ export async function buildFodderLazyTargets(cycle, markup, minNetProfit) {
 
   sendMessageSafe({
     tipo: 'LOG',
-    valore: `[PREZZI FODDER CICLO #${cycle}] Rating ${botState.fodderRating} (${botState.listaFodder.length} giocatori) -> Valori Fut.gg: ${benchmarkFloor} - ${maxPlayerPrice} cr | Prezzi Max Safe individuali: da ${minMaxBuy} a ${maxMaxBuy} cr (Margine netto min: +200 cr garantito) | Vendite Scaglionate 1 ORA (Tier A +6%, Tier B +${markup}%, Tier C +15%)`
+    valore: `[PREZZI FODDER CICLO #${cycle}] Rating ${botState.fodderRating} (${botState.listaFodder.length} giocatori) -> Valori Fut.gg: ${benchmarkFloor} - ${maxPlayerPrice} cr | Prezzi Max Safe individuali: da ${minMaxBuy} a ${maxMaxBuy} cr (Margine netto scaglionato: >30k: +1500, >20k: +1000, >10k: +500, <=10k: +${minNetProfit} cr) | Vendite Scaglionate 1 ORA (Tier A +6%, Tier B +${markup}%, Tier C +15%)`
   });
 
   const targets = botState.listaFodder.filter(p => p && p.pid && p.priceInfo && p.priceInfo.maxBuyAllowed >= 150).map(p => {
@@ -207,7 +215,7 @@ export async function buildManagerLeagueLazyTargets(cycle, markup, minNetProfit)
         url.searchParams.set("micr", String(micr));
         return url;
       },
-      bidDataBase: { playStyleId: null, leagueId: lgId, amount: Number(lgId), name: `Modificatore ${pi.meta.name}`, isConsumable: true }
+      bidDataBase: { playStyleId: null, leagueId: lgId, amount: Number(lgId), name: `Modificatore ${pi.meta.name}`, isConsumable: true, basePrice: pi.floorBin, sellPrice: pi.sellPrice }
     };
   });
 
@@ -228,7 +236,7 @@ export async function buildManagerLeagueLazyTargets(cycle, markup, minNetProfit)
   };
 }
 
-export async function buildManagersLazyTargets(cycle) {
+export async function buildManagersLazyTargets(cycle, minNetProfit = 200) {
   const selectedNats = (botState.managerNation || "18,34").split(",").map(s => s.trim()).filter(Boolean);
   const managerKeys = selectedNats.map(managerTargetKey);
 
@@ -247,10 +255,11 @@ export async function buildManagersLazyTargets(cycle) {
     if (floor && floor > 0) {
       const maxBuyAllowed = roundDownToStep(floor * 0.85);
 
-      if (maxBuyAllowed < 150) {
+      const estProfit = Math.floor(floor * 0.95) - maxBuyAllowed;
+      if (maxBuyAllowed < 150 || estProfit < minNetProfit) {
         sendMessageSafe({
           tipo: 'LOG',
-          valore: `[GUARD-RAIL] Allenatore ${meta.name} (Floor: ${floor} cr): prezzo max d'acquisto a -15% (${maxBuyAllowed} cr) inferiore al minimo di mercato (150 cr). Nazione esclusa in questo ciclo!`
+          valore: `[GUARD-RAIL NETTO MINIMO] Allenatore ${meta.name} (Floor: ${floor} cr): profitto netto stimato (+${estProfit} cr) inferiore al minimo richiesto (+${minNetProfit} cr). Nazione esclusa!`
         });
         continue;
       }
@@ -263,7 +272,6 @@ export async function buildManagersLazyTargets(cycle) {
         meta: meta
       };
 
-      const estProfit = Math.floor(floor * 0.95) - maxBuyAllowed;
       sendMessageSafe({
         tipo: 'LOG',
         valore: `[PREZZI CICLO #${cycle}] Allenatore ${meta.name} -> Lowest BIN: ${floor} cr | Prezzo Max Acquisto (-15%): <= ${maxBuyAllowed} cr (Profitto netto stimato: +${estProfit} cr) | Vendita Istantanea: ${floor} cr`
@@ -414,7 +422,7 @@ export async function buildConsumablesLazyTargets(cycle, markup, minNetProfit) {
         url.searchParams.set("micr", String(micr));
         return url;
       },
-      bidDataBase: { playStyleId: sId, name: pi.meta.name, isConsumable: true }
+      bidDataBase: { playStyleId: sId, name: pi.meta.name, isConsumable: true, basePrice: pi.floorBin, sellPrice: pi.sellPrice }
     };
   });
 
@@ -445,7 +453,7 @@ export async function buildLazyCycleTargets(cycle) {
   } else if (botState.targetMode === "managerLeague") {
     return await buildManagerLeagueLazyTargets(cycle, markup, minNetProfit);
   } else if (botState.targetMode === "managers") {
-    return await buildManagersLazyTargets(cycle);
+    return await buildManagersLazyTargets(cycle, minNetProfit);
   } else {
     return await buildConsumablesLazyTargets(cycle, markup, minNetProfit);
   }
