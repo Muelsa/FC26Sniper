@@ -7,7 +7,7 @@ import { TRANSFERMARKET_URL } from '../ea/endpoints.js';
 import { sendBidRequest, getCrediti } from '../ea/market-api.js';
 import { clearSoldItem } from '../services/tradepile-service.js';
 import { resolveWatchlist } from '../services/watchlist-service.js';
-import { getFodderList, getNextFodder } from '../services/fodder-service.js';
+import { getFodderList, getNextFodder, filterPureFodder } from '../services/fodder-service.js';
 import { discoverConsumableLowestBin } from '../services/pricing-service.js';
 import { formatItemDisplayName, detectChemistryStyle } from '../services/item-classifier.js';
 import { sendCycleReport } from '../services/telegram-service.js';
@@ -343,6 +343,7 @@ export async function runMassBiddingEngine() {
         botState.listaFodder = [];
         botState.indexFodder = 0;
         await getFodderList();
+        botState.listaFodder = filterPureFodder(botState.listaFodder, 0.10);
       }
 
       if (botState.listaFodder.length === 0) {

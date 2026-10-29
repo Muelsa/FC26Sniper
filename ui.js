@@ -14,7 +14,9 @@ import {
   getMaxSnipePrice,
   getTargetTradepileSize,
   getLazyMarkupPercent,
-  getLazySleepMinutes
+  getLazySleepMinutes,
+  getDynamicQuotaSettings,
+  getChemTaxSettings
 } from './src/ui/form-controls.js';
 
 import {
@@ -64,6 +66,8 @@ function initApp() {
     const lazyMarkupPercent = getLazyMarkupPercent();
     const lazySleepMinutes = getLazySleepMinutes();
     const selectedManagerNation = getSelectedManagerNation();
+    const dynamicQuotas = getDynamicQuotaSettings();
+    const chemTaxSettings = getChemTaxSettings();
 
     const now = Date.now();
     const settings = {
@@ -81,6 +85,8 @@ function initApp() {
       targetTradepileSize: targetTradepileSize,
       lazyMarkupPercent: lazyMarkupPercent,
       lazySleepMinutes: lazySleepMinutes,
+      ...dynamicQuotas,
+      ...chemTaxSettings,
       telegramChatId: DOM.telegramChatIdInput ? DOM.telegramChatIdInput.value.trim() : '',
       botStartTime: now,
       start: true
@@ -100,7 +106,9 @@ function initApp() {
       rating: selectedRating,
       targetTradepileSize: targetTradepileSize,
       lazyMarkupPercent: lazyMarkupPercent,
-      lazySleepMinutes: lazySleepMinutes
+      lazySleepMinutes: lazySleepMinutes,
+      ...dynamicQuotas,
+      ...chemTaxSettings
     };
 
     // Svuota eventuali salvataggi debounced pendenti prima dello START
@@ -299,7 +307,7 @@ function initApp() {
         });
       });
     },
-    simulateUpdateAlert: (fakeVersion = '2.8.7', notes = 'Miglioramenti UI Bento Grid e ottimizzazioni performance.') => {
+    simulateUpdateAlert: (fakeVersion = '2.8.8', notes = 'Miglioramenti UI Bento Grid e ottimizzazioni performance.') => {
       showUpdateNotification({
         updateAvailable: true,
         currentVersion: getCurrentVersion(),

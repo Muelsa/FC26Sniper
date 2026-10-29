@@ -1,14 +1,22 @@
 // Gestione completa della Lista Trasferimenti e della pila Non Assegnati (Fase 3 Refactor)
-import { botState } from '../core/state.js';
+import {
+  botState,
+  incrementItemRelistCount,
+  removeItemRelistCount,
+  pruneItemRelistCounts,
+  recordTargetSale,
+  recordTargetExpiration
+} from '../core/state.js';
 import { sendMessageSafe, triggerPinEvent } from '../core/messenger.js';
 import { reportTelemetry } from '../core/telemetry.js';
 import { handle401Error } from '../ea/error-handlers.js';
 import { DELETE_SOLD_URL, TRADEPILE_URL, UNASSIGNED_URL } from '../ea/endpoints.js';
 import { getCrediti, sellSingleItem, moveSingleItemToTrade } from '../ea/market-api.js';
 import { CHEM_STYLES } from '../ea/constants.js';
-import { sleep, getRandomGaussian } from '../core/utils.js';
-import { getTieredSellPrice, resolveConsumableFloor } from './pricing-service.js';
+import { sleep, getRandomGaussian, roundUpToStep } from '../core/utils.js';
+import { getTieredSellPrice, resolveConsumableFloor, discoverPgpPlayerLowestBin } from './pricing-service.js';
 import { getFodderPriceForItem } from './fodder-service.js';
+import { detectTargetKey } from './item-classifier.js';
 
 // Recupera lo stato attuale della lista trasferimenti (Tradepile)
 export async function getTradepileInfo() {
@@ -149,6 +157,11 @@ export async function clearSoldItem(cachedPrices = {}, options = {}) {
           valore: `[TRADEPILE] Incassate e rimosse ${soldItems.length} carte vendute dalla lista trasferimenti! (Totale sessione: ${botState.carteVendute})`
         });
         reportTelemetry('SOLD_ITEMS_CLEARED', `Pulite ${soldItems.length} carte vendute dalla Tradepile`, { count: soldItems.length });
+        for (const s of soldItems) {
+          if (s.itemData?.id) removeItemRelistCount(s.itemData.id);
+          const tKey = detectTargetKey(s);
+          if (tKey) recordTargetSale(tKey, 1);
+        }
         await sleep(getRandomGaussian(0.8, 0.1, 0.6, 1.0) * 1000);
 
         // Aggiorna subito crediti posseduti e proiezione UI non appena incassate le carte
@@ -158,6 +171,8 @@ export async function clearSoldItem(cachedPrices = {}, options = {}) {
             botState.crediti = freshCrediti;
             sendMessageSafe({ tipo: 'CREDITI', valore: freshCrediti });
             const remainingAuctions = auctions.filter(a => !soldItems.some(s => s.tradeId === a.tradeId));
+            const activeIds = new Set(remainingAuctions.map(a => String(a.itemData?.id)).filter(Boolean));
+            pruneItemRelistCounts(activeIds);
             await calculateAndPublishProiezioneCrediti(freshCrediti, remainingAuctions);
           }
         } catch (crErr) {
@@ -172,6 +187,8 @@ export async function clearSoldItem(cachedPrices = {}, options = {}) {
       }
     } else {
       console.log('[FC Sniper] Nessuna carta venduta presente in Tradepile. Richiesta DELETE /trade/sold evitata.');
+      const activeIds = new Set(auctions.map(a => String(a.itemData?.id)).filter(Boolean));
+      pruneItemRelistCounts(activeIds);
     }
 
     // 4. Controlla e rimette in vendita automaticamente eventuali carte scadute/invendute (se non escluso esplicitamente)
@@ -235,7 +252,7 @@ export async function checkAndRelistExpiredItems(cachedPrices = {}, preloadedAuc
     console.log(`[FC Sniper Tradepile] Rilevate ${expiredUnsold.length} carte scadute/invendute. Ricalcolo Lowest BIN live e relist...`);
     sendMessageSafe({
       tipo: 'LOG',
-      valore: `[Tradepile Relist] Rilevate ${expiredUnsold.length} carte invendute. Ricalcolo prezzi live (Lowest BIN + 10%)...`
+      valore: `[Tradepile Smart Relist] Rilevate ${expiredUnsold.length} carte invendute. Ricalcolo prezzi live con Tier Decay (1°: Tier A, 2°+: Floor Live)...`
     });
 
     let relistedCount = 0;
@@ -244,12 +261,29 @@ export async function checkAndRelistExpiredItems(cachedPrices = {}, preloadedAuc
       const itemId = a.itemData?.id;
       if (!itemId) continue;
 
+      // Smart Relist con Tier Decay: traccia quante volte la carta è rimasta invenduta
+      const relistCount = incrementItemRelistCount(itemId);
+      const buyPrice = (a.itemData?.lastSalePrice && Number(a.itemData.lastSalePrice) > 0) ? Number(a.itemData.lastSalePrice) : null;
+
       let newSellPrice = 0;
       let cardName = "Carta";
       let tierTag = "";
 
       if (a.itemData?.itemType === "player") {
-        if (botState.targetMode === "fodder") {
+        const pId = a.itemData?.assetId || a.itemData?.resourceId;
+        const pStyle = a.itemData?.playStyle;
+        if (botState.targetMode === "chemTax") {
+          const styleId = pStyle || (botState.chemTaxStyle !== "all" ? botState.chemTaxStyle : "268");
+          const floor = cachedPrices?.[`pgp_${pId}_${styleId}`]?.floorBin || await discoverPgpPlayerLowestBin(pId, styleId);
+          if (floor && floor > 0) {
+            // Per il flusso chemTax, il relist non scende: mantiene il prezzo precedente (o floor se superiore)
+            const prevPrice = a.buyNowPrice && Number(a.buyNowPrice) > 0 ? Number(a.buyNowPrice) : 0;
+            newSellPrice = Math.max(floor, prevPrice);
+            const styleName = String(styleId) === "268" ? "Ombra" : (String(styleId) === "266" ? "Cacciatore" : `Stile ${styleId}`);
+            cardName = `Player ${pId} (${styleName})`;
+            tierTag = ` [ChemTax: ${newSellPrice} cr]`;
+          }
+        } else if (botState.targetMode === "fodder") {
           const assetId = a.itemData?.assetId || a.itemData?.resourceId;
           const cardRating = a.itemData?.rating;
           const pInfo = cachedPrices?.playerPriceMap?.get(String(assetId));
@@ -263,9 +297,9 @@ export async function checkAndRelistExpiredItems(cachedPrices = {}, preloadedAuc
             fodderPrice = await getFodderPriceForItem(a.itemData);
           }
           if (fodderPrice > 0) {
-            const tiered = getTieredSellPrice(fodderPrice, null, false);
+            const tiered = getTieredSellPrice(fodderPrice, null, false, relistCount, buyPrice);
             newSellPrice = tiered.price;
-            tierTag = ` [Tier ${tiered.tier}: +${tiered.markup}%]`;
+            tierTag = tiered.decayTag ? ` [${tiered.decayTag}]` : ` [Tier ${tiered.tier}: +${tiered.markup}%]`;
           }
         }
       } else if (a.itemData?.itemType === "training" || a.itemData?.playStyle || (a.itemData?.cardsubtypeid && CHEM_STYLES[String(a.itemData.cardsubtypeid)])) {
@@ -273,22 +307,34 @@ export async function checkAndRelistExpiredItems(cachedPrices = {}, preloadedAuc
         cardName = name;
 
         if (floor && floor > 0) {
-          const tiered = getTieredSellPrice(floor, null, true);
+          const tiered = getTieredSellPrice(floor, null, true, relistCount, buyPrice);
           newSellPrice = tiered.price;
-          tierTag = ` [Tier ${tiered.tier}: +${tiered.markup}%]`;
+          tierTag = tiered.decayTag ? ` [${tiered.decayTag}]` : ` [Tier ${tiered.tier}: +${tiered.markup}%]`;
         }
       } else if (a.itemData?.itemType === "manager") {
         const { floor, name } = await resolveConsumableFloor(a, cachedPrices);
         cardName = name;
         if (floor && floor > 0) {
           newSellPrice = floor;
-          tierTag = ` [Istantaneo: Lowest BIN live]`;
+          tierTag = relistCount > 0 ? ` [Floor Live #${relistCount} (+0%)]` : ` [Istantaneo: Lowest BIN live]`;
+        }
+      }
+
+      // Salvaguardia Stop-Loss / Break-Even assoluto: mai vendere sotto pareggio tasse EA
+      const prevPrice = a.buyNowPrice && Number(a.buyNowPrice) > 0 ? Number(a.buyNowPrice) : 0;
+      if (buyPrice && buyPrice > 0) {
+        const breakEvenPrice = roundUpToStep(buyPrice / 0.95);
+        if (newSellPrice < breakEvenPrice) {
+          const protectedPrice = Math.max(breakEvenPrice, prevPrice);
+          console.warn(`[FC Sniper Relist Stop-Loss] ${cardName}: prezzo calcolato (${newSellPrice} cr) inferiore al pareggio (${breakEvenPrice} cr su acquisto ${buyPrice} cr). Prezzo protetto a ${protectedPrice} cr.`);
+          newSellPrice = protectedPrice;
+          tierTag += " [Break-Even Stop-Loss]";
         }
       }
 
       // Fallback al prezzo precedente se non riusciamo a determinare il nuovo
       if (!newSellPrice || newSellPrice <= 0) {
-        newSellPrice = a.buyNowPrice;
+        newSellPrice = prevPrice;
       }
 
       await triggerPinEvent("TRIGGER_PIN_TRADEPILE");
@@ -296,6 +342,8 @@ export async function checkAndRelistExpiredItems(cachedPrices = {}, preloadedAuc
       if (Date.now() < botState.listingRestrictedUntil) break;
       if (success) {
         relistedCount++;
+        const expKey = detectTargetKey(a);
+        if (expKey) recordTargetExpiration(expKey, 1);
         const prevText = a.buyNowPrice ? ` (prec: ${a.buyNowPrice})` : '';
         if (expiredUnsold.length <= 5) {
           sendMessageSafe({
@@ -392,7 +440,18 @@ export async function processUnassignedItems(cachedPrices = {}) {
         let tierTag = "";
 
         if (item.itemType === "player") {
-          if (botState.targetMode === "fodder") {
+          const pId = item.assetId || item.resourceId;
+          const pStyle = item.playStyle;
+          if (botState.targetMode === "chemTax") {
+            const styleId = pStyle || (botState.chemTaxStyle !== "all" ? botState.chemTaxStyle : "268");
+            const floor = cachedPrices?.[`pgp_${pId}_${styleId}`]?.floorBin || await discoverPgpPlayerLowestBin(pId, styleId);
+            if (floor && floor > 0) {
+              sellPrice = floor;
+              const styleName = String(styleId) === "268" ? "Ombra" : (String(styleId) === "266" ? "Cacciatore" : `Stile ${styleId}`);
+              cardName = `Player ${pId} (${styleName})`;
+              tierTag = " [Istantaneo: Lowest BIN live]";
+            }
+          } else if (botState.targetMode === "fodder") {
             const assetId = item.assetId || item.resourceId;
             const cardRating = item.rating;
             const pInfo = cachedPrices?.playerPriceMap?.get(String(assetId));
@@ -542,7 +601,32 @@ export async function listUnlistedTradepileItems(cachedPrices = {}) {
       let sellPrice = 0;
 
       if (item.itemType === "player") {
-        if (botState.targetMode === "fodder") {
+        const pId = item.assetId || item.resourceId;
+        const pStyle = item.playStyle;
+        if (botState.targetMode === "chemTax") {
+          const styleId = pStyle || (botState.chemTaxStyle !== "all" ? botState.chemTaxStyle : "268");
+          const floor = cachedPrices?.[`pgp_${pId}_${styleId}`]?.floorBin || await discoverPgpPlayerLowestBin(pId, styleId);
+          if (floor && floor > 0) {
+            sellPrice = floor;
+            await triggerPinEvent("TRIGGER_PIN_TRADEPILE");
+            const success = await sellSingleItem(itemId, sellPrice);
+            if (Date.now() < botState.listingRestrictedUntil) break;
+            if (success) {
+              listedCount++;
+              const styleName = String(styleId) === "268" ? "Ombra" : (String(styleId) === "266" ? "Cacciatore" : `Stile ${styleId}`);
+              const buyPrice = (item.lastSalePrice && Number(item.lastSalePrice) > 0) ? Number(item.lastSalePrice) : null;
+              const netProfit = buyPrice ? (Math.floor(sellPrice * 0.95) - buyPrice) : null;
+              const profitText = buyPrice ? ` (Acquisto: ${buyPrice.toLocaleString('it-IT')} cr, Vendita: ${sellPrice.toLocaleString('it-IT')} cr, Profitto netto: +${netProfit.toLocaleString('it-IT')} cr)` : '';
+              sendMessageSafe({
+                tipo: 'LOG',
+                valore: `[VENDITA RECUPERATA] Player ${pId} (${styleName}) messo in vendita al Lowest BIN live (${sellPrice} cr)${profitText}`
+              });
+              await waitAfterListing(listedCount, unlisted.length);
+            } else {
+              await sleep(getRandomGaussian(4.0, 0.5, 3.0, 5.0) * 1000);
+            }
+          }
+        } else if (botState.targetMode === "fodder") {
           const assetId = item.assetId || item.resourceId;
           const cardRating = item.rating;
           const pInfo = cachedPrices?.playerPriceMap?.get(String(assetId));

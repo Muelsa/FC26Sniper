@@ -10,12 +10,14 @@ import {
   leagueTargetKey,
   managerTargetKey
 } from '../ea/constants.js';
-import { getFodderList } from '../services/fodder-service.js';
+import { getFodderList, filterPureFodder } from '../services/fodder-service.js';
 import {
   discoverLeagueModifierLowestBin,
   discoverManagerLowestBin,
-  discoverConsumableLowestBin
+  discoverConsumableLowestBin,
+  discoverPgpPlayerLowestBin
 } from '../services/pricing-service.js';
+import { fetchPgpPlayers, filterPgpCandidates } from '../services/pgp-service.js';
 import { detectManagerLeague } from '../services/item-classifier.js';
 import { roundDownToStep, roundUpToStep, sleep, getRandomGaussian } from '../core/utils.js';
 
@@ -72,9 +74,14 @@ export async function buildFodderLazyTargets(cycle, markup, minNetProfit) {
     f.priceInfo = pInfo;
   });
 
-  botState.listaFodder.sort((a, b) => (a.price || 999999) - (b.price || 999999));
+  const totalLoaded = botState.listaFodder.length;
+
+  // Fase 3 - Pure Fodder Guard (Floor Minimo + 10%)
+  // Esclude carte meta o con prezzo fuori scala (> +10% del floor minimo); tutte le rimanenti vengono utilizzate
+  botState.listaFodder = filterPureFodder(botState.listaFodder, 0.10);
 
   const benchmarkFloor = botState.listaFodder[0]?.price || 0;
+  const maxPureFodderPrice = Math.round(benchmarkFloor * 1.10);
   const maxPlayerPrice = botState.listaFodder[botState.listaFodder.length - 1]?.price || benchmarkFloor;
   const minMaxBuy = botState.listaFodder[0]?.priceInfo?.maxBuyAllowed || 0;
   const maxMaxBuy = botState.listaFodder[botState.listaFodder.length - 1]?.priceInfo?.maxBuyAllowed || minMaxBuy;
@@ -92,9 +99,12 @@ export async function buildFodderLazyTargets(cycle, markup, minNetProfit) {
     playerPriceMap: playerPriceMap
   };
 
+  const excludedCount = totalLoaded - botState.listaFodder.length;
+  const targetNames = botState.listaFodder.map(f => f.name || f.pid).join(', ');
+
   sendMessageSafe({
     tipo: 'LOG',
-    valore: `[PREZZI FODDER CICLO #${cycle}] Rating ${botState.fodderRating} (${botState.listaFodder.length} giocatori) -> Valori Fut.gg: ${benchmarkFloor} - ${maxPlayerPrice} cr | Prezzi Max Safe individuali: da ${minMaxBuy} a ${maxMaxBuy} cr (Margine netto scaglionato: >30k: +1500, >20k: +1000, >10k: +500, <=10k: +${minNetProfit} cr) | Vendite Scaglionate 1 ORA (Tier A +6%, Tier B +${markup}%, Tier C +15%)`
+    valore: `[PREZZI FODDER CICLO #${cycle}] Rating ${botState.fodderRating} -> ${botState.listaFodder.length} carte Pure Fodder attive (Floor: ${benchmarkFloor.toLocaleString('it-IT')} cr, Tetto +10%: ${maxPureFodderPrice.toLocaleString('it-IT')} cr | ${excludedCount} carte escluse da Pure Fodder Guard) | Prezzi Max Safe: da ${minMaxBuy.toLocaleString('it-IT')} a ${maxMaxBuy.toLocaleString('it-IT')} cr (Margine netto scaglionato: >30k: +1500, >20k: +1000, >10k: +500, <=10k: +${minNetProfit} cr) | Target attivi: ${targetNames}`
   });
 
   const targets = botState.listaFodder.filter(p => p && p.pid && p.priceInfo && p.priceInfo.maxBuyAllowed >= 150).map(p => {
@@ -443,6 +453,145 @@ export async function buildConsumablesLazyTargets(cycle, markup, minNetProfit) {
   };
 }
 
+export async function buildChemTaxLazyTargets(cycle, minNetProfit) {
+  const maxPrice = Number(botState.chemTaxMaxBasePrice) || 30000;
+  sendMessageSafe({
+    tipo: 'LOG',
+    valore: `[PGP CHEM TAX] Recupero giocatori più giocati dal server locale (http://localhost:3000/fut/pgp?max_price=${maxPrice})...`
+  });
+
+  let rawData = null;
+  try {
+    rawData = await fetchPgpPlayers(maxPrice);
+  } catch (err) {
+    sendMessageSafe({
+      tipo: 'LOG',
+      valore: `[PGP CHEM TAX] Errore connessione endpoint /fut/pgp: ${err.message}. Attendo 10s...`
+    });
+    await sleep(10000);
+    return { shouldContinue: true, cyclePrices: null, targets: [], minBidRequired: Infinity, targetStyles: null };
+  }
+
+  const effectiveMinProfit = Math.max(500, (typeof botState.chemTaxMinMargin === 'number' && botState.chemTaxMinMargin > 0 ? botState.chemTaxMinMargin : minNetProfit));
+  const candidates = filterPgpCandidates(rawData.players, {
+    styleFilter: botState.chemTaxStyle || "all",
+    maxBasePrice: maxPrice,
+    minBasePrice: 1500
+  });
+
+  if (candidates.length === 0) {
+    sendMessageSafe({
+      tipo: 'LOG',
+      valore: `[PGP CHEM TAX] Nessun calciatore candidato trovato con i filtri correnti (Max Prezzo: ${maxPrice} cr, Stile: ${botState.chemTaxStyle}). Attendo 10s...`
+    });
+    await sleep(10000);
+    return { shouldContinue: true, cyclePrices: null, targets: [], minBidRequired: Infinity, targetStyles: null };
+  }
+
+  // Prende i primi 8-10 candidati più giocati per concentrare le ricerche
+  const activePool = candidates.slice(0, 10);
+  const cyclePrices = {};
+  const validTargets = [];
+
+  for (const c of activePool) {
+    if (botState.start !== true) break;
+    sendMessageSafe({
+      tipo: 'LOG',
+      valore: `[PGP Analisi #${cycle}] Controllo spread per ${c.cardName} (${c.position || 'Ruolo'} | Target: ${c.styleName})...`
+    });
+
+    // 1. Rileva Lowest BIN base (senza stile)
+    const baseFloor = await discoverPgpPlayerLowestBin(c.eaId, null, `${c.cardName} (Liscia)`);
+    if (botState.start !== true) break;
+    await sleep(getRandomGaussian(1.2, 0.2, 0.9, 1.5) * 1000);
+
+    // 2. Rileva Lowest BIN con stile applicato (Ombra 268 o Cacciatore 266)
+    const chemFloor = await discoverPgpPlayerLowestBin(c.eaId, c.styleId, `${c.cardName} (${c.styleName})`);
+    if (botState.start !== true) break;
+
+    if (baseFloor > 0 && chemFloor > 0) {
+      const netRevenue = Math.floor(chemFloor * 0.95);
+      const rawMaxBuy = netRevenue - effectiveMinProfit;
+      const maxBuyAllowed = roundDownToStep(Math.min(baseFloor + 300, rawMaxBuy));
+      const estProfit = netRevenue - maxBuyAllowed;
+
+      if (maxBuyAllowed > baseFloor * 0.80 && estProfit >= effectiveMinProfit && chemFloor > baseFloor) {
+        cyclePrices[c.key] = {
+          floorBin: chemFloor,
+          baseFloor: baseFloor,
+          maxBidAllowed: maxBuyAllowed,
+          maxBuyNowAllowed: maxBuyAllowed,
+          sellPrice: chemFloor,
+          meta: { id: c.eaId, name: `${c.cardName} (${c.styleName})`, styleId: c.styleId, styleName: c.styleName }
+        };
+
+        validTargets.push({
+          key: c.key,
+          name: `${c.cardName} (${c.styleName})`,
+          maxBid: maxBuyAllowed,
+          maxBuyNow: maxBuyAllowed,
+          strongBase: chemFloor,
+          tierBase: chemFloor,
+          sellPrice: chemFloor,
+          isPgp: true,
+          itemFilter: (auction) => {
+            const pStyle = auction.playStyle || auction.itemData?.playStyle;
+            return String(pStyle) === String(c.styleId);
+          },
+          buildUrl: (micr, kind) => {
+            const url = new URL(TRANSFERMARKET_URL);
+            url.searchParams.set("num", "21");
+            url.searchParams.set("start", "0");
+            url.searchParams.set("type", "player");
+            url.searchParams.set("maskedDefId", String(c.eaId));
+            url.searchParams.set("playStyle", String(c.styleId));
+            url.searchParams.set(kind === "bid" ? "macr" : "maxb", String(maxBuyAllowed));
+            url.searchParams.set("micr", String(micr));
+            return url;
+          },
+          bidDataBase: {
+            eaId: c.eaId,
+            playStyleId: c.styleId,
+            name: `${c.cardName} (${c.styleName})`,
+            isPgp: true,
+            basePrice: chemFloor,
+            sellPrice: chemFloor
+          }
+        });
+
+        sendMessageSafe({
+          tipo: 'LOG',
+          valore: `[PGP TARGET AMMESSO] ${c.cardName} (${c.styleName}): Base ${baseFloor} cr -> Chem BIN ${chemFloor} cr (Max Buy: <= ${maxBuyAllowed} cr | Profitto netto: +${estProfit.toLocaleString('it-IT')} cr)`
+        });
+      } else {
+        sendMessageSafe({
+          tipo: 'LOG',
+          valore: `[PGP SPREAD BASSO] ${c.cardName} (${c.styleName}): Margine insufficiente (Base: ${baseFloor} cr, Chem: ${chemFloor} cr, Margine stimato: +${estProfit} cr < ${effectiveMinProfit} cr). Scartato.`
+        });
+      }
+    }
+    await sleep(getRandomGaussian(1.5, 0.2, 1.2, 1.8) * 1000);
+  }
+
+  if (validTargets.length === 0) {
+    sendMessageSafe({
+      tipo: 'LOG',
+      valore: `[PGP CHEM TAX] Nessun giocatore analizzato presenta uno spread sufficiente (+${effectiveMinProfit} cr netti). Riprovo al prossimo ciclo...`
+    });
+  }
+
+  const minBidRequired = validTargets.length > 0 ? Math.min(...validTargets.map(t => t.maxBid)) : Infinity;
+  const targetStyles = validTargets.map(t => t.key);
+
+  return {
+    shouldContinue: false,
+    cyclePrices,
+    targets: validTargets,
+    minBidRequired,
+    targetStyles
+  };
+}
+
 export async function buildLazyCycleTargets(cycle) {
   const isFodder = botState.targetMode === "fodder";
   const markup = botState.lazyMarkupPercent && botState.lazyMarkupPercent > 0 ? botState.lazyMarkupPercent : 10;
@@ -454,6 +603,8 @@ export async function buildLazyCycleTargets(cycle) {
     return await buildManagerLeagueLazyTargets(cycle, markup, minNetProfit);
   } else if (botState.targetMode === "managers") {
     return await buildManagersLazyTargets(cycle, minNetProfit);
+  } else if (botState.targetMode === "chemTax") {
+    return await buildChemTaxLazyTargets(cycle, minNetProfit);
   } else {
     return await buildConsumablesLazyTargets(cycle, markup, minNetProfit);
   }

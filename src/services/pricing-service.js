@@ -1,5 +1,5 @@
 // Logica di calcolo prezzi a tier e Auto-Discovery Lowest BIN (Fase 3 Refactor)
-import { botState, consumableBinCache } from '../core/state.js';
+import { botState, consumableBinCache, persistConsumableBinCache } from '../core/state.js';
 import { sendMessageSafe, triggerPinEvent } from '../core/messenger.js';
 import { handle401Error, handleSearchRateLimit } from '../ea/error-handlers.js';
 import { TRANSFERMARKET_URL } from '../ea/endpoints.js';
@@ -11,7 +11,7 @@ import {
   leagueTargetKey,
   managerTargetKey
 } from '../ea/constants.js';
-import { sleep, getRandomGaussian, getEaStep, roundUpToStep } from '../core/utils.js';
+import { sleep, getRandomGaussian, getEaStep, roundUpToStep, roundDownToStep } from '../core/utils.js';
 import {
   detectManager,
   detectManagerLeague,
@@ -27,10 +27,41 @@ import { getFodderPriceForItem } from './fodder-service.js';
  * - Tier B: 50% delle carte -> Markup standard (+10% o lazyMarkupPercent)
  * - Tier C: 20% delle carte -> Markup alto (+15%)
  */
-export function getTieredSellPrice(floorBin, customMarkup = null, isConsumable = true) {
-  if (!floorBin || floorBin <= 0) return { price: 0, tier: "B", markup: 10 };
+export function getTieredSellPrice(floorBin, customMarkup = null, isConsumable = true, relistCount = 0, buyPrice = null) {
+  if (!floorBin || floorBin <= 0) return { price: 0, tier: "B", markup: 10, isDecayed: false, decayTag: "" };
 
   const baseMarkup = (customMarkup !== null && customMarkup > 0) ? customMarkup : (botState.lazyMarkupPercent || 10);
+
+  let calculatedPrice = 0;
+  let slotTier = "B";
+  let appliedMarkup = 0;
+  let isDecayed = false;
+  let decayTag = "";
+
+  if (relistCount === 1) {
+    // 1° Relist (scaduta dopo 1 ora): Tier Decay Livello 1 -> Forza Tier A (+6%) per accelerare la rotazione
+    slotTier = "A";
+    appliedMarkup = Math.max(5, Math.round(baseMarkup * 0.6));
+    let rawPrice = floorBin * (1 + (appliedMarkup / 100));
+    calculatedPrice = roundUpToStep(rawPrice);
+    isDecayed = true;
+    decayTag = `Tier A Decay (+${appliedMarkup}%)`;
+  } else if (relistCount >= 2) {
+    // 2°+ Relist (scaduta dopo 2+ ore): Tier Decay Livello 2 -> Floor Liquidation al Lowest BIN live
+    slotTier = "Floor";
+    appliedMarkup = 0;
+    calculatedPrice = roundUpToStep(floorBin);
+
+    // Salvaguardia pareggio tasse se buyPrice è noto e vicino al floor live
+    if (buyPrice && buyPrice > 0) {
+      const breakEven = roundUpToStep(buyPrice / 0.95);
+      if (calculatedPrice < breakEven && (breakEven - calculatedPrice) <= getEaStep(calculatedPrice)) {
+        calculatedPrice = breakEven;
+      }
+    }
+    isDecayed = true;
+    decayTag = `Floor Decay #${relistCount} (+0%)`;
+  } else {
 
   // Sequenza interallacciata su 10 carte: 3 A (30%), 5 B (50%), 2 C (20%)
   const tierPattern = [
@@ -49,9 +80,11 @@ export function getTieredSellPrice(floorBin, customMarkup = null, isConsumable =
   const currentSlot = tierPattern[botState.listingTierCounter % tierPattern.length];
   botState.listingTierCounter++;
 
-  const appliedMarkup = Math.max(5, Math.round(baseMarkup * currentSlot.factor));
+    slotTier = currentSlot.tier;
+    appliedMarkup = Math.max(5, Math.round(baseMarkup * currentSlot.factor));
   let rawPrice = floorBin * (1 + (appliedMarkup / 100));
-  let calculatedPrice = roundUpToStep(rawPrice);
+    calculatedPrice = roundUpToStep(rawPrice);
+  }
 
   if (isConsumable && calculatedPrice > 5000) {
     calculatedPrice = 5000;
@@ -59,8 +92,10 @@ export function getTieredSellPrice(floorBin, customMarkup = null, isConsumable =
 
   return {
     price: calculatedPrice,
-    tier: currentSlot.tier,
-    markup: appliedMarkup
+    tier: slotTier,
+    markup: appliedMarkup,
+    isDecayed,
+    decayTag
   };
 }
 
@@ -101,11 +136,11 @@ export async function discoverCustomLowestBin(searchFilterParams, displayName, c
     return manualBinOverride;
   }
 
-  const CACHE_TTL_MS = 10 * 60 * 1000;
+  const CACHE_TTL_MS = 15 * 60 * 1000;
   if (!forceRefresh && cacheKey && consumableBinCache.has(String(cacheKey))) {
     const cached = consumableBinCache.get(String(cacheKey));
     if (Date.now() - cached.timestamp < CACHE_TTL_MS) {
-      const minsLeft = Math.round((CACHE_TTL_MS - (Date.now() - cached.timestamp)) / 60000);
+      const minsLeft = Math.max(1, Math.round((CACHE_TTL_MS - (Date.now() - cached.timestamp)) / 60000));
       console.log(`[FC Sniper Discovery] Usato Floor BIN in cache (${cached.price} cr) per ${displayName} (valido ancora per ${minsLeft} min)`);
       return cached.price;
     }
@@ -223,9 +258,10 @@ export async function discoverCustomLowestBin(searchFilterParams, displayName, c
 
   console.log(`[FC Sniper Discovery] Inizio scrematura verso il basso per ${displayName} a partire da ${candidateBin} crediti.`);
 
-  // FASE 2: Scrematura progressiva del prezzo (Downward Skimming)
+  // FASE 2: Scrematura progressiva del prezzo (Downward Skimming con Salto Adattivo)
   const MAX_SCREMATURA_ITERATIONS = 7;
   let verifiedBin = 0;
+  let lastJumpSteps = 1;
 
   for (let stepIdx = 0; stepIdx < MAX_SCREMATURA_ITERATIONS; stepIdx++) {
     if (botState.start !== true) break;
@@ -284,25 +320,33 @@ export async function discoverCustomLowestBin(searchFilterParams, displayName, c
     // CASO B: 0 carte trovate a questo prezzo
     if (totalCards === 0) {
       const step = getEaStep(candidateBin);
-      verifiedBin = candidateBin + step;
-      console.log(`[FC Sniper Discovery] 0 carte trovate a ${candidateBin} per ${displayName}. Lowest BIN reale: ${verifiedBin} crediti.`);
+      verifiedBin = roundUpToStep(candidateBin + step);
+      const adaptText = lastJumpSteps > 1 ? " [Riconciliato da salto doppio]" : "";
+      console.log(`[FC Sniper Discovery] 0 carte trovate a ${candidateBin} per ${displayName}. Lowest BIN reale: ${verifiedBin} crediti${adaptText}.`);
       sendMessageSafe({
         tipo: 'LOG',
-        valore: `[Auto-Discovery] Lowest BIN reale per ${displayName}: ${verifiedBin} crediti (0 carte a ${candidateBin})!`
+        valore: `[Auto-Discovery] Lowest BIN reale per ${displayName}: ${verifiedBin} crediti (0 carte a ${candidateBin})${adaptText}!`
       });
       break;
     }
 
-    // CASO C: Ci sono carte stagnanti o troppe carte -> scremiamo verso il basso
+    // CASO C: Ci sono carte stagnanti o troppe carte -> scremiamo verso il basso (Salto Adattivo)
     const step = getEaStep(candidateBin);
-    const nextLower = candidateBin - step;
+    let jumpSteps = 1;
+    // Se ci sono molte carte stagnanti (mercato saturo), scendi direttamente di 2 scalini per dimezzare le chiamate HTTP
+    if (staleCards.length >= 8 && (candidateBin - (step * 2)) >= 200) {
+      jumpSteps = 2;
+    }
+    const nextLower = roundDownToStep(candidateBin - (step * jumpSteps));
 
     if (nextLower < 200) {
       verifiedBin = 200;
       break;
     }
 
-    console.log(`[FC Sniper Scrematura] A ${candidateBin} ci sono ${totalCards} carte (${staleCards.length} ferme da oltre 2 min). Scremo verso il basso a ${nextLower}...`);
+    const jumpText = jumpSteps > 1 ? ` (Salto adattivo: -${step * jumpSteps} cr)` : '';
+    console.log(`[FC Sniper Scrematura] A ${candidateBin} ci sono ${totalCards} carte (${staleCards.length} ferme da oltre 2 min). Scremo verso il basso a ${nextLower}${jumpText}...`);
+    lastJumpSteps = jumpSteps;
     candidateBin = nextLower;
   }
 
@@ -313,6 +357,7 @@ export async function discoverCustomLowestBin(searchFilterParams, displayName, c
   if (verifiedBin > 0) {
     if (cacheKey) {
       consumableBinCache.set(String(cacheKey), { price: verifiedBin, timestamp: Date.now() });
+      persistConsumableBinCache();
     }
     return verifiedBin;
   }
@@ -329,6 +374,20 @@ export async function discoverConsumableLowestBin(playStyleId, manualBinOverride
     playStyle: String(playStyleId)
   };
   return discoverCustomLowestBin(params, styleMeta.name, String(playStyleId), manualBinOverride, forceRefresh);
+}
+
+// Auto-Discovery Lowest BIN per calciatori PGP (con o senza stile intesa specifico)
+export async function discoverPgpPlayerLowestBin(eaId, playStyleId = null, displayName = "", manualBinOverride = 0, forceRefresh = false) {
+  const cacheKey = playStyleId ? `pgp_chem_${eaId}_${playStyleId}` : `pgp_base_${eaId}`;
+  const searchFilter = {
+    type: "player",
+    maskedDefId: String(eaId)
+  };
+  if (playStyleId) {
+    searchFilter.playStyle = String(playStyleId);
+  }
+  const name = displayName || (playStyleId ? `Player ${eaId} (Stile ${playStyleId})` : `Player ${eaId} (Base)`);
+  return discoverCustomLowestBin(searchFilter, name, cacheKey, manualBinOverride, forceRefresh);
 }
 
 // Rileva il Lowest BIN di un Modificatore Campionato Allenatore (cat=managerLeagueModifier&amount=<leagueId>).
@@ -448,7 +507,7 @@ export async function resolveItemSellPrice(item, tracked = null) {
   let tierTag = "";
 
   if (tracked?.basePrice && tracked.basePrice > 0) {
-    if (botState.targetMode === "managers" || tracked?.isManager) {
+    if (botState.targetMode === "managers" || tracked?.isManager || botState.targetMode === "chemTax" || tracked?.isPgp) {
       return { sellPrice: tracked.basePrice, tierTag: " [Istantaneo: Lowest BIN live]" };
     }
     if (botState.targetMode === "manual" || tracked?.isManual || botState.strategyMode === "bidding") {
@@ -465,6 +524,19 @@ export async function resolveItemSellPrice(item, tracked = null) {
   }
 
   const data = item.itemData || item || {};
+
+  // 0. Modalità PGP Chem Tax (Giocatore con Ombra / Cacciatore)
+  if (botState.targetMode === "chemTax" || tracked?.isPgp) {
+    const playStyle = item.playStyle || data.playStyle || tracked?.playStyleId;
+    const pId = data.assetId || data.resourceId || item.assetId || item.resourceId || tracked?.eaId;
+    if (pId && playStyle) {
+      console.log(`[FC Sniper Pricing] Risoluzione dinamica prezzo per Giocatore PGP Chem Tax (${pId}, stile ${playStyle})...`);
+      const floor = await discoverPgpPlayerLowestBin(pId, playStyle, tracked?.name || `Player ${pId}`);
+      if (floor > 0) {
+        return { sellPrice: floor, tierTag: " [Istantaneo: Lowest BIN live]" };
+      }
+    }
+  }
 
   // 1. Modalità Fodder
   if (botState.targetMode === "fodder" || tracked?.isFodder) {

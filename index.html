@@ -20,7 +20,7 @@
             <div class="brand-title-wrap">
                 <h5 class="brand-title">
                     FC Sniper &amp; Trader
-                    <span id="versione" class="version-badge">v2.8.6</span>
+                    <span id="versione" class="version-badge">v2.8.7</span>
                     <button type="button" id="updateBadge" class="update-badge d-none" title="Nuova versione disponibile! Clicca per aggiornare">
                         <span class="update-pulse-dot" aria-hidden="true"></span>
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -240,6 +240,17 @@
                             <span class="target-tile-name">Allenatori</span>
                         </label>
 
+                        <input type="radio" class="btn-check" name="targetMode" id="targetChemTax" value="chemTax" autocomplete="off">
+                        <label class="target-tile" for="targetChemTax">
+                            <span class="target-tile-top">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polygon>
+                                </svg>
+                                <span class="tile-mini-tag tag-all-modes">PGP · High ROI</span>
+                            </span>
+                            <span class="target-tile-name">PGP Chem Tax</span>
+                        </label>
+
                         <input type="radio" class="btn-check" name="targetMode" id="targetManual" value="manual" autocomplete="off">
                         <label class="target-tile" for="targetManual">
                             <span class="target-tile-top">
@@ -337,6 +348,17 @@
                             <input type="radio" class="btn-check" name="fodderRating" id="rating88" value="88" autocomplete="off">
                             <label class="rating-pill" for="rating88">88</label>
                         </div>
+
+                        <div class="ios-switch-row" style="margin-top: 0.65rem; margin-bottom: 0;" title="Se attivo, assegna più slot e offerte ai calciatori Fodder con tasso di vendita reale più alto. Se disattivo, mantiene quote statiche paritarie.">
+                            <div class="ios-switch-info">
+                                <label class="ios-switch-label" for="dynamicQuotaFodderCheck">Quote Dinamiche (Sell-Through)</label>
+                                <span class="ios-switch-desc">Più acquisti per i giocatori a rotazione rapida</span>
+                            </div>
+                            <label class="ios-switch" for="dynamicQuotaFodderCheck">
+                                <input class="ios-switch-input" type="checkbox" id="dynamicQuotaFodderCheck">
+                                <span class="ios-switch-slider"></span>
+                            </label>
+                        </div>
                     </div>
 
                     <!-- Configurazione Consumabili -->
@@ -351,6 +373,17 @@
                                 <option value="260">Motore (Engine)</option>
                                 <option value="267">Catalizzatore (Catalyst)</option>
                             </select>
+                        </div>
+
+                        <div class="ios-switch-row" title="Se attivo, assegna fino al 40-50% degli slot agli stili intesa che si vendono più rapidamente. Se disattivo, usa quote statiche paritarie.">
+                            <div class="ios-switch-info">
+                                <label class="ios-switch-label" for="dynamicQuotaConsumablesCheck">Quote Dinamiche (Sell-Through)</label>
+                                <span class="ios-switch-desc">Privilegia stili ad alta liquidità (Ombra/Cacciatore)</span>
+                            </div>
+                            <label class="ios-switch" for="dynamicQuotaConsumablesCheck">
+                                <input class="ios-switch-input" type="checkbox" id="dynamicQuotaConsumablesCheck">
+                                <span class="ios-switch-slider"></span>
+                            </label>
                         </div>
 
                         <div id="snipeSpecificContainer">
@@ -373,6 +406,20 @@
                         </div>
                     </div>
 
+                    <!-- Configurazione Campionati -->
+                    <div id="managerLeagueConfigContainer" class="field-block d-none">
+                        <div class="ios-switch-row" style="margin-bottom: 0;" title="Se attivo, assegna più slot e offerte ai campionati con tasso di vendita reale più alto. Se disattivo, mantiene quote statiche paritarie (20% per campionato).">
+                            <div class="ios-switch-info">
+                                <label class="ios-switch-label" for="dynamicQuotaLeagueCheck">Quote Dinamiche (Sell-Through)</label>
+                                <span class="ios-switch-desc">Alloca più slot ai campionati manager più richiesti</span>
+                            </div>
+                            <label class="ios-switch" for="dynamicQuotaLeagueCheck">
+                                <input class="ios-switch-input" type="checkbox" id="dynamicQuotaLeagueCheck">
+                                <span class="ios-switch-slider"></span>
+                            </label>
+                        </div>
+                    </div>
+
                     <!-- Configurazione Allenatori -->
                     <div id="managersConfigContainer" class="field-block d-none">
                         <label for="managerNationSelect" class="form-label">Nazionalità Allenatore</label>
@@ -388,8 +435,55 @@
                             <option value="38">Portogallo</option>
                             <option value="52">Argentina</option>
                         </select>
+                        <div class="ios-switch-row" style="margin-top: 0.65rem; margin-bottom: 0.35rem;" title="Se attivo, assegna più slot e offerte alle nazioni allenatore con più vendite reali. Se disattivo, mantiene quote statiche paritarie.">
+                            <div class="ios-switch-info">
+                                <label class="ios-switch-label" for="dynamicQuotaManagersCheck">Quote Dinamiche (Sell-Through)</label>
+                                <span class="ios-switch-desc">Più acquisti per le nazioni a rotazione più rapida</span>
+                            </div>
+                            <label class="ios-switch" for="dynamicQuotaManagersCheck">
+                                <input class="ios-switch-input" type="checkbox" id="dynamicQuotaManagersCheck">
+                                <span class="ios-switch-slider"></span>
+                            </label>
+                        </div>
                         <small class="helper-note">
                             Acquisto automatico a -15% dal Lowest BIN live. Vendita istantanea al Lowest BIN.
+                        </small>
+                    </div>
+
+                    <!-- Configurazione PGP Chem Tax -->
+                    <div id="chemTaxConfigContainer" class="field-block d-none">
+                        <div class="field-grid-2">
+                            <div class="field-block">
+                                <label for="chemTaxStyleSelect" class="form-label">Stile Target</label>
+                                <select class="form-select" id="chemTaxStyleSelect">
+                                    <option value="all" selected>Tutti (Ombra + Cacciatore)</option>
+                                    <option value="268">Solo Ombra (Difesa/Mediani)</option>
+                                    <option value="266">Solo Cacciatore (Attacco/Ali)</option>
+                                </select>
+                            </div>
+                            <div class="field-block">
+                                <label for="chemTaxMaxBasePriceInput" class="form-label">Max Prezzo Base</label>
+                                <input type="number" class="form-control" id="chemTaxMaxBasePriceInput" value="30000" min="2000" step="1000" placeholder="es. 30000">
+                            </div>
+                        </div>
+
+                        <div class="field-block">
+                            <label for="chemTaxMinMarginInput" class="form-label">Margine Netto Minimo (Crediti)</label>
+                            <input type="number" class="form-control" id="chemTaxMinMarginInput" value="1000" min="300" step="100" placeholder="es. 1000">
+                        </div>
+
+                        <div class="ios-switch-row" style="margin-top: 0.65rem; margin-bottom: 0.35rem;" title="Se attivo, alloca più slot e offerte ai calciatori PGP con tasso di vendita reale più alto. Se disattivo, usa quote statiche paritarie.">
+                            <div class="ios-switch-info">
+                                <label class="ios-switch-label" for="dynamicQuotaChemTaxCheck">Quote Dinamiche (Sell-Through)</label>
+                                <span class="ios-switch-desc">Più acquisti per i calciatori PGP a rotazione più rapida</span>
+                            </div>
+                            <label class="ios-switch" for="dynamicQuotaChemTaxCheck">
+                                <input class="ios-switch-input" type="checkbox" id="dynamicQuotaChemTaxCheck">
+                                <span class="ios-switch-slider"></span>
+                            </label>
+                        </div>
+                        <small class="helper-note">
+                            Acquista calciatori meta popolari con Ombra/Cacciatore al prezzo della carta liscia. Rivende al Lowest BIN dello stile (+1.000 / +3.000 cr netti).
                         </small>
                     </div>
 
@@ -559,7 +653,7 @@
                 <div class="version-compare-row">
                     <div class="version-box current">
                         <span class="label">Versione Attuale</span>
-                        <strong id="modalCurrentVersion">v2.8.6</strong>
+                        <strong id="modalCurrentVersion">v2.8.7</strong>
                     </div>
                     <span class="version-arrow">➜</span>
                     <div class="version-box next">
