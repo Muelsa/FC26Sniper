@@ -11,7 +11,7 @@ import {
 } from '../core/state.js';
 import { sendMessageSafe, triggerPinEvent } from '../core/messenger.js';
 import { reportTelemetry } from '../core/telemetry.js';
-import { handle401Error, handleCaptchaDetected } from '../ea/error-handlers.js';
+import { handle401Error, handleCaptchaDetected, reloadWebAppTab } from '../ea/error-handlers.js';
 import { isRateLimitStatus } from '../ea/status-policy.js';
 import { getCrediti, sendBidRequest, sendBuyNowRequest, moveSingleItemToTrade, sellSingleItem } from '../ea/market-api.js';
 import {
@@ -946,8 +946,10 @@ export async function runLazySleepWithHeartbeat(ctx) {
   } = ctx;
 
   let sleepMins;
+  let isSoftBanPause = false;
   if (botState.marketRestricted || ctx.consecutive512InCycle > 0) {
     botState.marketRestricted = true;
+    isSoftBanPause = true;
     ctx.consecutiveSoftBansInSession++;
     const baseMins = Math.max(45, botState.lazySleepMinutes && botState.lazySleepMinutes > 0 ? botState.lazySleepMinutes : 60);
     if (ctx.consecutiveSoftBansInSession <= 1) {
@@ -1014,6 +1016,8 @@ export async function runLazySleepWithHeartbeat(ctx) {
   const totalSleepSeconds = sleepMins * 60;
   let nextHeartbeatAt = Math.round(getRandomGaussian(120, 10, 95, 150));
   let nextPingAt = Math.round(getRandomGaussian(480, 30, 360, 600));
+  let midPauseReloadDone = false;
+  const midSleepSeconds = Math.floor(totalSleepSeconds / 2);
 
   let elapsed = 0;
   while (elapsed < totalSleepSeconds && botState.start === true) {
@@ -1024,6 +1028,41 @@ export async function runLazySleepWithHeartbeat(ctx) {
       try {
         await chrome.storage.local.get(['keepAliveCheck']);
       } catch (_) { }
+    }
+
+    // Ricarica Web App a metà pausa rigenerativa da soft-ban per rinnovare il token EA dopo il dovuto riposo
+    if (isSoftBanPause && !midPauseReloadDone && elapsed >= midSleepSeconds && botState.start === true) {
+      midPauseReloadDone = true;
+      const elapsedMins = Math.round(elapsed / 60);
+      const remainingMins = Math.round((totalSleepSeconds - elapsed) / 60);
+      sendMessageSafe({
+        tipo: 'LOG',
+        valore: `[SOFT-BAN REFRESH] Raggiunta metà della pausa rigenerativa (${elapsedMins}/${sleepMins} min). Ricarico la scheda Web App per ottenere un nuovo token EA e lasciarlo riposare per i restanti ${remainingMins} min...`
+      });
+
+      const previousToken = botState.xUtSid;
+      const reloadResult = await reloadWebAppTab({ previousToken, waitForToken: true, maxWaitSeconds: 40 });
+      if (reloadResult.tokenSynced) {
+        botState.consecutive401Errors = 0;
+        sendMessageSafe({
+          tipo: 'LOG',
+          valore: `[SOFT-BAN REFRESH COMPLETATO] Nuovo token EA sincronizzato con successo (${botState.xUtSid.substring(0, 10)}...). Silenzio totale mantenuto per far riposare anche la nuova sessione prima della ripresa.`
+        });
+        reportTelemetry('SOFTBAN_MIDPAUSE_RELOAD', `Web App ricaricata a metà pausa soft-ban con nuovo token`, {
+          previousToken: previousToken ? previousToken.substring(0, 8) : null,
+          newToken: botState.xUtSid ? botState.xUtSid.substring(0, 8) : null,
+          elapsedMinutes: elapsedMins,
+          remainingMinutes: remainingMins
+        });
+      } else {
+        sendMessageSafe({
+          tipo: 'LOG',
+          valore: `[SOFT-BAN REFRESH] Scheda Web App ricaricata. Mantengo il riposo silenziato per i restanti ${remainingMins} min.`
+        });
+      }
+
+      // Sposta il prossimo ping keep-alive in avanti per non disturbare la nuova sessione appena avviata
+      nextPingAt = elapsed + Math.round(getRandomGaussian(480, 30, 360, 600));
     }
 
     if (elapsed >= nextHeartbeatAt && botState.start === true) {
