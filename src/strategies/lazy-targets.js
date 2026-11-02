@@ -194,7 +194,7 @@ export async function buildManagerLeagueLazyTargets(cycle, markup, minNetProfit)
       });
     }
     if (botState.start !== true) break;
-    await sleep(getRandomGaussian(1.5, 0.2, 1.2, 1.8) * 1000);
+    await sleep(getRandomGaussian(2.0, 0.3, 1.5, 2.5) * 1000);
   }
   if (botState.start !== true) {
     return { shouldContinue: true, cyclePrices, targets: [], minBidRequired: Infinity, targetStyles };

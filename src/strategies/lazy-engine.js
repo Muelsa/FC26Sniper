@@ -9,7 +9,7 @@ import {
   computeDynamicAllocation,
   decaySellThroughStats
 } from '../core/state.js';
-import { sendMessageSafe, triggerPinEvent } from '../core/messenger.js';
+import { sendMessageSafe, triggerPinEvent, stopBot } from '../core/messenger.js';
 import { reportTelemetry } from '../core/telemetry.js';
 import { handle401Error, handleCaptchaDetected, reloadWebAppTab } from '../ea/error-handlers.js';
 import { isRateLimitStatus } from '../ea/status-policy.js';
@@ -28,7 +28,7 @@ import {
 } from '../services/watchlist-service.js';
 import { getTieredSellPrice } from '../services/pricing-service.js';
 import { detectConsumableKey, detectTargetKey, targetDisplayName } from '../services/item-classifier.js';
-import { sendCycleReport } from '../services/telegram-service.js';
+import { sendCycleReport, sendTelegramMessage } from '../services/telegram-service.js';
 import { sleep, getRandomGaussian, calculateNextBid, roundUpToStep } from '../core/utils.js';
 import { getUrgentAuctionTimeRemaining } from './strategy-utils.js';
 import { buildLazyCycleTargets } from './lazy-targets.js';
@@ -850,27 +850,26 @@ export async function runLazyTopUpStep(ctx) {
                 minPriceOffset++;
                 const nextMinBump = minBidBumps[(styleTopUpCount + minPriceOffset) % minBidBumps.length];
 
-                const isSoftBanTriggered = (botState.consecutive461InBidding >= 3 && consecutive461InTopUp >= 1) || consecutive461InTopUp >= 3;
+                const isSoftBanTriggered = (botState.consecutive461InBidding >= 3 && consecutive461InTopUp >= 1) || consecutive461InTopUp >= 2;
 
                 if (isSoftBanTriggered) {
                   const errorCountReason = botState.consecutive461InBidding >= 3
                     ? `4 errori 461 consecutivi (3 su aste + 1 su Compra Ora)`
-                    : `3 tentativi consecutivi di Compra Ora rifiutati (461)`;
-                  console.log(`[${topUpTag}] Rilevato Soft-Ban EA: ${errorCountReason}. Concludo Step 2 e avvio pausa silenziata.`);
+                    : `2 rifiuti consecutivi (461) su Compra Ora`;
+                  console.log(`[${topUpTag}] Rilevato rischio Soft-Ban EA: ${errorCountReason}. Concludo precauzionalmente Step 2 per prevenire soft-ban.`);
                   sendMessageSafe({
                     tipo: 'LOG',
-                    valore: `[${topUpTag}] Rilevato Soft-Ban EA (${errorCountReason}). Attivazione pausa rigenerativa silenziata (keep-alive di sessione attivo per evitare disconnessioni)...`
+                    valore: `[${topUpTag}] Rilevati 2 rifiuti consecutivi (461) su Compra Ora. Interrompo precauzionalmente il rifornimento per questo ciclo per prevenire soft-ban EA.`
                   });
-                  botState.marketRestricted = true;
                   stopTopUpDueTo461 = true;
-                  ctx.requiresSoftBanProbe = true;
                   break;
                 } else {
+                  const backoffSec = (getRandomGaussian(10.0, 0.8, 8.0, 12.0)).toFixed(1);
                   sendMessageSafe({
                     tipo: 'LOG',
-                    valore: `[${topUpTag}] Carta anticipata (461). Eseguo nuova ricerca variando prezzo minimo (${nextMinBump} cr)... (${consecutive461InTopUp}/3)`
+                    valore: `[${topUpTag}] Carta anticipata o rifiutata (461). Backoff prudenziale di ${backoffSec}s prima della prossima ricerca (${nextMinBump} cr)... (${consecutive461InTopUp}/2)`
                   });
-                  await sleep(getRandomGaussian(2.5, 0.3, 2.0, 3.2) * 1000);
+                  await sleep(backoffSec * 1000);
                 }
               } else {
                 await sleep(getRandomGaussian(2.5, 0.3, 2.0, 3.2) * 1000);
@@ -950,6 +949,7 @@ export async function runLazySleepWithHeartbeat(ctx) {
   if (botState.marketRestricted || ctx.consecutive512InCycle > 0) {
     botState.marketRestricted = true;
     isSoftBanPause = true;
+    ctx.tokenAtSoftBan = botState.xUtSid || null;
     ctx.consecutiveSoftBansInSession++;
     const baseMins = Math.max(45, botState.lazySleepMinutes && botState.lazySleepMinutes > 0 ? botState.lazySleepMinutes : 60);
     if (ctx.consecutiveSoftBansInSession <= 1) {
@@ -1057,8 +1057,16 @@ export async function runLazySleepWithHeartbeat(ctx) {
       } else {
         sendMessageSafe({
           tipo: 'LOG',
-          valore: `[SOFT-BAN REFRESH] Scheda Web App ricaricata. Mantengo il riposo silenziato per i restanti ${remainingMins} min.`
+          valore: `[SOFT-BAN REFRESH FALLITO] ⚠️ Web App non autenticata dopo il reload: effettua il login manuale per ripristinare il token EA!`
         });
+        try {
+          await sendTelegramMessage(
+            '⚠️ <b>FC Sniper - Allarme Sessione</b>\n\n' +
+            'La Web App è stata ricaricata a metà pausa da soft-ban ma <b>non risulta autenticata</b>.\n' +
+            'La sessione o i cookie EA potrebbero essere scaduti (pagina ferma su Login).\n\n' +
+            '👉 <b>Effettua subito il login manuale nella Web App</b> per generare un nuovo token EA prima della fine della pausa!'
+          );
+        } catch (_) {}
       }
 
       // Sposta il prossimo ping keep-alive in avanti per non disturbare la nuova sessione appena avviata
@@ -1336,6 +1344,45 @@ export async function runLazyTradingEngine() {
         if (botState.marketRestricted) {
           requiresSoftBanProbe = true;
         }
+
+        // Verifica all'uscita della pausa: se il token è ancora identico a quello che ha subito il soft-ban
+        if (ctx.tokenAtSoftBan && botState.xUtSid === ctx.tokenAtSoftBan) {
+          sendMessageSafe({
+            tipo: 'LOG',
+            valore: `[AVVISO ATTESA TOKEN] ⚠️ Il token EA non è cambiato rispetto al soft-ban (${ctx.tokenAtSoftBan.substring(0, 8)}...). Richiedo token a caldo dalla Web App (attesa fino a 20s)...`
+          });
+          await triggerPinEvent('REQUEST_TOKEN_REFRESH').catch(() => {});
+          for (let waitSec = 0; waitSec < 20 && botState.start === true; waitSec++) {
+            await sleep(1000);
+            if (botState.xUtSid && botState.xUtSid !== ctx.tokenAtSoftBan) {
+              break;
+            }
+          }
+
+          if (botState.xUtSid === ctx.tokenAtSoftBan) {
+            sendMessageSafe({
+              tipo: 'LOG',
+              valore: `[BLOCCO SICUREZZA] 🛑 Il token EA è ancora identico a quello del soft-ban (${ctx.tokenAtSoftBan.substring(0, 8)}...). Arresto immediato del bot per evitare ulteriori chiamate/ban.`
+            });
+            try {
+              await sendTelegramMessage(
+                `🛑 <b>FC Sniper - Bot Arrestato</b>\n\n` +
+                `Pausa soft-ban terminata, ma il token EA in uso è ancora quello bloccato (${ctx.tokenAtSoftBan.substring(0, 8)}...).\n` +
+                `Il bot è stato <b>arrestato per sicurezza</b> senza effettuare chiamate di test verso il mercato.\n\n` +
+                `👉 Effettua il login manuale nella Web App e riavvia il bot.`
+              );
+            } catch (_) {}
+            await stopBot('Token EA invariato dopo soft-ban (sessione non rinnovata)');
+            return;
+          } else {
+            sendMessageSafe({
+              tipo: 'LOG',
+              valore: `[TOKEN AGGIORNATO] Rilevato nuovo token EA (${botState.xUtSid.substring(0, 10)}...) prima della sonda di mercato!`
+            });
+          }
+        }
+        ctx.tokenAtSoftBan = null;
+
         botState.marketRestricted = false;
         botState.consecutive461InBidding = 0;
         reportTelemetry('CYCLE_START', `Avvio Ciclo #${cycle + 1}`, { cycle: cycle + 1, crediti: botState.crediti });

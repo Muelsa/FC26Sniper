@@ -334,7 +334,7 @@ export async function discoverCustomLowestBin(searchFilterParams, displayName, c
     const step = getEaStep(candidateBin);
     let jumpSteps = 1;
     // Se ci sono molte carte stagnanti (mercato saturo), scendi direttamente di 2 scalini per dimezzare le chiamate HTTP
-    if (staleCards.length >= 8 && (candidateBin - (step * 2)) >= 200) {
+    if (staleCards.length >= 4 && (candidateBin - (step * 2)) >= 200) {
       jumpSteps = 2;
     }
     const nextLower = roundDownToStep(candidateBin - (step * jumpSteps));
