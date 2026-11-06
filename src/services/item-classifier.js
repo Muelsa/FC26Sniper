@@ -161,8 +161,28 @@ export function detectConsumableKey(itemOrAuction, fallbackStyle = null) {
   return cs ? String(cs) : null;
 }
 
-// Nome leggibile per log: allenatore, campionato o stile intesa
+// Chiave target universale per il Sell-Through Rate (include anche il PID per Fodder e PGP Chem Tax)
+export function detectTargetKey(itemOrAuction, fallbackStyle = null) {
+  if (!itemOrAuction) return detectConsumableKey(itemOrAuction, fallbackStyle);
+  const data = itemOrAuction.itemData || itemOrAuction;
+  if (data?.itemType === "player") {
+    const pid = data.assetId || data.resourceId || itemOrAuction.assetId || itemOrAuction.resourceId;
+    const playStyle = data.playStyle || itemOrAuction.playStyle;
+    if (pid && playStyle && (String(playStyle) === "268" || String(playStyle) === "266")) {
+      return `pgp_${pid}_${playStyle}`;
+    }
+    if (pid) return String(pid);
+  }
+  return detectConsumableKey(itemOrAuction, fallbackStyle);
+}
+
+// Nome leggibile per log: allenatore, campionato, stile intesa o giocatore PGP
 export function targetDisplayName(key) {
+  if (String(key).startsWith("pgp_")) {
+    const parts = String(key).split("_");
+    const styleName = parts[2] === "268" ? "Ombra" : (parts[2] === "266" ? "Cacciatore" : `Stile ${parts[2]}`);
+    return `Player ${parts[1]} (${styleName})`;
+  }
   if (String(key).startsWith("manager_nat_")) {
     const natId = String(key).slice("manager_nat_".length);
     return `Allenatore ${TOP_MANAGER_NATIONS[natId]?.name || NATION_NAMES[natId] || 'Naz ' + natId}`;

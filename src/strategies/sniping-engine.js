@@ -5,7 +5,7 @@ import { handle401Error, handleSearchRateLimit } from '../ea/error-handlers.js';
 import { TRANSFERMARKET_URL } from '../ea/endpoints.js';
 import { sendBuyNowRequest, sendToTransferList, sellFodder, sellSingleItem, getCrediti } from '../ea/market-api.js';
 import { clearSoldItem } from '../services/tradepile-service.js';
-import { getFodderList, getNextFodder } from '../services/fodder-service.js';
+import { getFodderList, getNextFodder, filterPureFodder } from '../services/fodder-service.js';
 import { discoverConsumableLowestBin } from '../services/pricing-service.js';
 import { CHEM_STYLES } from '../ea/constants.js';
 import { sleep, getRandomGaussian, roundDownToStep } from '../core/utils.js';
@@ -157,6 +157,7 @@ export async function sendFodderResearchRequest() {
       botState.listaFodder = [];
       botState.indexFodder = 0;
       await getFodderList();
+      botState.listaFodder = filterPureFodder(botState.listaFodder, 0.10);
     }
 
     if (botState.listaFodder.length === 0) {

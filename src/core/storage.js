@@ -20,6 +20,14 @@ export const getTargetTradepileSize = async () => parseInt(await getKey('targetT
 export const getLazyMarkupPercent = async () => parseInt(await getKey('lazyMarkupPercent', 10)) || 10;
 export const getLazySleepMinutes = async () => parseInt(await getKey('lazySleepMinutes', 63)) || 63;
 export const getManagerNation = () => getKey('managerNation', "18,34");
+export const getDynamicQuotaFodder = async () => Boolean(await getKey('dynamicQuotaFodder', false));
+export const getDynamicQuotaConsumables = async () => Boolean(await getKey('dynamicQuotaConsumables', false));
+export const getDynamicQuotaLeague = async () => Boolean(await getKey('dynamicQuotaLeague', false));
+export const getDynamicQuotaManagers = async () => Boolean(await getKey('dynamicQuotaManagers', false));
+export const getDynamicQuotaChemTax = async () => Boolean(await getKey('dynamicQuotaChemTax', false));
+export const getChemTaxStyle = () => getKey('chemTaxStyle', 'all');
+export const getChemTaxMaxBasePrice = async () => parseInt(await getKey('chemTaxMaxBasePrice', 30000)) || 30000;
+export const getChemTaxMinMargin = async () => parseInt(await getKey('chemTaxMinMargin', 1000)) || 1000;
 
 // targetMode con retro-compatibilità dalla vecchia chiave booleana fodderMode
 export function getTargetMode() {

@@ -1,8 +1,17 @@
 // Motore UNICO di LAZY TRADING (fodder / consumabili / campionati / allenatori)
-import { botState, activeBids, attemptedTradeIds, markTradeAttempted, storePendingBid } from '../core/state.js';
-import { sendMessageSafe, triggerPinEvent } from '../core/messenger.js';
+import {
+  botState,
+  activeBids,
+  attemptedTradeIds,
+  markTradeAttempted,
+  storePendingBid,
+  isDynamicQuotaEnabled,
+  computeDynamicAllocation,
+  decaySellThroughStats
+} from '../core/state.js';
+import { sendMessageSafe, triggerPinEvent, stopBot } from '../core/messenger.js';
 import { reportTelemetry } from '../core/telemetry.js';
-import { handle401Error, handleCaptchaDetected } from '../ea/error-handlers.js';
+import { handle401Error, handleCaptchaDetected, reloadWebAppTab } from '../ea/error-handlers.js';
 import { isRateLimitStatus } from '../ea/status-policy.js';
 import { getCrediti, sendBidRequest, sendBuyNowRequest, moveSingleItemToTrade, sellSingleItem } from '../ea/market-api.js';
 import {
@@ -18,13 +27,13 @@ import {
   checkAndProcessWatchlistForLazy
 } from '../services/watchlist-service.js';
 import { getTieredSellPrice } from '../services/pricing-service.js';
-import { detectConsumableKey, targetDisplayName } from '../services/item-classifier.js';
-import { sendCycleReport } from '../services/telegram-service.js';
+import { detectConsumableKey, detectTargetKey, targetDisplayName } from '../services/item-classifier.js';
+import { sendCycleReport, sendTelegramMessage } from '../services/telegram-service.js';
 import { sleep, getRandomGaussian, calculateNextBid, roundUpToStep } from '../core/utils.js';
 import { getUrgentAuctionTimeRemaining } from './strategy-utils.js';
 import { buildLazyCycleTargets } from './lazy-targets.js';
 
-export function computeLazyCycleTarget(pileInfo, isFodder, tag, targetStyles) {
+export function computeLazyCycleTarget(pileInfo, isFodder, tag, targetStyles, targets = []) {
   const currentActiveCount = pileInfo.active || 0;
   const currentTotalCount = pileInfo.total || 0;
   const unlistedCount = Math.max(0, currentTotalCount - currentActiveCount);
@@ -33,23 +42,80 @@ export function computeLazyCycleTarget(pileInfo, isFodder, tag, targetStyles) {
     ? Math.min(botState.targetTradepileSize, MAX_TRADEPILE_LIMIT)
     : 50;
 
-  // Bilanciamento paritario presenze per stile / campionato / nazione (solo non-fodder)
-  if (!isFodder && Array.isArray(targetStyles) && targetStyles.length > 0) {
-    const currentStyleCounts = {};
-    for (const sId of targetStyles) currentStyleCounts[sId] = 0;
-    for (const a of (pileInfo.auctions || [])) {
-      const detected = detectConsumableKey(a);
-      if (currentStyleCounts[detected] !== undefined) currentStyleCounts[detected]++;
+  const isPgpMode = botState.targetMode === "chemTax";
+  const activeKeys = (isFodder || isPgpMode)
+    ? (Array.isArray(targets) ? targets.map(t => String(t.key)) : [])
+    : (Array.isArray(targetStyles) ? targetStyles.map(String) : []);
+
+  const currentStyleCounts = {};
+  for (const k of activeKeys) currentStyleCounts[k] = 0;
+  for (const a of (pileInfo.auctions || [])) {
+    const detected = (isFodder || isPgpMode) ? detectTargetKey(a) : detectConsumableKey(a);
+    if (detected && currentStyleCounts[detected] !== undefined) {
+      currentStyleCounts[detected]++;
     }
-    const presenceLog = targetStyles.map(sId => {
-      const name = targetDisplayName(sId).replace("Modificatore ", "").replace("Allenatore ", "");
-      return `${name}: ${currentStyleCounts[sId]}`;
-    }).join(" | ");
-    const unitName = botState.targetMode === "managers" ? "nazione" : (botState.targetMode === "managerLeague" ? "campionato" : "stile");
-    sendMessageSafe({
-      tipo: 'LOG',
-      valore: `[BILANCIAMENTO TRADEPILE] Presenze attuali: ${presenceLog} (Quota paritaria: ${Math.round(100 / targetStyles.length)}% per ${unitName})`
-    });
+  }
+
+  const pileAlloc = computeDynamicAllocation(activeKeys, targetSize, null, !isDynamicQuotaEnabled());
+
+  // Bilanciamento presenze (Statico Paritario oppure Dinamico Sell-Through)
+  if (!isFodder && activeKeys.length > 0) {
+    const unitName = botState.targetMode === "chemTax" ? "calciatore PGP" : (botState.targetMode === "managers" ? "nazione" : (botState.targetMode === "managerLeague" ? "campionato" : "stile"));
+    if (pileAlloc.isDynamicActive) {
+      const presenceLog = activeKeys.map(sId => {
+        const name = targetDisplayName(sId).replace("Modificatore ", "").replace("Allenatore ", "");
+        const sharePct = Math.round((pileAlloc.shares[sId] || 0) * 100);
+        const r = pileAlloc.rates[sId];
+        const strInfo = r && r.strPercent !== null ? `, STR ${r.strPercent}%` : "";
+        return `${name}: ${currentStyleCounts[sId]}/${pileAlloc.quotas[sId]} (Quota ${sharePct}%${strInfo})`;
+      }).join(" | ");
+      sendMessageSafe({
+        tipo: 'LOG',
+        valore: `[ALLOCAZIONE DINAMICA SELL-THROUGH] Presenze/Target Tradepile: ${presenceLog}`
+      });
+    } else if (pileAlloc.dynamicEnabled) {
+      const presenceLog = activeKeys.map(sId => {
+        const name = targetDisplayName(sId).replace("Modificatore ", "").replace("Allenatore ", "");
+        return `${name}: ${currentStyleCounts[sId]}`;
+      }).join(" | ");
+      sendMessageSafe({
+        tipo: 'LOG',
+        valore: `[ALLOCAZIONE DINAMICA SELL-THROUGH] Presenze attuali: ${presenceLog} (Raccolta dati vendita in corso: partenza con quota paritaria ${Math.round(100 / activeKeys.length)}% per ${unitName})`
+      });
+    } else {
+      const presenceLog = activeKeys.map(sId => {
+        const name = targetDisplayName(sId).replace("Modificatore ", "").replace("Allenatore ", "");
+        return `${name}: ${currentStyleCounts[sId]}`;
+      }).join(" | ");
+      sendMessageSafe({
+        tipo: 'LOG',
+        valore: `[BILANCIAMENTO TRADEPILE] Presenze attuali: ${presenceLog} (Quota statica paritaria: ${Math.round(100 / activeKeys.length)}% per ${unitName})`
+      });
+    }
+  } else if (isFodder && Array.isArray(targets) && targets.length > 0) {
+    if (pileAlloc.isDynamicActive) {
+      targets.sort((a, b) => (pileAlloc.shares[b.key] || 0) - (pileAlloc.shares[a.key] || 0));
+      const topFodderLog = targets.slice(0, 5).map(t => {
+        const r = pileAlloc.rates[t.key];
+        const strTxt = r && r.strPercent !== null ? `STR ${r.strPercent}%` : "N/D";
+        const sharePct = Math.round((pileAlloc.shares[t.key] || 0) * 100);
+        return `${t.name} (${sharePct}%, ${strTxt})`;
+      }).join(" | ");
+      sendMessageSafe({
+        tipo: 'LOG',
+        valore: `[ALLOCAZIONE DINAMICA FODDER] Priorità Sell-Through attiva su ${targets.length} carte (Top rotazione: ${topFodderLog})`
+      });
+    } else if (pileAlloc.dynamicEnabled) {
+      sendMessageSafe({
+        tipo: 'LOG',
+        valore: `[ALLOCAZIONE DINAMICA FODDER] Attiva su ${targets.length} carte Pure Fodder (Raccolta dati vendita in corso: avvio con quote paritarie).`
+      });
+    } else {
+      sendMessageSafe({
+        tipo: 'LOG',
+        valore: `[BILANCIAMENTO FODDER] Modalità Quote Statiche Paritarie attiva su ${targets.length} carte Pure Fodder.`
+      });
+    }
   }
 
   const physicalFreeSlots = Math.max(0, MAX_TRADEPILE_LIMIT - currentTotalCount);
@@ -67,7 +133,9 @@ export function computeLazyCycleTarget(pileInfo, isFodder, tag, targetStyles) {
     cycleTarget = 0;
   } else {
     let maxBatch;
-    if (isFodder) {
+    if (botState.targetMode === "chemTax") {
+      maxBatch = 20;
+    } else if (isFodder) {
       maxBatch = 15;
       if (currentTotalCount < 50) maxBatch = 25;
       else if (currentTotalCount < 80) maxBatch = 20;
@@ -92,7 +160,9 @@ export function computeLazyCycleTarget(pileInfo, isFodder, tag, targetStyles) {
     rawMissing,
     targetSize,
     isListingBlocked,
-    cycleTarget
+    cycleTarget,
+    currentStyleCounts,
+    pileAlloc
   };
 }
 
@@ -119,25 +189,33 @@ export async function runLazyBiddingStep(ctx) {
   let bidPriceOffset = 0;
   const bidsPerStyle = {};
 
-  const MAX_BIDS_PER_CYCLE = isFodder
-    ? Math.min(15, cycleTarget)
-    : (rawMissing >= 25 ? 30 : Math.min(30, Math.max(cycleTarget, rawMissing * 2)));
+  const isPgp = botState.targetMode === "chemTax";
+  const MAX_BIDS_PER_CYCLE = isPgp
+    ? Math.min(20, cycleTarget)
+    : (isFodder
+      ? Math.min(15, cycleTarget)
+      : (rawMissing >= 25 ? 30 : Math.min(30, Math.max(cycleTarget, rawMissing * 2))));
 
-  let bidsTargetPerStyle = null;
-  if (!isFodder && Array.isArray(targetStyles)) {
-    const bidsBaseQuota = Math.max(1, Math.floor(MAX_BIDS_PER_CYCLE / targetStyles.length));
-    const bidsRemainder = MAX_BIDS_PER_CYCLE % targetStyles.length;
-    bidsTargetPerStyle = {};
-    targetStyles.forEach((sId, idx) => {
-      bidsTargetPerStyle[sId] = bidsBaseQuota + (idx < bidsRemainder ? 1 : 0);
-    });
-  }
+  const dynEnabled = isDynamicQuotaEnabled();
+  const activeKeys = (isFodder || isPgp)
+    ? (Array.isArray(targets) ? targets.map(t => String(t.key)) : [])
+    : (Array.isArray(targetStyles) ? targetStyles.map(String) : []);
+  const bidAlloc = computeDynamicAllocation(
+    activeKeys,
+    MAX_BIDS_PER_CYCLE,
+    ctx.currentStyleCounts,
+    !dynEnabled,
+    ctx.targetSize
+  );
+  const bidsTargetPerStyle = activeKeys.length > 0 ? bidAlloc.quotas : null;
 
   botState.consecutive461InBidding = 0;
   ctx.consecutive512InCycle = 0;
   botState.marketRestricted = false;
   let stopBiddingDueTo461 = false;
-  const maxBiddingSearches = isFodder ? Math.max(25, cycleTarget * 3) : Math.max(80, Math.round(MAX_BIDS_PER_CYCLE * 2.5));
+  const maxBiddingSearches = isPgp
+    ? Math.max(20, cycleTarget * 4)
+    : (isFodder ? Math.max(25, cycleTarget * 3) : Math.max(80, Math.round(MAX_BIDS_PER_CYCLE * 2.5)));
   const MAX_ACTIVE_WATCHLIST = isFodder ? 35 : 45;
   let targetCycleIdx = 0;
 
@@ -146,15 +224,17 @@ export async function runLazyBiddingStep(ctx) {
       const name = targetDisplayName(sId).replace("Modificatore ", "").replace("Allenatore ", "");
       return `${name}: ${bidsTargetPerStyle[sId]}`;
     }).join(" | ");
-    const unitName = botState.targetMode === "managers" ? "nazione" : (botState.targetMode === "managerLeague" ? "campionato" : "stile");
+    const unitName = botState.targetMode === "chemTax" ? "calciatore PGP" : (botState.targetMode === "managers" ? "nazione" : (botState.targetMode === "managerLeague" ? "campionato" : "stile"));
+    const quotaModeTitle = bidAlloc.isDynamic ? "Offerte all'asta con Quote Dinamiche Sell-Through" : "Offerte all'asta con Quote Statiche Paritarie";
     sendMessageSafe({
       tipo: 'LOG',
-      valore: `[${bidActionTag}] Step 1: Offerte all'asta paritarie (Quota offerte per ${unitName}: ${bidsQuotaLog} | Totale: ${MAX_BIDS_PER_CYCLE}). Finestra 1-10 min, controrilanci attivi...`
+      valore: `[${bidActionTag}] Step 1: ${quotaModeTitle} (Quota offerte per ${unitName}: ${bidsQuotaLog} | Totale: ${MAX_BIDS_PER_CYCLE}). Finestra 1-10 min, controrilanci attivi...`
     });
   } else {
+    const fodderModeTitle = bidAlloc.isDynamic ? "Quote Dinamiche Sell-Through" : "Quote Statiche Paritarie";
     sendMessageSafe({
       tipo: 'LOG',
-      valore: `[LAZY FODDER BIDDING] Step 1: Offerte all'asta a sconto (Target: ${cycleTarget} carte, Max offerte: ${MAX_BIDS_PER_CYCLE}, Prezzi Max: ${ctx.minMaxBuy || 0}-${ctx.maxMaxBuy || 0} cr). Rotazione sui giocatori Rating ${botState.fodderRating}...`
+      valore: `[LAZY FODDER BIDDING] Step 1: Offerte all'asta a sconto [${fodderModeTitle}] (Target: ${cycleTarget} carte, Max offerte: ${MAX_BIDS_PER_CYCLE}, Prezzi Max: ${ctx.minMaxBuy || 0}-${ctx.maxMaxBuy || 0} cr). Rotazione sui giocatori Rating ${botState.fodderRating}...`
     });
   }
 
@@ -198,12 +278,13 @@ export async function runLazyBiddingStep(ctx) {
     }
 
     if (!isFodder && bidsTargetPerStyle) {
-      const allBidsFilled = targetStyles.every(sId => (bidsPerStyle[sId] || 0) >= (bidsTargetPerStyle[sId] || 1));
+      const allBidsFilled = targetStyles.every(sId => (bidsPerStyle[sId] || 0) >= (bidsTargetPerStyle[sId] || 0));
       if (allBidsFilled || totalBidsPlaced >= MAX_BIDS_PER_CYCLE) {
         const unitName = botState.targetMode === "managers" ? "nazioni" : (botState.targetMode === "managerLeague" ? "campionati" : "stili");
+        const quotaLabel = bidAlloc.isDynamic ? "Quota dinamica Sell-Through" : "Quota paritaria";
         sendMessageSafe({
           tipo: 'LOG',
-          valore: `[${bidActionTag}] Quota paritaria offerte completata su tutte le ${unitName} (${totalBidsPlaced}/${MAX_BIDS_PER_CYCLE}). Monitoraggio e risoluzione aste in corso...`
+          valore: `[${bidActionTag}] ${quotaLabel} offerte completata su tutte le ${unitName} (${totalBidsPlaced}/${MAX_BIDS_PER_CYCLE}). Monitoraggio e risoluzione aste in corso...`
         });
         break;
       }
@@ -257,9 +338,13 @@ export async function runLazyBiddingStep(ctx) {
       continue;
     }
 
-    if (!isFodder && bidsTargetPerStyle && (bidsPerStyle[target.key] || 0) >= (bidsTargetPerStyle[target.key] || 1)) {
-      searchCount++;
-      continue;
+    const enforceStrictBidQuota = searchCount < Math.max(targets.length * 2, 10);
+    if (bidsTargetPerStyle && enforceStrictBidQuota) {
+      const targetQuota = bidsTargetPerStyle[target.key] ?? 1;
+      const hasOtherUnfilled = targets.some(t => (bidsPerStyle[t.key] || 0) < (bidsTargetPerStyle[t.key] ?? 1));
+      if ((bidsPerStyle[target.key] || 0) >= targetQuota && hasOtherUnfilled) {
+        continue;
+      }
     }
 
     const styleSpecificCount = styleSearchCounts[target.key] || 0;
@@ -323,7 +408,8 @@ export async function runLazyBiddingStep(ctx) {
         for (const auction of targetAuctions) {
           if (bidsInThisSearch >= 2) break;
           if (consecutiveFailedBidsInSearch >= 2) break;
-          if (!isFodder && bidsTargetPerStyle && ((bidsPerStyle[target.key] || 0) >= (bidsTargetPerStyle[target.key] || 1) || totalBidsPlaced >= MAX_BIDS_PER_CYCLE)) break;
+          if (totalBidsPlaced >= MAX_BIDS_PER_CYCLE) break;
+          if (bidsTargetPerStyle && enforceStrictBidQuota && (bidsPerStyle[target.key] || 0) >= (bidsTargetPerStyle[target.key] ?? 1)) break;
           const capBreak = isFodder
             ? (botState.start !== true || wonInThisCycle >= cycleTarget || (wonInThisCycle + activeBids.size) >= (cycleTarget + 2) || activeBids.size >= MAX_ACTIVE_WATCHLIST)
             : (botState.start !== true || wonInThisCycle >= cycleTarget || (wonInThisCycle + activeBids.size) >= physicalFreeSlots || activeBids.size >= MAX_ACTIVE_WATCHLIST);
@@ -565,11 +651,26 @@ export async function runLazyTopUpStep(ctx) {
 
   if (topUpTarget <= 0) return { wonInThisCycle, topUpBought: 0 };
 
+  const dynTopUp = isDynamicQuotaEnabled();
+  const topUpKeys = Array.isArray(targets) ? targets.map(t => String(t.key)) : [];
+  const topUpAlloc = computeDynamicAllocation(
+    topUpKeys,
+    topUpTarget,
+    ctx.currentStyleCounts,
+    !dynTopUp,
+    targetSize
+  );
+  const topUpQuotaPerKey = topUpKeys.length > 0 ? topUpAlloc.quotas : null;
+  const topUpBoughtPerKey = {};
+  const quotaSuffix = topUpAlloc.isDynamic ? " [Quote Dinamiche Sell-Through]" : " [Quote Statiche Paritarie]";
+
   const topUpLogText = isFodder
-    ? `[LAZY FODDER TOP-UP] Step 2: Compra Ora rapido sotto-prezzo per completare il lotto (${topUpTarget} carte mancanti, Max Buy: <= ${ctx.minMaxBuy || 0}-${ctx.maxMaxBuy || 0} cr)...`
-    : (botState.targetMode === "managers"
-      ? `[LAZY ALLENATORI TOP-UP] Step 2: Compra Ora rapido di ${topUpTarget} allenatori a -15% dal Lowest BIN...`
-      : `[LAZY TOP-UP] Step 2: Rifornimento Compra Ora di ${topUpTarget} carte al Floor BIN per completare gli slot mancanti...`);
+    ? `[LAZY FODDER TOP-UP] Step 2: Compra Ora rapido sotto-prezzo${quotaSuffix} per completare il lotto (${topUpTarget} carte mancanti, Max Buy: <= ${ctx.minMaxBuy || 0}-${ctx.maxMaxBuy || 0} cr)...`
+    : (botState.targetMode === "chemTax"
+      ? `[LAZY PGP TOP-UP] Step 2: Compra Ora rapido di ${topUpTarget} carte PGP con stile applicato${quotaSuffix}...`
+      : (botState.targetMode === "managers"
+        ? `[LAZY ALLENATORI TOP-UP] Step 2: Compra Ora rapido di ${topUpTarget} allenatori a -15% dal Lowest BIN${quotaSuffix}...`
+        : `[LAZY TOP-UP] Step 2: Rifornimento Compra Ora di ${topUpTarget} carte al Floor BIN${quotaSuffix} per completare gli slot mancanti...`));
   sendMessageSafe({
     tipo: 'LOG',
     valore: topUpLogText
@@ -579,7 +680,10 @@ export async function runLazyTopUpStep(ctx) {
   let topUpSearches = 0;
   let consecutive461InTopUp = 0;
   let minPriceOffset = 0;
-  const maxTopUpSearches = isFodder ? Math.max(40, topUpTarget * 5) : Math.max(50, topUpTarget * 6);
+  const isPgp = botState.targetMode === "chemTax";
+  const maxTopUpSearches = isPgp
+    ? Math.max(20, topUpTarget * 4)
+    : (isFodder ? Math.max(40, topUpTarget * 5) : Math.max(50, topUpTarget * 6));
   let topUpTargetIdx = 0;
   botState.lastBidErrorStatus = 0;
   botState.lastBuyNowErrorStatus = 0;
@@ -593,6 +697,15 @@ export async function runLazyTopUpStep(ctx) {
     if (!target || !target.maxBuyNow || target.maxBuyNow <= 0) {
       topUpSearches++;
       continue;
+    }
+
+    const enforceStrictTopUpQuota = topUpSearches < Math.floor(maxTopUpSearches * 0.75);
+    if (topUpQuotaPerKey && enforceStrictTopUpQuota) {
+      const kQuota = topUpQuotaPerKey[target.key] ?? 1;
+      const hasOtherUnfilled = targets.some(t => (topUpBoughtPerKey[t.key] || 0) < (topUpQuotaPerKey[t.key] ?? 1));
+      if ((topUpBoughtPerKey[target.key] || 0) >= kQuota && hasOtherUnfilled) {
+        continue;
+      }
     }
 
     if (typeof botState.crediti === 'number' && botState.crediti < target.maxBuyNow) {
@@ -680,6 +793,10 @@ export async function runLazyTopUpStep(ctx) {
 
           if (buySuccess) {
             topUpBought++;
+            topUpBoughtPerKey[target.key] = (topUpBoughtPerKey[target.key] || 0) + 1;
+            if (ctx.currentStyleCounts) {
+              ctx.currentStyleCounts[target.key] = (ctx.currentStyleCounts[target.key] || 0) + 1;
+            }
             consecutive461InTopUp = 0;
             botState.consecutive461InBidding = 0;
             wonInThisCycle++;
@@ -694,7 +811,7 @@ export async function runLazyTopUpStep(ctx) {
 
             let targetSellPrice = target.sellPrice;
             let sellLogMsg = "";
-            if (target.isManagerTarget || botState.targetMode === "managers") {
+            if (target.isPgp || target.isManagerTarget || botState.targetMode === "managers") {
               targetSellPrice = target.sellPrice;
               sellLogMsg = `al Lowest BIN live (${targetSellPrice} cr)`;
             } else {
@@ -733,27 +850,26 @@ export async function runLazyTopUpStep(ctx) {
                 minPriceOffset++;
                 const nextMinBump = minBidBumps[(styleTopUpCount + minPriceOffset) % minBidBumps.length];
 
-                const isSoftBanTriggered = (botState.consecutive461InBidding >= 3 && consecutive461InTopUp >= 1) || consecutive461InTopUp >= 3;
+                const isSoftBanTriggered = (botState.consecutive461InBidding >= 3 && consecutive461InTopUp >= 1) || consecutive461InTopUp >= 2;
 
                 if (isSoftBanTriggered) {
                   const errorCountReason = botState.consecutive461InBidding >= 3
                     ? `4 errori 461 consecutivi (3 su aste + 1 su Compra Ora)`
-                    : `3 tentativi consecutivi di Compra Ora rifiutati (461)`;
-                  console.log(`[${topUpTag}] Rilevato Soft-Ban EA: ${errorCountReason}. Concludo Step 2 e avvio pausa silenziata.`);
+                    : `2 rifiuti consecutivi (461) su Compra Ora`;
+                  console.log(`[${topUpTag}] Rilevato rischio Soft-Ban EA: ${errorCountReason}. Concludo precauzionalmente Step 2 per prevenire soft-ban.`);
                   sendMessageSafe({
                     tipo: 'LOG',
-                    valore: `[${topUpTag}] Rilevato Soft-Ban EA (${errorCountReason}). Attivazione pausa rigenerativa silenziata (keep-alive di sessione attivo per evitare disconnessioni)...`
+                    valore: `[${topUpTag}] Rilevati 2 rifiuti consecutivi (461) su Compra Ora. Interrompo precauzionalmente il rifornimento per questo ciclo per prevenire soft-ban EA.`
                   });
-                  botState.marketRestricted = true;
                   stopTopUpDueTo461 = true;
-                  ctx.requiresSoftBanProbe = true;
                   break;
                 } else {
+                  const backoffSec = (getRandomGaussian(10.0, 0.8, 8.0, 12.0)).toFixed(1);
                   sendMessageSafe({
                     tipo: 'LOG',
-                    valore: `[${topUpTag}] Carta anticipata (461). Eseguo nuova ricerca variando prezzo minimo (${nextMinBump} cr)... (${consecutive461InTopUp}/3)`
+                    valore: `[${topUpTag}] Carta anticipata o rifiutata (461). Backoff prudenziale di ${backoffSec}s prima della prossima ricerca (${nextMinBump} cr)... (${consecutive461InTopUp}/2)`
                   });
-                  await sleep(getRandomGaussian(2.5, 0.3, 2.0, 3.2) * 1000);
+                  await sleep(backoffSec * 1000);
                 }
               } else {
                 await sleep(getRandomGaussian(2.5, 0.3, 2.0, 3.2) * 1000);
@@ -829,8 +945,11 @@ export async function runLazySleepWithHeartbeat(ctx) {
   } = ctx;
 
   let sleepMins;
+  let isSoftBanPause = false;
   if (botState.marketRestricted || ctx.consecutive512InCycle > 0) {
     botState.marketRestricted = true;
+    isSoftBanPause = true;
+    ctx.tokenAtSoftBan = botState.xUtSid || null;
     ctx.consecutiveSoftBansInSession++;
     const baseMins = Math.max(45, botState.lazySleepMinutes && botState.lazySleepMinutes > 0 ? botState.lazySleepMinutes : 60);
     if (ctx.consecutiveSoftBansInSession <= 1) {
@@ -897,6 +1016,8 @@ export async function runLazySleepWithHeartbeat(ctx) {
   const totalSleepSeconds = sleepMins * 60;
   let nextHeartbeatAt = Math.round(getRandomGaussian(120, 10, 95, 150));
   let nextPingAt = Math.round(getRandomGaussian(480, 30, 360, 600));
+  let midPauseReloadDone = false;
+  const midSleepSeconds = Math.floor(totalSleepSeconds / 2);
 
   let elapsed = 0;
   while (elapsed < totalSleepSeconds && botState.start === true) {
@@ -907,6 +1028,49 @@ export async function runLazySleepWithHeartbeat(ctx) {
       try {
         await chrome.storage.local.get(['keepAliveCheck']);
       } catch (_) { }
+    }
+
+    // Ricarica Web App a metà pausa rigenerativa da soft-ban per rinnovare il token EA dopo il dovuto riposo
+    if (isSoftBanPause && !midPauseReloadDone && elapsed >= midSleepSeconds && botState.start === true) {
+      midPauseReloadDone = true;
+      const elapsedMins = Math.round(elapsed / 60);
+      const remainingMins = Math.round((totalSleepSeconds - elapsed) / 60);
+      sendMessageSafe({
+        tipo: 'LOG',
+        valore: `[SOFT-BAN REFRESH] Raggiunta metà della pausa rigenerativa (${elapsedMins}/${sleepMins} min). Ricarico la scheda Web App per ottenere un nuovo token EA e lasciarlo riposare per i restanti ${remainingMins} min...`
+      });
+
+      const previousToken = botState.xUtSid;
+      const reloadResult = await reloadWebAppTab({ previousToken, waitForToken: true, maxWaitSeconds: 40 });
+      if (reloadResult.tokenSynced) {
+        botState.consecutive401Errors = 0;
+        sendMessageSafe({
+          tipo: 'LOG',
+          valore: `[SOFT-BAN REFRESH COMPLETATO] Nuovo token EA sincronizzato con successo (${botState.xUtSid.substring(0, 10)}...). Silenzio totale mantenuto per far riposare anche la nuova sessione prima della ripresa.`
+        });
+        reportTelemetry('SOFTBAN_MIDPAUSE_RELOAD', `Web App ricaricata a metà pausa soft-ban con nuovo token`, {
+          previousToken: previousToken ? previousToken.substring(0, 8) : null,
+          newToken: botState.xUtSid ? botState.xUtSid.substring(0, 8) : null,
+          elapsedMinutes: elapsedMins,
+          remainingMinutes: remainingMins
+        });
+      } else {
+        sendMessageSafe({
+          tipo: 'LOG',
+          valore: `[SOFT-BAN REFRESH FALLITO] ⚠️ Web App non autenticata dopo il reload: effettua il login manuale per ripristinare il token EA!`
+        });
+        try {
+          await sendTelegramMessage(
+            '⚠️ <b>FC Sniper - Allarme Sessione</b>\n\n' +
+            'La Web App è stata ricaricata a metà pausa da soft-ban ma <b>non risulta autenticata</b>.\n' +
+            'La sessione o i cookie EA potrebbero essere scaduti (pagina ferma su Login).\n\n' +
+            '👉 <b>Effettua subito il login manuale nella Web App</b> per generare un nuovo token EA prima della fine della pausa!'
+          );
+        } catch (_) {}
+      }
+
+      // Sposta il prossimo ping keep-alive in avanti per non disturbare la nuova sessione appena avviata
+      nextPingAt = elapsed + Math.round(getRandomGaussian(480, 30, 360, 600));
     }
 
     if (elapsed >= nextHeartbeatAt && botState.start === true) {
@@ -965,10 +1129,11 @@ export async function runLazySleepWithHeartbeat(ctx) {
 
 export async function runLazyTradingEngine() {
   const isFodder = botState.targetMode === "fodder";
-  const tag = isFodder ? "LAZY FODDER" : (botState.targetMode === "managerLeague" ? "LAZY CAMPIONATI" : (botState.targetMode === "managers" ? "LAZY ALLENATORI" : "LAZY TRADING"));
-  const bidTag = isFodder ? "LAZY FODDER BID" : (botState.targetMode === "managerLeague" ? "LAZY CAMPIONATI BID" : (botState.targetMode === "managers" ? "LAZY ALLENATORI BID" : "LAZY BID"));
-  const bidActionTag = isFodder ? "LAZY FODDER BIDDING" : (botState.targetMode === "managerLeague" ? "LAZY CAMPIONATI BIDDING" : (botState.targetMode === "managers" ? "LAZY ALLENATORI BIDDING" : "LAZY BIDDING"));
-  const topUpTag = isFodder ? "LAZY FODDER TOP-UP" : (botState.targetMode === "managerLeague" ? "LAZY CAMPIONATI TOP-UP" : (botState.targetMode === "managers" ? "LAZY ALLENATORI TOP-UP" : "LAZY TOP-UP"));
+  const isPgp = botState.targetMode === "chemTax";
+  const tag = isFodder ? "LAZY FODDER" : (isPgp ? "LAZY PGP CHEM TAX" : (botState.targetMode === "managerLeague" ? "LAZY CAMPIONATI" : (botState.targetMode === "managers" ? "LAZY ALLENATORI" : "LAZY TRADING")));
+  const bidTag = isFodder ? "LAZY FODDER BID" : (isPgp ? "LAZY PGP BID" : (botState.targetMode === "managerLeague" ? "LAZY CAMPIONATI BID" : (botState.targetMode === "managers" ? "LAZY ALLENATORI BID" : "LAZY BID")));
+  const bidActionTag = isFodder ? "LAZY FODDER BIDDING" : (isPgp ? "LAZY PGP BIDDING" : (botState.targetMode === "managerLeague" ? "LAZY CAMPIONATI BIDDING" : (botState.targetMode === "managers" ? "LAZY ALLENATORI BIDDING" : "LAZY BIDDING")));
+  const topUpTag = isFodder ? "LAZY FODDER TOP-UP" : (isPgp ? "LAZY PGP TOP-UP" : (botState.targetMode === "managerLeague" ? "LAZY CAMPIONATI TOP-UP" : (botState.targetMode === "managers" ? "LAZY ALLENATORI TOP-UP" : "LAZY TOP-UP")));
   let cycle = 1;
   let lastReportCycle = 0;
   let consecutiveSoftBansInSession = 0;
@@ -984,6 +1149,10 @@ export async function runLazyTradingEngine() {
       botState.marketRestricted = false;
       botState.consecutive461InBidding = 0;
 
+      if (cycle > 1) {
+        decaySellThroughStats(0.85);
+      }
+
       sendMessageSafe({
         tipo: 'LOG',
         valore: `=== [${tag}] Inizio Ciclo #${cycle} ===`
@@ -994,11 +1163,13 @@ export async function runLazyTradingEngine() {
         tipo: 'LOG',
         valore: isFodder
           ? `[LAZY FODDER] Fase 1: Riconciliazione aste vinte, aggiornamento lista Fut.gg (Rating ${botState.fodderRating}), riscossione vendite e relist 1 Ora...`
-          : (botState.targetMode === "managers"
-            ? `[LAZY ALLENATORI] Fase 1: Riconciliazione aste vinte, auto-discovery Lowest BIN live, riscossione vendite e relist immediato...`
-            : (botState.targetMode === "managerLeague"
-              ? `[LAZY CAMPIONATI] Fase 1: Riconciliazione aste vinte, rilevamento prezzi live campionati, riscossione vendite e relist ricalcolato...`
-              : `[LAZY TRADING] Fase 1: Riconciliazione aste vinte, rilevamento prezzi live, riscossione vendite e relist ricalcolato...`))
+          : (isPgp
+            ? `[LAZY PGP CHEM TAX] Fase 1: Riconciliazione aste vinte, verifica candidati /fut/pgp, riscossione vendite e relist immediato...`
+            : (botState.targetMode === "managers"
+              ? `[LAZY ALLENATORI] Fase 1: Riconciliazione aste vinte, auto-discovery Lowest BIN live, riscossione vendite e relist immediato...`
+              : (botState.targetMode === "managerLeague"
+                ? `[LAZY CAMPIONATI] Fase 1: Riconciliazione aste vinte, rilevamento prezzi live campionati, riscossione vendite e relist ricalcolato...`
+                : `[LAZY TRADING] Fase 1: Riconciliazione aste vinte, rilevamento prezzi live, riscossione vendite e relist ricalcolato...`)))
       });
 
       await reconcileWatchlistOnStartup();
@@ -1037,8 +1208,9 @@ export async function runLazyTradingEngine() {
         rawMissing,
         targetSize,
         isListingBlocked,
-        cycleTarget
-      } = computeLazyCycleTarget(pileInfo, isFodder, tag, targetStyles);
+        cycleTarget,
+        currentStyleCounts
+      } = computeLazyCycleTarget(pileInfo, isFodder, tag, targetStyles, targets);
 
       // FASE 3: Rifornimento Ibrido Protetto
       const styleSearchCounts = {};
@@ -1057,6 +1229,7 @@ export async function runLazyTradingEngine() {
         targetSize,
         minBidBumps,
         styleSearchCounts,
+        currentStyleCounts,
         consecutive512InCycle,
         earlyExitRateLimit,
         requiresSoftBanProbe,
@@ -1171,6 +1344,45 @@ export async function runLazyTradingEngine() {
         if (botState.marketRestricted) {
           requiresSoftBanProbe = true;
         }
+
+        // Verifica all'uscita della pausa: se il token è ancora identico a quello che ha subito il soft-ban
+        if (ctx.tokenAtSoftBan && botState.xUtSid === ctx.tokenAtSoftBan) {
+          sendMessageSafe({
+            tipo: 'LOG',
+            valore: `[AVVISO ATTESA TOKEN] ⚠️ Il token EA non è cambiato rispetto al soft-ban (${ctx.tokenAtSoftBan.substring(0, 8)}...). Richiedo token a caldo dalla Web App (attesa fino a 20s)...`
+          });
+          await triggerPinEvent('REQUEST_TOKEN_REFRESH').catch(() => {});
+          for (let waitSec = 0; waitSec < 20 && botState.start === true; waitSec++) {
+            await sleep(1000);
+            if (botState.xUtSid && botState.xUtSid !== ctx.tokenAtSoftBan) {
+              break;
+            }
+          }
+
+          if (botState.xUtSid === ctx.tokenAtSoftBan) {
+            sendMessageSafe({
+              tipo: 'LOG',
+              valore: `[BLOCCO SICUREZZA] 🛑 Il token EA è ancora identico a quello del soft-ban (${ctx.tokenAtSoftBan.substring(0, 8)}...). Arresto immediato del bot per evitare ulteriori chiamate/ban.`
+            });
+            try {
+              await sendTelegramMessage(
+                `🛑 <b>FC Sniper - Bot Arrestato</b>\n\n` +
+                `Pausa soft-ban terminata, ma il token EA in uso è ancora quello bloccato (${ctx.tokenAtSoftBan.substring(0, 8)}...).\n` +
+                `Il bot è stato <b>arrestato per sicurezza</b> senza effettuare chiamate di test verso il mercato.\n\n` +
+                `👉 Effettua il login manuale nella Web App e riavvia il bot.`
+              );
+            } catch (_) {}
+            await stopBot('Token EA invariato dopo soft-ban (sessione non rinnovata)');
+            return;
+          } else {
+            sendMessageSafe({
+              tipo: 'LOG',
+              valore: `[TOKEN AGGIORNATO] Rilevato nuovo token EA (${botState.xUtSid.substring(0, 10)}...) prima della sonda di mercato!`
+            });
+          }
+        }
+        ctx.tokenAtSoftBan = null;
+
         botState.marketRestricted = false;
         botState.consecutive461InBidding = 0;
         reportTelemetry('CYCLE_START', `Avvio Ciclo #${cycle + 1}`, { cycle: cycle + 1, crediti: botState.crediti });

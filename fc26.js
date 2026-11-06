@@ -1,6 +1,6 @@
 // Entrypoint Background Service Worker — FC Sniper Orchestrator
 import { installGlobalRateLimiter } from './src/core/rate-limiter.js';
-import { botState, restoreInitialStateFromStorage, clearAllPriceCaches } from './src/core/state.js';
+import { botState, restoreInitialStateFromStorage, clearAllPriceCaches, isDynamicQuotaEnabled } from './src/core/state.js';
 import {
   sendMessageSafe,
   triggerPinEvent,
@@ -26,6 +26,14 @@ import {
   getLazyMarkupPercent,
   getLazySleepMinutes,
   getManagerNation,
+  getDynamicQuotaFodder,
+  getDynamicQuotaConsumables,
+  getDynamicQuotaLeague,
+  getDynamicQuotaManagers,
+  getDynamicQuotaChemTax,
+  getChemTaxStyle,
+  getChemTaxMaxBasePrice,
+  getChemTaxMinMargin,
   cleanExpiredPendingBids,
   getUserProfile,
   getTradepileStatus
@@ -156,6 +164,10 @@ function handleFodderModeMessage(message) {
   if (message.rating) botState.fodderRating = message.rating;
   if (message.strategyMode) botState.strategyMode = message.strategyMode;
   if (message.minMargin) botState.minMargin = message.minMargin;
+  if (message.dynamicQuotaFodder !== undefined) botState.dynamicQuotaFodder = Boolean(message.dynamicQuotaFodder);
+  if (message.dynamicQuotaConsumables !== undefined) botState.dynamicQuotaConsumables = Boolean(message.dynamicQuotaConsumables);
+  if (message.dynamicQuotaLeague !== undefined) botState.dynamicQuotaLeague = Boolean(message.dynamicQuotaLeague);
+  if (message.dynamicQuotaManagers !== undefined) botState.dynamicQuotaManagers = Boolean(message.dynamicQuotaManagers);
 }
 
 // 5. Router messaggi runtime IPC
@@ -357,6 +369,14 @@ async function handleStartMessage(message) {
     botState.lazyMarkupPercent = message.lazyMarkupPercent || await getLazyMarkupPercent();
     botState.lazySleepMinutes = message.lazySleepMinutes || await getLazySleepMinutes();
     botState.managerNation = message.managerNation || await getManagerNation();
+    botState.dynamicQuotaFodder = message.dynamicQuotaFodder !== undefined ? Boolean(message.dynamicQuotaFodder) : await getDynamicQuotaFodder();
+    botState.dynamicQuotaConsumables = message.dynamicQuotaConsumables !== undefined ? Boolean(message.dynamicQuotaConsumables) : await getDynamicQuotaConsumables();
+    botState.dynamicQuotaLeague = message.dynamicQuotaLeague !== undefined ? Boolean(message.dynamicQuotaLeague) : await getDynamicQuotaLeague();
+    botState.dynamicQuotaManagers = message.dynamicQuotaManagers !== undefined ? Boolean(message.dynamicQuotaManagers) : await getDynamicQuotaManagers();
+    botState.dynamicQuotaChemTax = message.dynamicQuotaChemTax !== undefined ? Boolean(message.dynamicQuotaChemTax) : await getDynamicQuotaChemTax();
+    botState.chemTaxStyle = message.chemTaxStyle || await getChemTaxStyle();
+    botState.chemTaxMaxBasePrice = message.chemTaxMaxBasePrice !== undefined ? Number(message.chemTaxMaxBasePrice) : await getChemTaxMaxBasePrice();
+    botState.chemTaxMinMargin = message.chemTaxMinMargin !== undefined ? Number(message.chemTaxMinMargin) : await getChemTaxMinMargin();
     botState.carteAcquistate = 0;
     botState.carteVendute = 0;
     sendMessageSafe({ tipo: 'CARTA_ACQUISTATA', valore: 0 });
@@ -391,24 +411,29 @@ async function handleStartMessage(message) {
     }
 
     if (botState.strategyMode === "lazy") {
+      const quotaLabel = isDynamicQuotaEnabled(botState.targetMode) ? "Quote: Dinamiche Sell-Through" : "Quote: Statiche Paritarie";
       if (botState.targetMode === "fodder") {
         botState.ricercaFodder = true;
-        sendMessageSafe({ tipo: 'LOG', valore: `Avvio LAZY TRADING Fodder (Rating ${botState.fodderRating}, Target: ${botState.targetTradepileSize}, Ricarico: +${botState.lazyMarkupPercent}%, Pausa: ${botState.lazySleepMinutes}m)` });
+        sendMessageSafe({ tipo: 'LOG', valore: `Avvio LAZY TRADING Fodder (Rating ${botState.fodderRating}, Target: ${botState.targetTradepileSize}, Ricarico: +${botState.lazyMarkupPercent}%, Pausa: ${botState.lazySleepMinutes}m | ${quotaLabel})` });
         await runLazyTradingEngine();
       } else if (botState.targetMode === "managerLeague") {
         botState.ricercaFodder = false;
-        sendMessageSafe({ tipo: 'LOG', valore: `Avvio LAZY TRADING Campionati Allenatore (Premier League, LaLiga, Serie A, Bundesliga, Ligue 1 | Target: ${botState.targetTradepileSize}, Ricarico: +${botState.lazyMarkupPercent}%, Pausa: ${botState.lazySleepMinutes}m)` });
+        sendMessageSafe({ tipo: 'LOG', valore: `Avvio LAZY TRADING Campionati Allenatore (Premier League, LaLiga, Serie A, Bundesliga, Ligue 1 | Target: ${botState.targetTradepileSize}, Ricarico: +${botState.lazyMarkupPercent}%, Pausa: ${botState.lazySleepMinutes}m | ${quotaLabel})` });
         await runLazyTradingEngine();
       } else if (botState.targetMode === "managers") {
         botState.ricercaFodder = false;
         const natLabel = botState.managerNation === "18,34" ? "Francia + Olanda" : (TOP_MANAGER_NATIONS[botState.managerNation]?.name || NATION_NAMES[botState.managerNation] || `Naz ${botState.managerNation}`);
-        sendMessageSafe({ tipo: 'LOG', valore: `Avvio TRADING ALLENATORI (${natLabel} | Acquisto max -15%, Vendita istantanea Lowest BIN | Target Tradepile: ${botState.targetTradepileSize}, Pausa: ${botState.lazySleepMinutes}m)` });
+        sendMessageSafe({ tipo: 'LOG', valore: `Avvio TRADING ALLENATORI (${natLabel} | Acquisto max -15%, Vendita istantanea Lowest BIN | Target Tradepile: ${botState.targetTradepileSize}, Pausa: ${botState.lazySleepMinutes}m | ${quotaLabel})` });
+        await runLazyTradingEngine();
+      } else if (botState.targetMode === "chemTax") {
+        botState.ricercaFodder = false;
+        sendMessageSafe({ tipo: 'LOG', valore: `Avvio PGP CHEM TAX (Shadow/Hunter Tax sui calciatori più giocati | Target Tradepile: ${botState.targetTradepileSize}, Margine min: +${botState.chemTaxMinMargin} cr, Pausa: ${botState.lazySleepMinutes}m | ${quotaLabel})` });
         await runLazyTradingEngine();
       } else {
         botState.targetMode = "consumables";
         botState.ricercaFodder = false;
         const styleName = botState.chemStyle === "all" ? "Rotazione (Ombra, Cacciatore, Ancora, Motore)" : (CHEM_STYLES[botState.chemStyle]?.name || `Stile ${botState.chemStyle}`);
-        sendMessageSafe({ tipo: 'LOG', valore: `Avvio LAZY TRADING Consumabili (${styleName}, Target: ${botState.targetTradepileSize}, Ricarico: +${botState.lazyMarkupPercent}%, Pausa: ${botState.lazySleepMinutes}m)` });
+        sendMessageSafe({ tipo: 'LOG', valore: `Avvio LAZY TRADING Consumabili (${styleName}, Target: ${botState.targetTradepileSize}, Ricarico: +${botState.lazyMarkupPercent}%, Pausa: ${botState.lazySleepMinutes}m | ${quotaLabel})` });
         await runLazyTradingEngine();
       }
     } else {

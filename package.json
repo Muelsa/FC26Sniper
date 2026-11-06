@@ -1,6 +1,6 @@
 {
   "name": "fc26-sniper",
-  "version": "2.8.6",
+  "version": "2.8.7",
   "description": "FC Sniper & Trader — Automated FUT Market Companion",
   "main": "fc26.js",
   "scripts": {

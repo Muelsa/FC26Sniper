@@ -66,6 +66,33 @@ export function getNextFodder() {
   return fodder;
 }
 
+/**
+ * Filtra e ordina una lista di calciatori fodder tenendo solo le carte "Pure Fodder"
+ * con prezzo entro il Floor Minimo + maxPercentAboveFloor (default 10%).
+ * Tutte le carte che rientrano in questo range di prezzo vengono utilizzate (nessun cap fisso).
+ *
+ * @param {Array<Object>} fodderList - Lista grezza di fodder con { pid, name, price, ... }
+ * @param {number} [maxPercentAboveFloor=0.10] - Tetto percentuale sopra il floor minimo (+10%)
+ * @param {number|null} [maxShortlist=null] - Limite opzionale di carte da tenere (se omesso o null, tiene tutte quelle valide)
+ * @returns {Array<Object>} Lista filtrata e ordinata per prezzo crescente
+ */
+export function filterPureFodder(fodderList, maxPercentAboveFloor = 0.10, maxShortlist = null) {
+  if (!Array.isArray(fodderList) || fodderList.length === 0) return [];
+
+  const valid = fodderList.filter(f => typeof f.price === 'number' && f.price > 0);
+  if (valid.length === 0) return [];
+
+  // Ordina per prezzo di mercato crescente
+  valid.sort((a, b) => a.price - b.price);
+
+  const floor = valid[0].price;
+  const ceiling = Math.round(floor * (1 + maxPercentAboveFloor));
+
+  const pureFodder = valid.filter(f => f.price <= ceiling);
+  const result = pureFodder.length > 0 ? pureFodder : valid;
+  return (typeof maxShortlist === 'number' && maxShortlist > 0) ? result.slice(0, maxShortlist) : result;
+}
+
 export async function getFodderPriceForItem(itemData) {
   if (!itemData || botState.targetMode !== "fodder") return 0;
   const assetId = itemData.assetId || itemData.resourceId;

@@ -44,9 +44,33 @@ export function initDomReferences() {
   DOM.manualPriceHelp = document.getElementById('manualPriceHelp');
   DOM.managersConfigContainer = document.getElementById('managersConfigContainer');
   DOM.managerNationSelect = document.getElementById('managerNationSelect');
+  DOM.managerLeagueConfigContainer = document.getElementById('managerLeagueConfigContainer');
+  DOM.dynamicQuotaFodderCheck = document.getElementById('dynamicQuotaFodderCheck');
+  DOM.dynamicQuotaConsumablesCheck = document.getElementById('dynamicQuotaConsumablesCheck');
+  DOM.dynamicQuotaLeagueCheck = document.getElementById('dynamicQuotaLeagueCheck');
+  DOM.dynamicQuotaManagersCheck = document.getElementById('dynamicQuotaManagersCheck');
+  DOM.dynamicQuotaChemTaxCheck = document.getElementById('dynamicQuotaChemTaxCheck');
+  DOM.chemTaxConfigContainer = document.getElementById('chemTaxConfigContainer');
+  DOM.chemTaxStyleSelect = document.getElementById('chemTaxStyleSelect');
+  DOM.chemTaxMaxBasePriceInput = document.getElementById('chemTaxMaxBasePriceInput');
+  DOM.chemTaxMinMarginInput = document.getElementById('chemTaxMinMarginInput');
   DOM.sessionTimer = document.getElementById('sessionTimer');
   DOM.sessionTimerPill = document.getElementById('sessionTimerPill');
 }
+
+export const getDynamicQuotaSettings = () => ({
+  dynamicQuotaFodder: Boolean(DOM.dynamicQuotaFodderCheck?.checked),
+  dynamicQuotaConsumables: Boolean(DOM.dynamicQuotaConsumablesCheck?.checked),
+  dynamicQuotaLeague: Boolean(DOM.dynamicQuotaLeagueCheck?.checked),
+  dynamicQuotaManagers: Boolean(DOM.dynamicQuotaManagersCheck?.checked),
+  dynamicQuotaChemTax: Boolean(DOM.dynamicQuotaChemTaxCheck?.checked)
+});
+
+export const getChemTaxSettings = () => ({
+  chemTaxStyle: DOM.chemTaxStyleSelect?.value || 'all',
+  chemTaxMaxBasePrice: parseInt(DOM.chemTaxMaxBasePriceInput?.value, 10) || 30000,
+  chemTaxMinMargin: parseInt(DOM.chemTaxMinMarginInput?.value, 10) || 1000
+});
 
 export const getSelectedTargetMode = () => {
   const checkedRadio = document.querySelector('input[name="targetMode"]:checked');
@@ -176,6 +200,12 @@ export const toggleTargetContainers = () => {
   if (DOM.managersConfigContainer) {
     DOM.managersConfigContainer.classList.toggle('d-none', target !== 'managers');
   }
+  if (DOM.managerLeagueConfigContainer) {
+    DOM.managerLeagueConfigContainer.classList.toggle('d-none', target !== 'managerLeague');
+  }
+  if (DOM.chemTaxConfigContainer) {
+    DOM.chemTaxConfigContainer.classList.toggle('d-none', target !== 'chemTax');
+  }
   if (target === 'fodder') {
     DOM.fodderRatingContainer?.classList.remove('d-none');
     DOM.consumablesConfigContainer?.classList.add('d-none');
@@ -242,6 +272,26 @@ export const toggleTargetContainers = () => {
     }
     if (DOM.labelModeLazy) DOM.labelModeLazy.classList.remove('d-none');
     if (labelModeLazyText) labelModeLazyText.textContent = 'Lazy (Ciclo -15%)';
+  } else if (target === 'chemTax') {
+    DOM.fodderRatingContainer?.classList.add('d-none');
+    DOM.consumablesConfigContainer?.classList.add('d-none');
+    if (DOM.manualConfigContainer) DOM.manualConfigContainer.classList.add('d-none');
+    if (DOM.switchFodder) DOM.switchFodder.checked = false;
+
+    // PGP Chem Tax: gira sul motore ciclico Lazy (oppure sniping rapido)
+    modeSniping?.classList.add('d-none');
+    labelModeSniping?.classList.add('d-none');
+    modeBidding?.classList.add('d-none');
+    labelModeBidding?.classList.add('d-none');
+    if (DOM.modeLazy) {
+      DOM.modeLazy.classList.remove('d-none');
+      if (!DOM.modeLazy.checked) {
+        DOM.modeLazy.checked = true;
+        queueSettingsSave({ strategyMode: 'lazy' });
+      }
+    }
+    if (DOM.labelModeLazy) DOM.labelModeLazy.classList.remove('d-none');
+    if (labelModeLazyText) labelModeLazyText.textContent = 'Lazy (PGP Tax)';
   } else {
     DOM.fodderRatingContainer?.classList.add('d-none');
     DOM.consumablesConfigContainer?.classList.add('d-none');
@@ -349,6 +399,14 @@ export const setControlsDisabled = (disabled) => {
   if (DOM.lazyMarkupPercentInput) disabled ? DOM.lazyMarkupPercentInput.setAttribute('disabled', 'true') : DOM.lazyMarkupPercentInput.removeAttribute('disabled');
   if (DOM.lazySleepMinutesInput) disabled ? DOM.lazySleepMinutesInput.setAttribute('disabled', 'true') : DOM.lazySleepMinutesInput.removeAttribute('disabled');
   if (DOM.managerNationSelect) disabled ? DOM.managerNationSelect.setAttribute('disabled', 'true') : DOM.managerNationSelect.removeAttribute('disabled');
+  if (DOM.dynamicQuotaFodderCheck) disabled ? DOM.dynamicQuotaFodderCheck.setAttribute('disabled', 'true') : DOM.dynamicQuotaFodderCheck.removeAttribute('disabled');
+  if (DOM.dynamicQuotaConsumablesCheck) disabled ? DOM.dynamicQuotaConsumablesCheck.setAttribute('disabled', 'true') : DOM.dynamicQuotaConsumablesCheck.removeAttribute('disabled');
+  if (DOM.dynamicQuotaLeagueCheck) disabled ? DOM.dynamicQuotaLeagueCheck.setAttribute('disabled', 'true') : DOM.dynamicQuotaLeagueCheck.removeAttribute('disabled');
+  if (DOM.dynamicQuotaManagersCheck) disabled ? DOM.dynamicQuotaManagersCheck.setAttribute('disabled', 'true') : DOM.dynamicQuotaManagersCheck.removeAttribute('disabled');
+  if (DOM.dynamicQuotaChemTaxCheck) disabled ? DOM.dynamicQuotaChemTaxCheck.setAttribute('disabled', 'true') : DOM.dynamicQuotaChemTaxCheck.removeAttribute('disabled');
+  if (DOM.chemTaxStyleSelect) disabled ? DOM.chemTaxStyleSelect.setAttribute('disabled', 'true') : DOM.chemTaxStyleSelect.removeAttribute('disabled');
+  if (DOM.chemTaxMaxBasePriceInput) disabled ? DOM.chemTaxMaxBasePriceInput.setAttribute('disabled', 'true') : DOM.chemTaxMaxBasePriceInput.removeAttribute('disabled');
+  if (DOM.chemTaxMinMarginInput) disabled ? DOM.chemTaxMinMarginInput.setAttribute('disabled', 'true') : DOM.chemTaxMinMarginInput.removeAttribute('disabled');
   if (DOM.clearCacheBtn) disabled ? DOM.clearCacheBtn.setAttribute('disabled', 'true') : DOM.clearCacheBtn.removeAttribute('disabled');
 };
 
@@ -404,6 +462,14 @@ export const saveAllCurrentFormSettings = () => {
   if (DOM.targetTradepileSizeInput) current.targetTradepileSize = parseInt(DOM.targetTradepileSizeInput.value) || 50;
   if (DOM.lazyMarkupPercentInput) current.lazyMarkupPercent = parseInt(DOM.lazyMarkupPercentInput.value) || 10;
   if (DOM.lazySleepMinutesInput) current.lazySleepMinutes = parseInt(DOM.lazySleepMinutesInput.value) || 63;
+  if (DOM.dynamicQuotaFodderCheck) current.dynamicQuotaFodder = DOM.dynamicQuotaFodderCheck.checked;
+  if (DOM.dynamicQuotaConsumablesCheck) current.dynamicQuotaConsumables = DOM.dynamicQuotaConsumablesCheck.checked;
+  if (DOM.dynamicQuotaLeagueCheck) current.dynamicQuotaLeague = DOM.dynamicQuotaLeagueCheck.checked;
+  if (DOM.dynamicQuotaManagersCheck) current.dynamicQuotaManagers = DOM.dynamicQuotaManagersCheck.checked;
+  if (DOM.dynamicQuotaChemTaxCheck) current.dynamicQuotaChemTax = DOM.dynamicQuotaChemTaxCheck.checked;
+  if (DOM.chemTaxStyleSelect) current.chemTaxStyle = DOM.chemTaxStyleSelect.value;
+  if (DOM.chemTaxMaxBasePriceInput) current.chemTaxMaxBasePrice = parseInt(DOM.chemTaxMaxBasePriceInput.value, 10) || 30000;
+  if (DOM.chemTaxMinMarginInput) current.chemTaxMinMargin = parseInt(DOM.chemTaxMinMarginInput.value, 10) || 1000;
   if (DOM.telegramChatIdInput) current.telegramChatId = DOM.telegramChatIdInput.value.trim();
 
   flushPendingSettingsSave();
@@ -499,6 +565,55 @@ export function initFormControls() {
     DOM.managerNationSelect.addEventListener('change', () => {
       queueSettingsSave({ managerNation: DOM.managerNationSelect.value });
     });
+  }
+
+  if (DOM.dynamicQuotaFodderCheck) {
+    DOM.dynamicQuotaFodderCheck.addEventListener('change', () => {
+      queueSettingsSave({ dynamicQuotaFodder: DOM.dynamicQuotaFodderCheck.checked });
+    });
+  }
+  if (DOM.dynamicQuotaConsumablesCheck) {
+    DOM.dynamicQuotaConsumablesCheck.addEventListener('change', () => {
+      queueSettingsSave({ dynamicQuotaConsumables: DOM.dynamicQuotaConsumablesCheck.checked });
+    });
+  }
+  if (DOM.dynamicQuotaLeagueCheck) {
+    DOM.dynamicQuotaLeagueCheck.addEventListener('change', () => {
+      queueSettingsSave({ dynamicQuotaLeague: DOM.dynamicQuotaLeagueCheck.checked });
+    });
+  }
+  if (DOM.dynamicQuotaManagersCheck) {
+    DOM.dynamicQuotaManagersCheck.addEventListener('change', () => {
+      queueSettingsSave({ dynamicQuotaManagers: DOM.dynamicQuotaManagersCheck.checked });
+    });
+  }
+
+  if (DOM.dynamicQuotaChemTaxCheck) {
+    DOM.dynamicQuotaChemTaxCheck.addEventListener('change', () => {
+      queueSettingsSave({ dynamicQuotaChemTax: DOM.dynamicQuotaChemTaxCheck.checked });
+    });
+  }
+
+  if (DOM.chemTaxStyleSelect) {
+    DOM.chemTaxStyleSelect.addEventListener('change', () => {
+      queueSettingsSave({ chemTaxStyle: DOM.chemTaxStyleSelect.value });
+    });
+  }
+
+  if (DOM.chemTaxMaxBasePriceInput) {
+    const saveMaxBase = () => {
+      queueSettingsSave({ chemTaxMaxBasePrice: parseInt(DOM.chemTaxMaxBasePriceInput.value, 10) || 30000 });
+    };
+    DOM.chemTaxMaxBasePriceInput.addEventListener('input', saveMaxBase);
+    DOM.chemTaxMaxBasePriceInput.addEventListener('change', saveMaxBase);
+  }
+
+  if (DOM.chemTaxMinMarginInput) {
+    const saveChemMargin = () => {
+      queueSettingsSave({ chemTaxMinMargin: parseInt(DOM.chemTaxMinMarginInput.value, 10) || 1000 });
+    };
+    DOM.chemTaxMinMarginInput.addEventListener('input', saveChemMargin);
+    DOM.chemTaxMinMarginInput.addEventListener('change', saveChemMargin);
   }
 
   if (DOM.maxSnipePriceInput) {
@@ -679,6 +794,8 @@ export function initFormControls() {
     'chemStyle', 'autoBin', 'manualBin', 'strategyMode', 'minMargin', 'maxSnipePrice',
     'targetTradepileSize', 'lazyMarkupPercent', 'lazySleepMinutes', 'telegramChatId', 'personaName',
     'managerNation',
+    'dynamicQuotaFodder', 'dynamicQuotaConsumables', 'dynamicQuotaLeague', 'dynamicQuotaManagers', 'dynamicQuotaChemTax',
+    'chemTaxStyle', 'chemTaxMaxBasePrice', 'chemTaxMinMargin',
     'tradepileCount', 'crediti', 'proiezioneCrediti', 'carteAcquistate', 'carteVendute', 'start', 'botStatus',
     'botStartTime'
   ], (result) => {
@@ -716,6 +833,31 @@ export function initFormControls() {
 
     if (result.managerNation && DOM.managerNationSelect) {
       DOM.managerNationSelect.value = result.managerNation;
+    }
+
+    if (result.dynamicQuotaFodder !== undefined && DOM.dynamicQuotaFodderCheck) {
+      DOM.dynamicQuotaFodderCheck.checked = Boolean(result.dynamicQuotaFodder);
+    }
+    if (result.dynamicQuotaConsumables !== undefined && DOM.dynamicQuotaConsumablesCheck) {
+      DOM.dynamicQuotaConsumablesCheck.checked = Boolean(result.dynamicQuotaConsumables);
+    }
+    if (result.dynamicQuotaLeague !== undefined && DOM.dynamicQuotaLeagueCheck) {
+      DOM.dynamicQuotaLeagueCheck.checked = Boolean(result.dynamicQuotaLeague);
+    }
+    if (result.dynamicQuotaManagers !== undefined && DOM.dynamicQuotaManagersCheck) {
+      DOM.dynamicQuotaManagersCheck.checked = Boolean(result.dynamicQuotaManagers);
+    }
+    if (result.dynamicQuotaChemTax !== undefined && DOM.dynamicQuotaChemTaxCheck) {
+      DOM.dynamicQuotaChemTaxCheck.checked = Boolean(result.dynamicQuotaChemTax);
+    }
+    if (result.chemTaxStyle && DOM.chemTaxStyleSelect) {
+      DOM.chemTaxStyleSelect.value = result.chemTaxStyle;
+    }
+    if (result.chemTaxMaxBasePrice && DOM.chemTaxMaxBasePriceInput) {
+      DOM.chemTaxMaxBasePriceInput.value = result.chemTaxMaxBasePrice;
+    }
+    if (result.chemTaxMinMargin && DOM.chemTaxMinMarginInput) {
+      DOM.chemTaxMinMarginInput.value = result.chemTaxMinMargin;
     }
 
     let savedTarget = result.targetMode;
@@ -765,7 +907,7 @@ export function initFormControls() {
 
     if (result.strategyMode) {
       let effectiveStrategy = result.strategyMode;
-      if (savedTarget === 'managerLeague' || savedTarget === 'managers') {
+      if (savedTarget === 'managerLeague' || savedTarget === 'managers' || savedTarget === 'chemTax') {
         effectiveStrategy = 'lazy';
       } else if (effectiveStrategy === 'lazy' && savedTarget !== 'consumables' && savedTarget !== 'fodder') {
         savedTarget = 'consumables';
