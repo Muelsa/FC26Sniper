@@ -133,7 +133,9 @@ export function computeLazyCycleTarget(pileInfo, isFodder, tag, targetStyles, ta
     cycleTarget = 0;
   } else {
     let maxBatch;
-    if (botState.targetMode === "chemTax") {
+    if (botState.safeMode) {
+      maxBatch = 20;
+    } else if (botState.targetMode === "chemTax") {
       maxBatch = 20;
     } else if (isFodder) {
       maxBatch = 15;
@@ -146,9 +148,12 @@ export function computeLazyCycleTarget(pileInfo, isFodder, tag, targetStyles, ta
     }
     cycleTarget = Math.min(rawMissing, maxBatch);
     console.log(`[${tag}] Tradepile: ${currentActiveCount} attive, ${currentTotalCount}/${MAX_TRADEPILE_LIMIT} totali (Mancanti: ${rawMissing}, Target ciclo: ${cycleTarget})`);
+    const batchSuffix = rawMissing > maxBatch
+      ? (botState.safeMode ? ` (Safe-Mode attiva: target limitato a ${cycleTarget} carte per questo ciclo)` : ` (Acquisti scaglionati: target ${cycleTarget} carte per questo ciclo)`)
+      : '';
     sendMessageSafe({
       tipo: 'LOG',
-      valore: `[${tag}] Tradepile: ${currentActiveCount} attive (${currentTotalCount}/${targetSize} tot). Mancanti: ${rawMissing}` + (rawMissing > maxBatch ? ` (Acquisti scaglionati: target ${cycleTarget} carte per questo ciclo)` : '')
+      valore: `[${tag}] Tradepile: ${currentActiveCount} attive (${currentTotalCount}/${targetSize} tot). Mancanti: ${rawMissing}${batchSuffix}`
     });
   }
 
@@ -190,11 +195,14 @@ export async function runLazyBiddingStep(ctx) {
   const bidsPerStyle = {};
 
   const isPgp = botState.targetMode === "chemTax";
-  const MAX_BIDS_PER_CYCLE = isPgp
-    ? Math.min(20, cycleTarget)
-    : (isFodder
-      ? Math.min(15, cycleTarget)
-      : (rawMissing >= 25 ? 30 : Math.min(30, Math.max(cycleTarget, rawMissing * 2))));
+  const isSafe = Boolean(botState.safeMode);
+  const MAX_BIDS_PER_CYCLE = isSafe
+    ? Math.min(15, cycleTarget)
+    : (isPgp
+      ? Math.min(20, cycleTarget)
+      : (isFodder
+        ? Math.min(15, cycleTarget)
+        : (rawMissing >= 25 ? 30 : Math.min(30, Math.max(cycleTarget, rawMissing * 2)))));
 
   const dynEnabled = isDynamicQuotaEnabled();
   const activeKeys = (isFodder || isPgp)
@@ -213,9 +221,12 @@ export async function runLazyBiddingStep(ctx) {
   ctx.consecutive512InCycle = 0;
   botState.marketRestricted = false;
   let stopBiddingDueTo461 = false;
-  const maxBiddingSearches = isPgp
-    ? Math.max(20, cycleTarget * 4)
-    : (isFodder ? Math.max(25, cycleTarget * 3) : Math.max(80, Math.round(MAX_BIDS_PER_CYCLE * 2.5)));
+  let probe461Count = 0;
+  const maxBiddingSearches = isSafe
+    ? Math.max(15, cycleTarget * 3)
+    : (isPgp
+      ? Math.max(20, cycleTarget * 4)
+      : (isFodder ? Math.max(25, cycleTarget * 3) : Math.max(80, Math.round(MAX_BIDS_PER_CYCLE * 2.5))));
   const MAX_ACTIVE_WATCHLIST = isFodder ? 35 : 45;
   let targetCycleIdx = 0;
 
@@ -401,7 +412,15 @@ export async function runLazyBiddingStep(ctx) {
           targetAuctions = targetAuctions.filter(target.itemFilter);
         }
 
-        targetAuctions.sort((a, b) => (a.expires || 0) - (b.expires || 0));
+        if (ctx.requiresSoftBanProbe) {
+          const calmAuctions = targetAuctions.filter(a => (a.expires || 0) >= 120);
+          if (calmAuctions.length > 0) {
+            targetAuctions = calmAuctions;
+          }
+          targetAuctions.sort((a, b) => (b.expires || 0) - (a.expires || 0));
+        } else {
+          targetAuctions.sort((a, b) => (a.expires || 0) - (b.expires || 0));
+        }
 
         let bidsInThisSearch = 0;
         let consecutiveFailedBidsInSearch = 0;
@@ -433,7 +452,7 @@ export async function runLazyBiddingStep(ctx) {
             if (ctx.requiresSoftBanProbe) {
               sendMessageSafe({
                 tipo: 'LOG',
-                valore: `[SONDA ANTI-BAN] Verifica preliminare permessi offerte dopo la pausa di riposo (1 sola offerta test)...`
+                valore: `[SONDA ANTI-BAN] Verifica preliminare permessi offerte dopo la pausa di riposo (Tentativo ${probe461Count + 1}/2 su asta a ${Math.round(auction.expires || 0)}s)...`
               });
             }
 
@@ -443,14 +462,26 @@ export async function runLazyBiddingStep(ctx) {
 
             if (ctx.requiresSoftBanProbe) {
               if (!bidSuccess && botState.lastBidErrorStatus === 461) {
-                sendMessageSafe({
-                  tipo: 'LOG',
-                  valore: `[SONDA ANTI-BAN] L'offerta di test ha ricevuto 461 (Soft-ban EA ancora attivo). L'account necessita di ulteriore riposo: rientro in pausa senza insistere.`
-                });
-                botState.marketRestricted = true;
-                ctx.earlyExitRateLimit = true;
-                break;
+                probe461Count++;
+                if (probe461Count >= 2) {
+                  sendMessageSafe({
+                    tipo: 'LOG',
+                    valore: `[SONDA ANTI-BAN] 2 offerte di test consecutive hanno ricevuto 461 (Soft-ban EA ancora attivo). L'account necessita di ulteriore riposo: rientro in pausa senza insistere.`
+                  });
+                  botState.marketRestricted = true;
+                  ctx.earlyExitRateLimit = true;
+                  break;
+                } else {
+                  bidPriceOffset++;
+                  sendMessageSafe({
+                    tipo: 'LOG',
+                    valore: `[SONDA ANTI-BAN] 1ª offerta di test superata/rifiutata (461). Attendo 5s e verifico su una seconda asta non in scadenza per escludere un falso positivo (1/2)...`
+                  });
+                  await sleep(getRandomGaussian(5.0, 0.5, 4.2, 6.0) * 1000);
+                  break;
+                }
               } else if (bidSuccess) {
+                probe461Count = 0;
                 ctx.requiresSoftBanProbe = false;
                 sendMessageSafe({
                   tipo: 'LOG',
@@ -622,7 +653,7 @@ export async function runLazyBiddingStep(ctx) {
     }
   }
 
-  return { wonInThisCycle, consecutiveErrorsCount };
+  return { wonInThisCycle, consecutiveErrorsCount, stopBiddingDueTo461 };
 }
 
 export async function runLazyTopUpStep(ctx) {
@@ -651,8 +682,18 @@ export async function runLazyTopUpStep(ctx) {
 
   if (topUpTarget <= 0) return { wonInThisCycle, topUpBought: 0 };
 
+  // Il minimo Compra Ora possibile sul mercato EA è 200 crediti (150 cr non esiste in Compra Ora, solo all'asta)
+  const buyNowTargets = (Array.isArray(targets) ? targets : []).filter(t => t && t.maxBuyNow >= 200);
+  if (buyNowTargets.length === 0) {
+    sendMessageSafe({
+      tipo: 'LOG',
+      valore: `[${topUpTag}] Nessun target attivo ha Prezzo Max Compra Ora >= 200 cr (minimo Compra Ora sul mercato EA). Salto Step 2.`
+    });
+    return { wonInThisCycle, topUpBought: 0 };
+  }
+
   const dynTopUp = isDynamicQuotaEnabled();
-  const topUpKeys = Array.isArray(targets) ? targets.map(t => String(t.key)) : [];
+  const topUpKeys = buyNowTargets.map(t => String(t.key));
   const topUpAlloc = computeDynamicAllocation(
     topUpKeys,
     topUpTarget,
@@ -679,11 +720,15 @@ export async function runLazyTopUpStep(ctx) {
   let topUpBought = 0;
   let topUpSearches = 0;
   let consecutive461InTopUp = 0;
+  let probeTopUp461Count = 0;
   let minPriceOffset = 0;
   const isPgp = botState.targetMode === "chemTax";
-  const maxTopUpSearches = isPgp
-    ? Math.max(20, topUpTarget * 4)
-    : (isFodder ? Math.max(40, topUpTarget * 5) : Math.max(50, topUpTarget * 6));
+  const isSafe = Boolean(botState.safeMode);
+  const maxTopUpSearches = isSafe
+    ? Math.max(15, topUpTarget * 3)
+    : (isPgp
+      ? Math.max(20, topUpTarget * 4)
+      : (isFodder ? Math.max(40, topUpTarget * 5) : Math.max(50, topUpTarget * 6)));
   let topUpTargetIdx = 0;
   botState.lastBidErrorStatus = 0;
   botState.lastBuyNowErrorStatus = 0;
@@ -691,10 +736,10 @@ export async function runLazyTopUpStep(ctx) {
   let stopTopUpDueTo461 = false;
 
   while (topUpBought < topUpTarget && topUpSearches < maxTopUpSearches && botState.start === true) {
-    const target = targets[topUpTargetIdx % targets.length];
+    const target = buyNowTargets[topUpTargetIdx % buyNowTargets.length];
     topUpTargetIdx++;
 
-    if (!target || !target.maxBuyNow || target.maxBuyNow <= 0) {
+    if (!target || !target.maxBuyNow || target.maxBuyNow < 200) {
       topUpSearches++;
       continue;
     }
@@ -702,7 +747,7 @@ export async function runLazyTopUpStep(ctx) {
     const enforceStrictTopUpQuota = topUpSearches < Math.floor(maxTopUpSearches * 0.75);
     if (topUpQuotaPerKey && enforceStrictTopUpQuota) {
       const kQuota = topUpQuotaPerKey[target.key] ?? 1;
-      const hasOtherUnfilled = targets.some(t => (topUpBoughtPerKey[t.key] || 0) < (topUpQuotaPerKey[t.key] ?? 1));
+      const hasOtherUnfilled = buyNowTargets.some(t => (topUpBoughtPerKey[t.key] || 0) < (topUpQuotaPerKey[t.key] ?? 1));
       if ((topUpBoughtPerKey[target.key] || 0) >= kQuota && hasOtherUnfilled) {
         continue;
       }
@@ -767,7 +812,7 @@ export async function runLazyTopUpStep(ctx) {
           if (ctx.requiresSoftBanProbe) {
             sendMessageSafe({
               tipo: 'LOG',
-              valore: `[SONDA ANTI-BAN] Verifica preliminare permessi acquisto Compra Ora dopo la pausa di riposo (1 solo acquisto test)...`
+              valore: `[SONDA ANTI-BAN] Verifica preliminare permessi acquisto Compra Ora dopo la pausa di riposo (Tentativo ${probeTopUp461Count + 1}/2)...`
             });
           }
 
@@ -775,14 +820,26 @@ export async function runLazyTopUpStep(ctx) {
 
           if (ctx.requiresSoftBanProbe) {
             if (!buySuccess && (botState.lastBuyNowErrorStatus === 461 || botState.lastBuyNowErrorStatus === 478)) {
-              sendMessageSafe({
-                tipo: 'LOG',
-                valore: `[SONDA ANTI-BAN] L'acquisto di test Compra Ora ha ricevuto 461 (Soft-ban EA ancora attivo). Rientro in pausa senza insistere.`
-              });
-              botState.marketRestricted = true;
-              stopTopUpDueTo461 = true;
-              break;
+              probeTopUp461Count++;
+              if (probeTopUp461Count >= 2) {
+                sendMessageSafe({
+                  tipo: 'LOG',
+                  valore: `[SONDA ANTI-BAN] 2 acquisti di test Compra Ora consecutivi hanno ricevuto 461 (Soft-ban EA ancora attivo). Rientro in pausa senza insistere.`
+                });
+                botState.marketRestricted = true;
+                stopTopUpDueTo461 = true;
+                break;
+              } else {
+                minPriceOffset++;
+                sendMessageSafe({
+                  tipo: 'LOG',
+                  valore: `[SONDA ANTI-BAN] 1° acquisto di test Compra Ora anticipato/rifiutato (461). Attendo 6s e riprovo per escludere un falso positivo (1/2)...`
+                });
+                await sleep(getRandomGaussian(6.0, 0.5, 5.0, 7.0) * 1000);
+                continue;
+              }
             } else if (buySuccess) {
+              probeTopUp461Count = 0;
               ctx.requiresSoftBanProbe = false;
               sendMessageSafe({
                 tipo: 'LOG',
@@ -850,16 +907,26 @@ export async function runLazyTopUpStep(ctx) {
                 minPriceOffset++;
                 const nextMinBump = minBidBumps[(styleTopUpCount + minPriceOffset) % minBidBumps.length];
 
-                const isSoftBanTriggered = (botState.consecutive461InBidding >= 3 && consecutive461InTopUp >= 1) || consecutive461InTopUp >= 2;
+                const isFullSoftBanConfirmed = (botState.consecutive461InBidding >= 3 && consecutive461InTopUp >= 1);
+                const isIsolatedTopUpSoftBan = consecutive461InTopUp >= 5;
 
-                if (isSoftBanTriggered) {
-                  const errorCountReason = botState.consecutive461InBidding >= 3
-                    ? `4 errori 461 consecutivi (3 su aste + 1 su Compra Ora)`
-                    : `2 rifiuti consecutivi (461) su Compra Ora`;
-                  console.log(`[${topUpTag}] Rilevato rischio Soft-Ban EA: ${errorCountReason}. Concludo precauzionalmente Step 2 per prevenire soft-ban.`);
+                if (isFullSoftBanConfirmed || isIsolatedTopUpSoftBan) {
+                  const errorCountReason = isFullSoftBanConfirmed
+                    ? `3 errori su aste + ${consecutive461InTopUp} su Compra Ora`
+                    : `${consecutive461InTopUp} rifiuti consecutivi su Compra Ora`;
+                  console.log(`[${topUpTag}] Rilevato Soft-Ban EA confermato: ${errorCountReason}. Attivazione blocco mercato e pausa rigenerativa.`);
                   sendMessageSafe({
                     tipo: 'LOG',
-                    valore: `[${topUpTag}] Rilevati 2 rifiuti consecutivi (461) su Compra Ora. Interrompo precauzionalmente il rifornimento per questo ciclo per prevenire soft-ban EA.`
+                    valore: `[SOFT-BAN CONFERMATO] Rilevati rifiuti 461 ripetuti (${errorCountReason}). Attivo blocco mercato protettivo: avvio pausa rigenerativa (60+ min) con refresh token a metà pausa...`
+                  });
+                  botState.marketRestricted = true;
+                  ctx.requiresSoftBanProbe = true;
+                  stopTopUpDueTo461 = true;
+                  break;
+                } else if (consecutive461InTopUp >= 2) {
+                  sendMessageSafe({
+                    tipo: 'LOG',
+                    valore: `[${topUpTag}] Rilevate 2 carte consecutive anticipate da altri utenti (461). Concludo il rifornimento Compra Ora per questo ciclo e procedo regolarmente.`
                   });
                   stopTopUpDueTo461 = true;
                   break;
@@ -964,12 +1031,12 @@ export async function runLazySleepWithHeartbeat(ctx) {
       tipo: 'LOG',
       valore: `[${tag}] Rate limit EA attivo (Soft-ban consecutivo #${ctx.consecutiveSoftBansInSession}). Pausa rigenerativa incrementale di ${sleepMins} min per sblocco completo dell'account (Silenzio totale verso il mercato)...`
     });
-  } else if ((Date.now() - sessionActiveStartTime) >= (3 * 60 * 60 * 1000)) {
+  } else if ((Date.now() - sessionActiveStartTime) >= (2.5 * 60 * 60 * 1000)) {
     ctx.isMacroPause = true;
     ctx.consecutiveSoftBansInSession = 0;
     sleepMins = botState.lazySleepMinutes && botState.lazySleepMinutes > 0 ? botState.lazySleepMinutes : 60;
     const hoursActive = ((Date.now() - sessionActiveStartTime) / (1000 * 60 * 60)).toFixed(1);
-    reportTelemetry('MACRO_PAUSE_START', `Superate le 3 ore di attività continuativa (${hoursActive}h). Macro-pausa rigenerativa (${sleepMins} min) avviata`, { sleepMins, hoursActive });
+    reportTelemetry('MACRO_PAUSE_START', `Superate le 2.5 ore di attività continuativa (${hoursActive}h). Macro-pausa rigenerativa (${sleepMins} min) avviata`, { sleepMins, hoursActive });
     sendMessageSafe({
       tipo: 'LOG',
       valore: `[MACRO-PAUSA RIGENERATIVA] Concluso intero ciclo dopo ${hoursActive}h di attività continuativa! Avvio macro-pausa di ${sleepMins} min per azzerare i contatori EA e favorire le vendite (Keep-alive attivo)...`
@@ -991,7 +1058,13 @@ export async function runLazySleepWithHeartbeat(ctx) {
     });
   } else if (finalPile.active < targetSize) {
     ctx.consecutiveSoftBansInSession = 0;
-    if (finalPile.active < 40) {
+    if (botState.safeMode) {
+      if (finalPile.active < 75) {
+        sleepMins = Math.round(getRandomGaussian(24.0, 1.2, 22.0, 26.0));
+      } else {
+        sleepMins = Math.round(getRandomGaussian(28.0, 1.5, 25.0, 32.0));
+      }
+    } else if (finalPile.active < 40) {
       sleepMins = Math.round(getRandomGaussian(11.5, 0.8, 10.0, 13.0));
     } else if (finalPile.active < 75) {
       sleepMins = Math.round(getRandomGaussian(18.0, 1.2, 16.0, 22.0));
@@ -1014,7 +1087,7 @@ export async function runLazySleepWithHeartbeat(ctx) {
   }
 
   const totalSleepSeconds = sleepMins * 60;
-  let nextHeartbeatAt = Math.round(getRandomGaussian(120, 10, 95, 150));
+  let nextHeartbeatAt = Math.round(getRandomGaussian(240, 15, 210, 270));
   let nextPingAt = Math.round(getRandomGaussian(480, 30, 360, 600));
   let midPauseReloadDone = false;
   const midSleepSeconds = Math.floor(totalSleepSeconds / 2);
@@ -1074,7 +1147,7 @@ export async function runLazySleepWithHeartbeat(ctx) {
     }
 
     if (elapsed >= nextHeartbeatAt && botState.start === true) {
-      nextHeartbeatAt = elapsed + Math.round(getRandomGaussian(120, 10, 95, 150));
+      nextHeartbeatAt = elapsed + Math.round(getRandomGaussian(240, 15, 210, 270));
       try {
         const remainingMinutes = Math.round((totalSleepSeconds - elapsed) / 60);
         if (botState.marketRestricted) {
@@ -1184,7 +1257,7 @@ export async function runLazyTradingEngine() {
       const { cyclePrices, targets, minBidRequired, targetStyles } = targetBuild;
 
       // 1c, 1d, 1e: Riscossione vendite, non assegnati, relist e aggiornamento crediti
-      await clearSoldItem(cyclePrices);
+      await clearSoldItem(cyclePrices, { skipRelist: requiresSoftBanProbe });
       if (botState.start !== true) break;
       await sleep(1500);
 
@@ -1251,10 +1324,26 @@ export async function runLazyTradingEngine() {
           let wonInThisCycle = bidResult.wonInThisCycle;
           ctx.wonInThisCycle = wonInThisCycle;
 
+          if (requiresSoftBanProbe && !botState.marketRestricted && !ctx.earlyExitRateLimit) {
+            requiresSoftBanProbe = false;
+            await clearSoldItem(cyclePrices);
+          }
+
           // Step 2: Rabbocco Compra Ora
+          let topUpBought = 0;
           if (botState.start === true && !botState.marketRestricted && !ctx.earlyExitRateLimit && ctx.consecutive512InCycle < 2 && bidResult.consecutiveErrorsCount < 3) {
             const topUpResult = await runLazyTopUpStep(ctx);
             wonInThisCycle = topUpResult.wonInThisCycle;
+            topUpBought = topUpResult.topUpBought || 0;
+          }
+
+          if (bidResult.stopBiddingDueTo461 && topUpBought === 0 && !botState.marketRestricted) {
+            botState.marketRestricted = true;
+            ctx.requiresSoftBanProbe = true;
+            sendMessageSafe({
+              tipo: 'LOG',
+              valore: `[SOFT-BAN CONFERMATO] Rifiuti 461 confermati all'asta e nessun acquisto Compra Ora completato. Attivo blocco mercato protettivo: avvio pausa rigenerativa (60+ min) con refresh token a metà pausa...`
+            });
           }
 
           if (!botState.marketRestricted) {
@@ -1264,6 +1353,10 @@ export async function runLazyTradingEngine() {
           }
         }
       } else if (cycleTarget === 0) {
+        if (requiresSoftBanProbe && !botState.marketRestricted) {
+          requiresSoftBanProbe = false;
+          await clearSoldItem(cyclePrices);
+        }
         if (isListingBlocked) {
           sendMessageSafe({
             tipo: 'LOG',
@@ -1294,7 +1387,7 @@ export async function runLazyTradingEngine() {
 
       if (!botState.marketRestricted) {
         await sleep(2000);
-        await clearSoldItem(cyclePrices);
+        await clearSoldItem(cyclePrices, { skipRelist: true });
         await processUnassignedItems(cyclePrices);
         await listUnlistedTradepileItems(cyclePrices);
       }

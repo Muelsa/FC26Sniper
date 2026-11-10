@@ -119,13 +119,16 @@ export async function buildFodderLazyTargets(cycle, markup, minNetProfit) {
       sellPrice: pi.tierBPrice,
       tierIsConsumable: false,
       buildUrl: (micr, kind) => {
+        const maxVal = pi.maxBuyAllowed;
         const url = new URL(TRANSFERMARKET_URL);
         url.searchParams.set("num", "21");
         url.searchParams.set("start", "0");
         url.searchParams.set("type", "player");
         url.searchParams.set("maskedDefId", String(p.pid));
-        url.searchParams.set(kind === "bid" ? "macr" : "maxb", String(pi.maxBuyAllowed));
-        url.searchParams.set("micr", String(micr));
+        url.searchParams.set(kind === "bid" ? "macr" : "maxb", String(maxVal));
+        if (micr > 0 && micr < maxVal) {
+          url.searchParams.set("micr", String(micr));
+        }
         return url;
       },
       bidDataBase: { pid: p.pid, name: p.name, playStyleId: null, basePrice: pi.basePrice, isConsumable: false }
@@ -200,7 +203,6 @@ export async function buildManagerLeagueLazyTargets(cycle, markup, minNetProfit)
     return { shouldContinue: true, cyclePrices, targets: [], minBidRequired: Infinity, targetStyles };
   }
 
-  targetStyles = leagueKeys;
   const targets = leagueKeys.filter(key => cyclePrices[key] && cyclePrices[key].maxBidAllowed >= 150).map(key => {
     const pi = cyclePrices[key];
     const lgId = key.slice(7);
@@ -215,19 +217,23 @@ export async function buildManagerLeagueLazyTargets(cycle, markup, minNetProfit)
       tierIsConsumable: true,
       itemFilter: (a) => detectManagerLeague(a) === lgId,
       buildUrl: (micr, kind) => {
+        const maxVal = kind === "bid" ? pi.maxBidAllowed : pi.maxBuyNowAllowed;
         const url = new URL(TRANSFERMARKET_URL);
         url.searchParams.set("num", "21");
         url.searchParams.set("start", "0");
         url.searchParams.set("type", "training");
         url.searchParams.set("cat", "managerLeagueModifier");
         url.searchParams.set("amount", String(lgId));
-        url.searchParams.set(kind === "bid" ? "macr" : "maxb", String(kind === "bid" ? pi.maxBidAllowed : pi.maxBuyNowAllowed));
-        url.searchParams.set("micr", String(micr));
+        url.searchParams.set(kind === "bid" ? "macr" : "maxb", String(maxVal));
+        if (micr > 0 && micr < maxVal) {
+          url.searchParams.set("micr", String(micr));
+        }
         return url;
       },
       bidDataBase: { playStyleId: null, leagueId: lgId, amount: Number(lgId), name: `Modificatore ${pi.meta.name}`, isConsumable: true, basePrice: pi.floorBin, sellPrice: pi.sellPrice }
     };
   });
+  targetStyles = targets.map(t => t.key);
 
   if (targets.length === 0) {
     sendMessageSafe({
@@ -294,7 +300,6 @@ export async function buildManagersLazyTargets(cycle, minNetProfit = 200) {
     return { shouldContinue: true, cyclePrices, targets: [], minBidRequired: Infinity, targetStyles: managerKeys };
   }
 
-  const targetStyles = managerKeys;
   const targets = managerKeys.filter(key => cyclePrices[key] && cyclePrices[key].maxBidAllowed >= 150).map(key => {
     const pi = cyclePrices[key];
     const natId = key.slice("manager_nat_".length);
@@ -314,14 +319,17 @@ export async function buildManagersLazyTargets(cycle, minNetProfit = 200) {
                (String(data.nation) === String(natId) || String(a.nation) === String(natId));
       },
       buildUrl: (micr, kind) => {
+        const maxVal = kind === "bid" ? pi.maxBidAllowed : pi.maxBuyNowAllowed;
         const url = new URL(TRANSFERMARKET_URL);
         url.searchParams.set("num", "21");
         url.searchParams.set("start", "0");
         url.searchParams.set("type", "staff");
         url.searchParams.set("cat", "manager");
         url.searchParams.set("nat", String(natId));
-        url.searchParams.set(kind === "bid" ? "macr" : "maxb", String(kind === "bid" ? pi.maxBidAllowed : pi.maxBuyNowAllowed));
-        url.searchParams.set("micr", String(micr));
+        url.searchParams.set(kind === "bid" ? "macr" : "maxb", String(maxVal));
+        if (micr > 0 && micr < maxVal) {
+          url.searchParams.set("micr", String(micr));
+        }
         return url;
       },
       bidDataBase: {
@@ -335,6 +343,7 @@ export async function buildManagersLazyTargets(cycle, minNetProfit = 200) {
       }
     };
   });
+  const targetStyles = targets.map(t => t.key);
 
   if (targets.length === 0) {
     sendMessageSafe({
@@ -422,19 +431,23 @@ export async function buildConsumablesLazyTargets(cycle, markup, minNetProfit) {
       sellPrice: pi.sellPrice,
       tierIsConsumable: true,
       buildUrl: (micr, kind) => {
+        const maxVal = kind === "bid" ? pi.maxBidAllowed : pi.maxBuyNowAllowed;
         const url = new URL(TRANSFERMARKET_URL);
         url.searchParams.set("num", "21");
         url.searchParams.set("start", "0");
         url.searchParams.set("type", "training");
         url.searchParams.set("cat", "playStyle");
         url.searchParams.set("playStyle", String(sId));
-        url.searchParams.set(kind === "bid" ? "macr" : "maxb", String(kind === "bid" ? pi.maxBidAllowed : pi.maxBuyNowAllowed));
-        url.searchParams.set("micr", String(micr));
+        url.searchParams.set(kind === "bid" ? "macr" : "maxb", String(maxVal));
+        if (micr > 0 && micr < maxVal) {
+          url.searchParams.set("micr", String(micr));
+        }
         return url;
       },
       bidDataBase: { playStyleId: sId, name: pi.meta.name, isConsumable: true, basePrice: pi.floorBin, sellPrice: pi.sellPrice }
     };
   });
+  const activeTargetStyles = targets.map(t => t.key);
 
   if (targets.length === 0) {
     sendMessageSafe({
@@ -449,7 +462,7 @@ export async function buildConsumablesLazyTargets(cycle, markup, minNetProfit) {
     cyclePrices,
     targets,
     minBidRequired,
-    targetStyles
+    targetStyles: activeTargetStyles
   };
 }
 
@@ -546,7 +559,9 @@ export async function buildChemTaxLazyTargets(cycle, minNetProfit) {
             url.searchParams.set("maskedDefId", String(c.eaId));
             url.searchParams.set("playStyle", String(c.styleId));
             url.searchParams.set(kind === "bid" ? "macr" : "maxb", String(maxBuyAllowed));
-            url.searchParams.set("micr", String(micr));
+            if (micr > 0 && micr < maxBuyAllowed) {
+              url.searchParams.set("micr", String(micr));
+            }
             return url;
           },
           bidDataBase: {

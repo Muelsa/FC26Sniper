@@ -40,6 +40,7 @@ export const botState = {
   chemTaxStyle: "all",
   chemTaxMaxBasePrice: 30000,
   chemTaxMinMargin: 1000,
+  safeMode: false,
   consecutiveBidErrors: 0,
   consecutive470Errors: 0,
   consecutiveSnipeErrors: 0,
@@ -394,7 +395,7 @@ export function restoreInitialStateFromStorage() {
   chrome.storage.local.get([
     'xUtSid', 'searchUrl', 'attemptedTradeIds', 'itemRelistCounts', 'consumableBinCache', 'sellThroughStats',
     'dynamicQuotaFodder', 'dynamicQuotaConsumables', 'dynamicQuotaLeague', 'dynamicQuotaManagers', 'dynamicQuotaChemTax',
-    'chemTaxStyle', 'chemTaxMaxBasePrice', 'chemTaxMinMargin'
+    'chemTaxStyle', 'chemTaxMaxBasePrice', 'chemTaxMinMargin', 'safeMode'
   ], (result) => {
     if (result.xUtSid) {
       botState.xUtSid = result.xUtSid;
@@ -412,6 +413,7 @@ export function restoreInitialStateFromStorage() {
     if (result.chemTaxStyle) botState.chemTaxStyle = result.chemTaxStyle;
     if (result.chemTaxMaxBasePrice) botState.chemTaxMaxBasePrice = Number(result.chemTaxMaxBasePrice) || 30000;
     if (result.chemTaxMinMargin) botState.chemTaxMinMargin = Number(result.chemTaxMinMargin) || 1000;
+    if (result.safeMode !== undefined) botState.safeMode = Boolean(result.safeMode);
     const sellThroughEntries = result.sellThroughStats;
     if (Array.isArray(sellThroughEntries)) {
       const now = Date.now();

@@ -556,6 +556,19 @@
                     </button>
 
                     <div class="collapse" id="botSettingsCollapse">
+                        <!-- Protezione Account (Safe-Mode) -->
+                        <span class="settings-group-label">Protezione Account</span>
+                        <div class="ios-switch-row" style="margin-bottom: 0.75rem;" title="Se attivo, limita il bot a max 20 carte per ciclo, max 15 offerte asta, ricerche ridotte a Target x 3 e pausa minima tra lotti di 22-26 min per prevenire soft-ban.">
+                            <div class="ios-switch-info">
+                                <label class="ios-switch-label" for="safeModeCheck">Safe-Mode (Anti Soft-Ban)</label>
+                                <span class="ios-switch-desc">Max 20 carte/ciclo, 15 offerte, ricerche x3 e pause min 24m</span>
+                            </div>
+                            <label class="ios-switch" for="safeModeCheck">
+                                <input class="ios-switch-input" type="checkbox" id="safeModeCheck">
+                                <span class="ios-switch-slider"></span>
+                            </label>
+                        </div>
+
                         <!-- Notifiche Telegram -->
                         <span class="settings-group-label">Notifiche Telegram (Fine Ciclo)</span>
                         <div class="telegram-input-row">

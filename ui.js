@@ -16,7 +16,8 @@ import {
   getLazyMarkupPercent,
   getLazySleepMinutes,
   getDynamicQuotaSettings,
-  getChemTaxSettings
+  getChemTaxSettings,
+  isSafeModeEnabled
 } from './src/ui/form-controls.js';
 
 import {
@@ -68,6 +69,7 @@ function initApp() {
     const selectedManagerNation = getSelectedManagerNation();
     const dynamicQuotas = getDynamicQuotaSettings();
     const chemTaxSettings = getChemTaxSettings();
+    const safeMode = isSafeModeEnabled();
 
     const now = Date.now();
     const settings = {
@@ -85,6 +87,7 @@ function initApp() {
       targetTradepileSize: targetTradepileSize,
       lazyMarkupPercent: lazyMarkupPercent,
       lazySleepMinutes: lazySleepMinutes,
+      safeMode: safeMode,
       ...dynamicQuotas,
       ...chemTaxSettings,
       telegramChatId: DOM.telegramChatIdInput ? DOM.telegramChatIdInput.value.trim() : '',
@@ -107,6 +110,7 @@ function initApp() {
       targetTradepileSize: targetTradepileSize,
       lazyMarkupPercent: lazyMarkupPercent,
       lazySleepMinutes: lazySleepMinutes,
+      safeMode: safeMode,
       ...dynamicQuotas,
       ...chemTaxSettings
     };

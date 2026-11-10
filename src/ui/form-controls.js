@@ -54,6 +54,7 @@ export function initDomReferences() {
   DOM.chemTaxStyleSelect = document.getElementById('chemTaxStyleSelect');
   DOM.chemTaxMaxBasePriceInput = document.getElementById('chemTaxMaxBasePriceInput');
   DOM.chemTaxMinMarginInput = document.getElementById('chemTaxMinMarginInput');
+  DOM.safeModeCheck = document.getElementById('safeModeCheck');
   DOM.sessionTimer = document.getElementById('sessionTimer');
   DOM.sessionTimerPill = document.getElementById('sessionTimerPill');
 }
@@ -71,6 +72,8 @@ export const getChemTaxSettings = () => ({
   chemTaxMaxBasePrice: parseInt(DOM.chemTaxMaxBasePriceInput?.value, 10) || 30000,
   chemTaxMinMargin: parseInt(DOM.chemTaxMinMarginInput?.value, 10) || 1000
 });
+
+export const isSafeModeEnabled = () => Boolean(DOM.safeModeCheck?.checked);
 
 export const getSelectedTargetMode = () => {
   const checkedRadio = document.querySelector('input[name="targetMode"]:checked');
@@ -407,6 +410,7 @@ export const setControlsDisabled = (disabled) => {
   if (DOM.chemTaxStyleSelect) disabled ? DOM.chemTaxStyleSelect.setAttribute('disabled', 'true') : DOM.chemTaxStyleSelect.removeAttribute('disabled');
   if (DOM.chemTaxMaxBasePriceInput) disabled ? DOM.chemTaxMaxBasePriceInput.setAttribute('disabled', 'true') : DOM.chemTaxMaxBasePriceInput.removeAttribute('disabled');
   if (DOM.chemTaxMinMarginInput) disabled ? DOM.chemTaxMinMarginInput.setAttribute('disabled', 'true') : DOM.chemTaxMinMarginInput.removeAttribute('disabled');
+  if (DOM.safeModeCheck) disabled ? DOM.safeModeCheck.setAttribute('disabled', 'true') : DOM.safeModeCheck.removeAttribute('disabled');
   if (DOM.clearCacheBtn) disabled ? DOM.clearCacheBtn.setAttribute('disabled', 'true') : DOM.clearCacheBtn.removeAttribute('disabled');
 };
 
@@ -470,6 +474,7 @@ export const saveAllCurrentFormSettings = () => {
   if (DOM.chemTaxStyleSelect) current.chemTaxStyle = DOM.chemTaxStyleSelect.value;
   if (DOM.chemTaxMaxBasePriceInput) current.chemTaxMaxBasePrice = parseInt(DOM.chemTaxMaxBasePriceInput.value, 10) || 30000;
   if (DOM.chemTaxMinMarginInput) current.chemTaxMinMargin = parseInt(DOM.chemTaxMinMarginInput.value, 10) || 1000;
+  if (DOM.safeModeCheck) current.safeMode = DOM.safeModeCheck.checked;
   if (DOM.telegramChatIdInput) current.telegramChatId = DOM.telegramChatIdInput.value.trim();
 
   flushPendingSettingsSave();
@@ -614,6 +619,12 @@ export function initFormControls() {
     };
     DOM.chemTaxMinMarginInput.addEventListener('input', saveChemMargin);
     DOM.chemTaxMinMarginInput.addEventListener('change', saveChemMargin);
+  }
+
+  if (DOM.safeModeCheck) {
+    DOM.safeModeCheck.addEventListener('change', () => {
+      queueSettingsSave({ safeMode: DOM.safeModeCheck.checked });
+    });
   }
 
   if (DOM.maxSnipePriceInput) {
@@ -795,7 +806,7 @@ export function initFormControls() {
     'targetTradepileSize', 'lazyMarkupPercent', 'lazySleepMinutes', 'telegramChatId', 'personaName',
     'managerNation',
     'dynamicQuotaFodder', 'dynamicQuotaConsumables', 'dynamicQuotaLeague', 'dynamicQuotaManagers', 'dynamicQuotaChemTax',
-    'chemTaxStyle', 'chemTaxMaxBasePrice', 'chemTaxMinMargin',
+    'chemTaxStyle', 'chemTaxMaxBasePrice', 'chemTaxMinMargin', 'safeMode',
     'tradepileCount', 'crediti', 'proiezioneCrediti', 'carteAcquistate', 'carteVendute', 'start', 'botStatus',
     'botStartTime'
   ], (result) => {
@@ -858,6 +869,9 @@ export function initFormControls() {
     }
     if (result.chemTaxMinMargin && DOM.chemTaxMinMarginInput) {
       DOM.chemTaxMinMarginInput.value = result.chemTaxMinMargin;
+    }
+    if (result.safeMode !== undefined && DOM.safeModeCheck) {
+      DOM.safeModeCheck.checked = Boolean(result.safeMode);
     }
 
     let savedTarget = result.targetMode;

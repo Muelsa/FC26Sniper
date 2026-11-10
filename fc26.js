@@ -34,6 +34,7 @@ import {
   getChemTaxStyle,
   getChemTaxMaxBasePrice,
   getChemTaxMinMargin,
+  getSafeMode,
   cleanExpiredPendingBids,
   getUserProfile,
   getTradepileStatus
@@ -377,6 +378,7 @@ async function handleStartMessage(message) {
     botState.chemTaxStyle = message.chemTaxStyle || await getChemTaxStyle();
     botState.chemTaxMaxBasePrice = message.chemTaxMaxBasePrice !== undefined ? Number(message.chemTaxMaxBasePrice) : await getChemTaxMaxBasePrice();
     botState.chemTaxMinMargin = message.chemTaxMinMargin !== undefined ? Number(message.chemTaxMinMargin) : await getChemTaxMinMargin();
+    botState.safeMode = message.safeMode !== undefined ? Boolean(message.safeMode) : await getSafeMode();
     botState.carteAcquistate = 0;
     botState.carteVendute = 0;
     sendMessageSafe({ tipo: 'CARTA_ACQUISTATA', valore: 0 });
@@ -411,7 +413,8 @@ async function handleStartMessage(message) {
     }
 
     if (botState.strategyMode === "lazy") {
-      const quotaLabel = isDynamicQuotaEnabled(botState.targetMode) ? "Quote: Dinamiche Sell-Through" : "Quote: Statiche Paritarie";
+      const baseQuotaLabel = isDynamicQuotaEnabled(botState.targetMode) ? "Quote: Dinamiche Sell-Through" : "Quote: Statiche Paritarie";
+      const quotaLabel = botState.safeMode ? `${baseQuotaLabel} | Safe-Mode: ON` : baseQuotaLabel;
       if (botState.targetMode === "fodder") {
         botState.ricercaFodder = true;
         sendMessageSafe({ tipo: 'LOG', valore: `Avvio LAZY TRADING Fodder (Rating ${botState.fodderRating}, Target: ${botState.targetTradepileSize}, Ricarico: +${botState.lazyMarkupPercent}%, Pausa: ${botState.lazySleepMinutes}m | ${quotaLabel})` });
