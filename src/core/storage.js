@@ -28,6 +28,7 @@ export const getDynamicQuotaChemTax = async () => Boolean(await getKey('dynamicQ
 export const getChemTaxStyle = () => getKey('chemTaxStyle', 'all');
 export const getChemTaxMaxBasePrice = async () => parseInt(await getKey('chemTaxMaxBasePrice', 30000)) || 30000;
 export const getChemTaxMinMargin = async () => parseInt(await getKey('chemTaxMinMargin', 1000)) || 1000;
+export const getSafeMode = async () => Boolean(await getKey('safeMode', false));
 
 // targetMode con retro-compatibilità dalla vecchia chiave booleana fodderMode
 export function getTargetMode() {
